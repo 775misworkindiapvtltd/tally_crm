@@ -37,7 +37,7 @@ function applyBootstrap(data){
   S.expense=data.expense||[]; S.payables=data.payables||[]; S.receivables=data.receivables||[];
   S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
   S.balanceVouchers=data.balanceVouchers||[];
-  S.users=data.users||[]; S.missingSheets=data.missingSheets||[];
+  S.missingSheets=data.missingSheets||[];
 }
 
 async function loadAll(){
@@ -50,14 +50,6 @@ async function loadAll(){
   S.ready=true;render();startClock();
 }
 
-function permsPayload(){
-  return S.user?{
-    dashboard:S.user.dashboard, expense:S.user.expense, payables:S.user.payables,
-    receivables:S.user.receivables, receipt:S.user.receipt, payment:S.user.payment,
-    ledger:S.user.ledger, finance:S.user.finance
-  }:null;
-}
-
 function markSynced(){
   const d=new Date();
   const pad=n=>n<10?'0'+n:''+n;
@@ -67,11 +59,7 @@ function markSynced(){
 async function loadHeavyData(){
   S.syncing=true;render();
   try{
-    applyBootstrap(await runServer('getBootstrapData',permsPayload()));
-    if(S.user){
-      const f=S.users.find(u=>u.id.toLowerCase()===S.user.id.toLowerCase());
-      if(f)S.user=Object.assign({},S.user,f);
-    }
+    applyBootstrap(await runServer('getBootstrapData'));
     S.loadError="";markSynced();
   }catch(err){ showToast("Data load error: "+err.message,true); }
   S.syncing=false;render();
@@ -80,13 +68,7 @@ async function loadHeavyData(){
 async function refreshData(){
   S.syncing=true;render();
   try{
-    applyBootstrap(await runServer('getBootstrapData',permsPayload()));
-    if(S.user){
-      const fresh=await runServer('getUserPermissions',S.user.id);
-      if(fresh)S.user=Object.assign({},S.user,fresh);
-      const item=NAV_ITEMS.find(n=>n.key===S.page);
-      if(item&&!S.user[item.perm])S.page=firstAllowedPage();
-    }
+    applyBootstrap(await runServer('getBootstrapData'));
     S.loadError="";S.syncing=false;markSynced();
     Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
     showToast("Sheet se latest data mil gaya.",false);
@@ -164,52 +146,52 @@ function renderLogin(){
         <div class="field"><label>Password</label><input type="password" id="loginPw" autocomplete="current-password" placeholder="••••••" required></div>
         <button type="submit" class="btn btn-primary btn-block">Sign In</button>
       </form>
-      <div class="login-hint">Credentials aur permissions aapki <b>LOGIN PAGE</b> sheet mein hain. Jis column mein <b>YES</b> hoga wahi page milega.</div>
+      <div class="login-hint">Credentials aapki <b>LOGIN PAGE</b> sheet mein hain (NAME, ID, PASSWORD columns). Login hone ke baad har user ko sabhi pages dikhenge.</div>
     </div>
   </div></div>`;
 }
-function firstAllowedPage(){ const f=NAV_ITEMS.find(n=>S.user&&S.user[n.perm]); return f?f.key:null; }
+function firstAllowedPage(){ return NAV_ITEMS[0]?NAV_ITEMS[0].key:null; }
 async function doLogin(id,pw){
   const u=S.users.find(x=>x.id.toLowerCase()===id.trim().toLowerCase()&&String(x.password)===pw);
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
   S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();render();
   await loadHeavyData();
-  try{
-    const fresh=await runServer('getUserPermissions',S.user.id);
-    if(fresh){S.user=Object.assign({},S.user,fresh);S.page=firstAllowedPage();render();}
-  }catch(e){}
 }
 
-/* ============================= NAV ============================= */
+/* ============================= NAV =============================
+ * Simple login only — every logged-in user sees every page, no per-page
+ * permission matrix. (Previously each item had a `perm` flag checked
+ * against LOGIN PAGE sheet columns; removed per request.)
+ */
 const NAV_ITEMS=[
-  {key:'dashboard',      label:'Dashboard',            perm:'dashboard',   group:null, icon:'grid'},
-  {key:'execSummary',    label:'Executive Summary',    perm:'dashboard',   group:null, icon:'summary'},
+  {key:'dashboard',      label:'Dashboard',            group:null, icon:'grid'},
+  {key:'execSummary',    label:'Executive Summary',    group:null, icon:'summary'},
 
-  {key:'recvDashboard',  label:'Receivables Dashboard',perm:'receivables', group:'Receivables', icon:'in'},
-  {key:'ageingRecv',     label:'Ageing Summary',       perm:'receivables', group:'Receivables', icon:'ageing'},
-  {key:'customerList',   label:'Customer List',        perm:'receivables', group:'Receivables', icon:'customer'},
-  {key:'receipt',        label:'Receipt List',         perm:'receipt',     group:'Receivables', icon:'arrow-down'},
-  {key:'collectionAnalysis',label:'Collection Analysis',perm:'receivables',group:'Receivables', icon:'collection'},
-  {key:'followUpList',   label:'Follow Up List',       perm:'receivables', group:'Receivables', icon:'followup'},
-  {key:'creditNotes',    label:'Credit Notes',         perm:'receivables', group:'Receivables', icon:'creditnote'},
+  {key:'recvDashboard',  label:'Receivables Dashboard',group:'Receivables', icon:'in'},
+  {key:'ageingRecv',     label:'Ageing Summary',       group:'Receivables', icon:'ageing'},
+  {key:'customerList',   label:'Customer List',        group:'Receivables', icon:'customer'},
+  {key:'receipt',        label:'Receipt List',         group:'Receivables', icon:'arrow-down'},
+  {key:'collectionAnalysis',label:'Collection Analysis',group:'Receivables', icon:'collection'},
+  {key:'followUpList',   label:'Follow Up List',       group:'Receivables', icon:'followup'},
+  {key:'creditNotes',    label:'Credit Notes',         group:'Receivables', icon:'creditnote'},
 
-  {key:'payDashboard',   label:'Payables Dashboard',   perm:'payables',    group:'Payables', icon:'out'},
-  {key:'ageingPay',      label:'Ageing Summary',       perm:'payables',    group:'Payables', icon:'ageing'},
-  {key:'vendorList',     label:'Vendor List',          perm:'payables',    group:'Payables', icon:'customer'},
-  {key:'payment',        label:'Payment List',         perm:'payment',     group:'Payables', icon:'arrow-up'},
+  {key:'payDashboard',   label:'Payables Dashboard',   group:'Payables', icon:'out'},
+  {key:'ageingPay',      label:'Ageing Summary',       group:'Payables', icon:'ageing'},
+  {key:'vendorList',     label:'Vendor List',          group:'Payables', icon:'customer'},
+  {key:'payment',        label:'Payment List',         group:'Payables', icon:'arrow-up'},
 
-  {key:'salesDashboard', label:'Sales Dashboard',      perm:'finance',     group:'Finance', icon:'sales'},
-  {key:'expensesDashboard',label:'Expenses Dashboard', perm:'finance',     group:'Finance', icon:'wallet'},
-  {key:'cashFlow',       label:'Cash Flow',            perm:'finance',     group:'Finance', icon:'cashflow'},
-  {key:'profitLoss',     label:'Profit & Loss',        perm:'finance',     group:'Finance', icon:'pl'},
-  {key:'balanceSheet',   label:'Balance Sheet',        perm:'finance',     group:'Finance', icon:'balance'},
-  {key:'reports',        label:'Reports',              perm:'finance',     group:'Finance', icon:'reports'},
+  {key:'salesDashboard', label:'Sales Dashboard',      group:'Finance', icon:'sales'},
+  {key:'expensesDashboard',label:'Expenses Dashboard', group:'Finance', icon:'wallet'},
+  {key:'cashFlow',       label:'Cash Flow',            group:'Finance', icon:'cashflow'},
+  {key:'profitLoss',     label:'Profit & Loss',        group:'Finance', icon:'pl'},
+  {key:'balanceSheet',   label:'Balance Sheet',        group:'Finance', icon:'balance'},
+  {key:'reports',        label:'Reports',              group:'Finance', icon:'reports'},
 
-  {key:'ledger',         label:'Party Ledger',         perm:'ledger',      group:'Finance', icon:'book'},
-  {key:'expense',        label:'Expense Vouchers',     perm:'expense',     group:'Finance', icon:'wallet'},
+  {key:'ledger',         label:'Party Ledger',         group:'Finance', icon:'book'},
+  {key:'expense',        label:'Expense Vouchers',     group:'Finance', icon:'wallet'},
 
-  {key:'alerts',         label:'Alerts',               perm:'dashboard',   group:null, icon:'bell', badge:()=>alertCount()},
-  {key:'settings',       label:'Settings',             perm:'dashboard',   group:null, icon:'settings'},
+  {key:'alerts',         label:'Alerts',               group:null, icon:'bell', badge:()=>alertCount()},
+  {key:'settings',       label:'Settings',             group:null, icon:'settings'},
 ];
 const PAGE_TITLES={
   dashboard:{t:'Finance Command Center',s:'Complete Overview of Your Business Performance'},
@@ -268,7 +250,7 @@ function alertCount(){
 
 /* ============================= SHELL ============================= */
 function renderShell(inner){
-  const items=NAV_ITEMS.filter(n=>S.user[n.perm]);
+  const items=NAV_ITEMS; // every logged-in user sees every page
   const initials=(S.user.name||'U').substring(0,2).toUpperCase();
   let navHtml='';
   let lastGroup=undefined;
@@ -277,8 +259,6 @@ function renderShell(inner){
     const badge=n.badge?n.badge():0;
     navHtml+=`<div class="nav-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}${badge?`<span class="nav-badge">${badge}</span>`:''}</div>`;
   });
-  if(!items.length) navHtml=`<div class="nav-empty">No pages assigned. Contact admin.</div>`;
-
   const bottomItems=[items.find(n=>n.key==='dashboard'),items.find(n=>n.group==='Receivables'),items.find(n=>n.group==='Payables'),items.find(n=>n.group==='Finance'),items.find(n=>n.key==='alerts')].filter(Boolean);
   const bottomNav=bottomItems.length?`<div class="bottom-nav">${bottomItems.map(n=>`<div class="bn-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span style="width:18px;height:18px;display:inline-block;">${NAV_ICONS[n.icon]||''}</span>${esc(n.label.split(' ')[0])}</div>`).join('')}</div>`:'';
 
@@ -324,17 +304,13 @@ function renderShell(inner){
   ${S.toast?`<div class="toast ${S.toast.isErr?'err':''}"><span>${S.toast.isErr?'⚠':'✓'}</span>${esc(S.toast.msg)}</div>`:""}`;
 }
 
-/* ============================= NAV ACTION ============================= */
-async function navigateTo(pageKey){
+/* ============================= NAV ACTION =============================
+ * Purely client-side page switch — no server round-trip on navigation anymore
+ * (this was the main cause of slow/blank-feeling page switches; previously every
+ * click re-fetched permissions from the LOGIN PAGE sheet before rendering).
+ */
+function navigateTo(pageKey){
   S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;render();
-  try{
-    const fresh=await runServer('getUserPermissions',S.user.id);
-    if(fresh){S.user=Object.assign({},S.user,fresh);
-      const item=NAV_ITEMS.find(n=>n.key===S.page);
-      if(item&&!S.user[item.perm]){showToast("Ye page ab aapke liye uplabdh nahi hai.",true);S.page=firstAllowedPage();}
-      render();
-    }
-  }catch(e){}
 }
 
 /* ============================= GENERIC GRID ENGINE ============================= */

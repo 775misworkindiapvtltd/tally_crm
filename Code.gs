@@ -19,10 +19,10 @@
  *
  * REQUIRED GOOGLE SHEET TABS (names must match EXACTLY):
  *
- *   LOGIN PAGE  -> NAME | ID | PASSWORD | ROLE | DASHBOARD | EXPENSE | PAYABLES |
- *                  RECEIVABLES | RECEIPT | PAYMENT | LEDGER | FINANCE
- *                  (mark YES in a column to grant that user the page; ROLE is any free text
- *                  shown under the user's name in the top-right corner, e.g. "Finance Manager")
+ *   LOGIN PAGE  -> NAME | ID | PASSWORD | ROLE
+ *                  (simple login only — every logged-in user sees every page. ROLE is
+ *                  optional free text shown under the user's name in the top-right
+ *                  corner, e.g. "Finance Manager"; defaults to "Team Member" if blank)
  *
  *   EXPENSE     -> TIMESTAMP | DATE | VOUCHER NUMBER | PARTY NAME | Group |
  *                  Sub_Group | DESIGN NUMBER | ITEM NAME | QTY | RATE | AMOUNT | TYPE
@@ -156,19 +156,11 @@ function pick_(r, names) {
 }
 
 /* ============================= ROW MAPPERS ============================= */
+// Simple login only (no per-page permission matrix) — every logged-in user gets every page.
 function mapUser_(r) {
   return {
     name: r['NAME'] || '', id: String(r['ID'] || '').trim(), password: String(r['PASSWORD'] || '').trim(),
-    role: fmtValue_(pick_(r, ['ROLE'])) || 'Team Member',
-    dashboard:   isYes_(pick_(r, ['DASHBOARD'])),
-    expense:     isYes_(pick_(r, ['EXPENSE'])),
-    payables:    isYes_(pick_(r, ['PAYABLES'])),
-    receivables: isYes_(pick_(r, ['RECEIVABLES'])),
-    receipt:     isYes_(pick_(r, ['RECEIPT'])),
-    payment:     isYes_(pick_(r, ['PAYMENT'])),
-    ledger:      isYes_(pick_(r, ['LEDGER'])),
-    finance:     isYes_(pick_(r, ['FINANCE'])),
-    overdue:     isYes_(pick_(r, ['OVERDUE'])) // legacy column, kept for backward compatibility only
+    role: fmtValue_(pick_(r, ['ROLE'])) || 'Team Member'
   };
 }
 
@@ -258,8 +250,7 @@ function mapBalanceRows_(rows) {
 // used by the Finance 360 dashboard to derive Sales / Purchase / Credit Note figures
 // (there is no dedicated Sales/Purchase register sheet, so we approximate from the
 // party ledger's voucherType field — see README "Assumptions" section).
-function getBalanceVouchers_() {
-  var rows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
+function getBalanceVouchersFromRows_(rows) {
   var out = [];
   rows.forEach(function (r) {
     if (!r.voucherDate && !r.voucherParticular && !r.voucherNo) return;
@@ -272,41 +263,34 @@ function getBalanceVouchers_() {
   return out;
 }
 
-/* ============================= LOGIN / BOOTSTRAP ============================= */
-function getUserPermissions(id) {
-  var usersRaw = sheetToObjects_(SHEETS.login);
-  var match = usersRaw.find(function (r) { return String(r['ID'] || '').trim().toLowerCase() === String(id || '').trim().toLowerCase(); });
-  if (!match) return null;
-  var u = mapUser_(match);
-  delete u.password;
-  return u;
-}
-
+/* ============================= LOGIN / BOOTSTRAP =============================
+ * Simple login only (no per-page permission matrix): getLoginData() is called once on
+ * page load to populate the login screen, and getBootstrapData() is called once after
+ * a successful login (and again only when the user clicks "Sync with Tally") to load
+ * every tab in a single batch. There are NO per-navigation-click server round-trips
+ * anymore, which is the main speed fix — previously every sidebar click re-read the
+ * LOGIN PAGE sheet just to re-check permissions.
+ */
 function getLoginData() {
   var usersRaw = sheetToObjects_(SHEETS.login);
   return { users: usersRaw.map(mapUser_) };
 }
 
-function getBootstrapData(perms) {
+function getBootstrapData() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var loadAll = !perms;
-  var needExpense     = loadAll || perms.dashboard || perms.expense;
-  var needPayables     = loadAll || perms.dashboard || perms.payables || perms.overdue;
-  var needReceivables   = loadAll || perms.dashboard || perms.receivables || perms.overdue;
-  var needReceipt       = loadAll || perms.dashboard || perms.receipt || perms.receivables || perms.finance;
-  var needPayment      = loadAll || perms.dashboard || perms.payment || perms.payables || perms.finance;
-  var needBalance      = loadAll || perms.dashboard || perms.ledger;
-  var needBalanceVouchers = loadAll || perms.dashboard || perms.receivables || perms.payables || perms.finance;
+
+  // Read the Balance tab's rows ONCE and reuse for both the ledger party list and the
+  // sales/purchase voucher extraction (previously read twice — this halves that cost).
+  var balanceRows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
 
   var result = {
-    expense:     needExpense     ? mapExpense_(sheetToObjects_(SHEETS.expense))         : [],
-    payables:    needPayables    ? mapPayables_(sheetToObjects_(SHEETS.payables))        : [],
-    receivables: needReceivables ? mapReceivables_(sheetToObjects_(SHEETS.receivables))  : [],
-    receipt:     needReceipt     ? mapReceiptRows_(sheetToRows_(SHEETS.receipt))         : [],
-    payment:     needPayment     ? mapReceiptRows_(sheetToRows_(SHEETS.payment))         : [],
-    balanceParties: needBalance  ? getLedgerPartyList_()                                  : [],
-    balanceVouchers: needBalanceVouchers ? getBalanceVouchers_()                           : [],
-    users:       sheetToObjects_(SHEETS.login).map(mapUser_),
+    expense:     mapExpense_(sheetToObjects_(SHEETS.expense)),
+    payables:    mapPayables_(sheetToObjects_(SHEETS.payables)),
+    receivables: mapReceivables_(sheetToObjects_(SHEETS.receivables)),
+    receipt:     mapReceiptRows_(sheetToRows_(SHEETS.receipt)),
+    payment:     mapReceiptRows_(sheetToRows_(SHEETS.payment)),
+    balanceParties:  getLedgerPartyListFromRows_(balanceRows),
+    balanceVouchers: getBalanceVouchersFromRows_(balanceRows),
     missingSheets: []
   };
 
@@ -322,8 +306,7 @@ function getBootstrapData(perms) {
 /* ============================= LEDGER (Balance tab) ============================= */
 
 // Lightweight party directory for the Ledger picker (name + group + mobile + running closing).
-function getLedgerPartyList_() {
-  var rows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
+function getLedgerPartyListFromRows_(rows) {
   var byName = {};
   rows.forEach(function (r) {
     if (!r.name) return;

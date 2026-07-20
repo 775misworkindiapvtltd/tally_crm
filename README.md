@@ -29,7 +29,8 @@ sub-report reachable from the sidebar).
 All filters (Company/Branch/FY/Sales Person/Date range/Compare) are wired
 directly into every dashboard/report's calculations — not just UI decoration.
 
-All pages are gated per-user via columns on the `LOGIN PAGE` sheet tab.
+**Login is simple username/password only** — there is no per-page permission
+matrix. Every user who successfully logs in sees every page in the sidebar.
 
 > **Note:** The AI Insights panel shown in the original Finance 360°
 > reference screenshot was intentionally excluded from this build, per
@@ -49,22 +50,18 @@ All pages are gated per-user via columns on the `LOGIN PAGE` sheet tab.
 
 Exact column order for every tab is documented at the top of `Code.gs`.
 
-### LOGIN PAGE — required permission columns
-
-Add these columns to `LOGIN PAGE` and mark `YES` for whichever pages a user
-should see:
+### LOGIN PAGE — required columns
 
 ```
-NAME | ID | PASSWORD | ROLE | DASHBOARD | EXPENSE | PAYABLES | RECEIVABLES | RECEIPT | PAYMENT | LEDGER | FINANCE
+NAME | ID | PASSWORD | ROLE
 ```
 
-- `ROLE` is free text shown under the user's name in the top-right corner
-  (e.g. "Finance Manager"). Optional — defaults to "Team Member".
-- `FINANCE` grants Sales Dashboard, Expenses Dashboard, Cash Flow, P&L,
-  Balance Sheet and Reports.
-- The old `OVERDUE` column from earlier builds is no longer used (Ageing
-  Summary pages now live under `RECEIVABLES`/`PAYABLES` permissions) but is
-  harmless to leave in your sheet.
+- `ROLE` is optional free text shown under the user's name in the top-right
+  corner (e.g. "Finance Manager"). Defaults to "Team Member" if left blank.
+- No per-page permission columns are needed — every user who logs in sees
+  every page. If your sheet still has old columns like `DASHBOARD`,
+  `RECEIVABLES`, `FINANCE`, `OVERDUE`, etc. from an earlier version, they are
+  simply ignored now and can be left in place or deleted.
 
 ## Deploying
 
@@ -107,3 +104,20 @@ since the source spreadsheet only has `EXPENSE`, `PAYABLES`, `RECEIVABLES`,
 The data layer (`Code.gs`) is fully decoupled from the presentation layer,
 so figures/formulas above can be refined without touching the UI, and the
 UI can be restyled without touching how data is read from the sheet.
+
+## Performance notes
+
+- Login only reads the `LOGIN PAGE` sheet. All other tabs (`EXPENSE`,
+  `PAYABLES`, `RECEIVABLES`, `Receipt`, `PAYMENT`, `Balance`) are read once,
+  right after a successful login, in a single `getBootstrapData()` call —
+  and again only when you click **"Sync with Tally"** in the sidebar.
+- Clicking between sidebar pages is instant (no server call) since there is
+  no per-page permission check anymore — the already-loaded data is just
+  re-rendered for the new page.
+- The `Balance` tab (often the largest tab) is read from the sheet only
+  once per sync and reused for both the Party Ledger list and the
+  Sales/Purchase/Credit Note figures, instead of being read twice.
+- If the app still feels slow to you, the most likely cause is sheet size —
+  Apps Script's `getDataRange().getValues()` cost scales with total rows
+  across all 7 tabs. Consider archiving old financial years to a separate
+  spreadsheet/tab if any tab has grown very large.
