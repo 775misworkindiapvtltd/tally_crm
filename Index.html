@@ -10,6 +10,18 @@
 </head>
 <body>
 <div id="app"></div>
+<!--
+  LOAD ORDER MATTERS HERE:
+  Common.html defines registerPage()/PAGE_RENDERERS and must load BEFORE any page
+  module (Dashboard/Receivables/Payables/Finance/Misc) that calls registerPage(...)
+  at the top level of its own <script> block. Similarly, Charts.html defines
+  CHART_DEFS and must load before page modules that assign CHART_DEFS['key']=... at
+  their top level. Common.html's own loadAll() call at the end of its script only
+  starts an async server call, so it's safe for it to run first — every later
+  <script> tag below still executes synchronously (registering pages/charts) well
+  before that server call resolves.
+-->
+<?!= include('Common') ?>
 <?!= include('Filters') ?>
 <?!= include('Charts') ?>
 <?!= include('Grids') ?>
@@ -19,6 +31,5 @@
 <?!= include('Finance') ?>
 <?!= include('Misc') ?>
 <?!= include('Ledger') ?>
-<?!= include('Common') ?>
 </body>
 </html>
