@@ -3,16 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <base target="_top">
-<title>Tally Dashboard</title>
+<title>Finance 360° — Tally Integrated</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <?!= include('CSS') ?>
 </head>
 <body>
 <div id="app"></div>
+<?!= include('Filters') ?>
+<?!= include('Charts') ?>
 <?!= include('Grids') ?>
 <?!= include('Dashboard') ?>
-<?!= include('Overdue') ?>
+<?!= include('Receivables') ?>
+<?!= include('Payables') ?>
+<?!= include('Finance') ?>
+<?!= include('Misc') ?>
 <?!= include('Ledger') ?>
 <?!= include('Common') ?>
 </body>

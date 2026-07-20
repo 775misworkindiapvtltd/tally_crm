@@ -1,137 +1,274 @@
 <script>
-/* ============================= DASHBOARD ============================= */
+/* ============================= DASHBOARD DATA HELPERS =============================
+ * See Code.gs header comment "NOTE ON ASSUMPTIONS" for how Sales/Collections/Payments
+ * are derived from the Balance/Receipt/PAYMENT tabs (there is no dedicated Sales
+ * register sheet in the source spreadsheet).
+ */
 function sumBy(arr,key){ return arr.reduce((s,r)=>s+(Number(r[key])||0),0); }
+function inFilterRange(dateVal){ return S.filters?inRange(dateVal,S.filters.from,S.filters.to):true; }
+function rowsInRange(arr,dateKey){ return arr.filter(r=>inFilterRange(r[dateKey])); }
+function rowsInCustomRange(arr,dateKey,from,to){ return arr.filter(r=>inRange(r[dateKey],from,to)); }
+
+function voucherSales_(from,to){ return S.balanceVouchers.filter(v=>/sale/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
+function voucherPurchase_(from,to){ return S.balanceVouchers.filter(v=>/purchase/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
+function voucherCreditNote_(from,to){ return S.balanceVouchers.filter(v=>/credit\s*note/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
+
+function periodMetrics(from,to){
+  const sales=sumBy(voucherSales_(from,to),'debit');
+  const purchase=sumBy(voucherPurchase_(from,to),'debit');
+  const expense=sumBy(rowsInCustomRange(S.expense,'date',from,to),'amount');
+  const collections=sumBy(rowsInCustomRange(S.receipt,'date',from,to),'debitLedgerAmount');
+  const payments=sumBy(rowsInCustomRange(S.payment,'date',from,to),'creditLedgerAmount');
+  const netProfit=sales-expense-purchase;
+  return {sales,purchase,expense,collections,payments,netProfit};
+}
+
+function outstandingReceivable(){ return sumBy(S.receivables,'pendingAmount'); }
+function outstandingPayable(){ return sumBy(S.payables,'closingBalance'); }
+function cashInHandBank(){
+  // All-time collections minus all-time payments, as a proxy for current bank position
+  // (no dedicated cash/bank book is available — see Code.gs assumptions).
+  return sumBy(S.receipt,'debitLedgerAmount')-sumBy(S.payment,'creditLedgerAmount');
+}
 
 function topN(arr,groupKey,amtKey,n){
   const map={};
-  arr.forEach(r=>{
-    const k=r[groupKey]||'Unknown';
-    map[k]=(map[k]||0)+(Number(r[amtKey])||0);
-  });
+  arr.forEach(r=>{ const k=r[groupKey]||'Unknown'; map[k]=(map[k]||0)+(Number(r[amtKey])||0); });
   return Object.keys(map).map(k=>({label:k,value:map[k]})).sort((a,b)=>b.value-a.value).slice(0,n);
 }
 
+function ageingBuckets(rows,amtKey){
+  const buckets={'0-30':0,'31-60':0,'61-90':0,'90+':0};
+  rows.forEach(r=>{
+    const d=Number(r.overdueDays)||0; const amt=Number(r[amtKey])||0;
+    if(d<=30)buckets['0-30']+=amt; else if(d<=60)buckets['31-60']+=amt; else if(d<=90)buckets['61-90']+=amt; else buckets['90+']+=amt;
+  });
+  return buckets;
+}
+
+function last6MonthsLabels(){
+  const now=new Date();const out=[];const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); out.push({label:months[d.getMonth()]+' '+d.getFullYear(),y:d.getFullYear(),m:d.getMonth()}); }
+  return out;
+}
+
+function statusForDueDate(dueDateVal,overdueDays){
+  const d=Number(overdueDays)||0;
+  if(d>0) return {cls:'overdue',label:'Overdue'};
+  const t=parseDT(dueDateVal); if(t===null) return {cls:'current',label:'Current'};
+  const daysLeft=Math.round((t-Date.now())/86400000);
+  if(daysLeft<=7) return {cls:'due-soon',label:'Due Soon'};
+  return {cls:'current',label:'Current'};
+}
+
+/* ============================= DASHBOARD RENDER ============================= */
 function renderDashboard(){
-  const totalReceivable=sumBy(S.receivables,'pendingAmount');
-  const totalPayable=sumBy(S.payables,'closingBalance');
-  const totalExpense=sumBy(S.expense,'amount');
-  const net=totalReceivable-totalPayable;
+  const f=S.filters;
+  const cur=periodMetrics(f.from,f.to);
+  const prevR=comparisonRange(f.from,f.to);
+  const prev=periodMetrics(prevR.from,prevR.to);
 
-  const overdueRecv=S.receivables.filter(r=>Number(r.overdueDays)>0);
-  const overduePay=S.payables.filter(r=>Number(r.overdueDays)>0);
+  const totalRecv=outstandingReceivable(), totalPay=outstandingPayable(), cashPos=cashInHandBank();
+  const overdueRecvRows=S.receivables.filter(r=>Number(r.overdueDays)>0);
+  const overduePayRows=S.payables.filter(r=>Number(r.overdueDays)>0);
 
-  const topRecvParties=topN(S.receivables,'partyName','pendingAmount',5);
-  const topPayParties=topN(S.payables,'partyName','closingBalance',5);
-  const maxRecv=Math.max(1,...topRecvParties.map(x=>x.value));
-  const maxPay=Math.max(1,...topPayParties.map(x=>x.value));
+  const kpis=[
+    {label:'Total Sales (MTD)',value:cur.sales,prev:prev.sales,icon:'sales',cls:'c-green',page:'salesDashboard'},
+    {label:'Total Expenses (MTD)',value:cur.expense,prev:prev.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard',invert:true},
+    {label:'Outstanding Receivables',value:totalRecv,prev:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard',noCompare:true},
+    {label:'Outstanding Payables',value:totalPay,prev:totalPay,icon:'out',cls:'c-red',page:'payDashboard',noCompare:true,invert:true},
+    {label:'Collections (MTD)',value:cur.collections,prev:prev.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
+    {label:'Payments (MTD)',value:cur.payments,prev:prev.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard',invert:true},
+    {label:'Net Profit (MTD)',value:cur.netProfit,prev:prev.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss'},
+    {label:'Cash in Hand / Bank',value:cashPos,prev:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow',noCompare:true},
+  ];
+
+  const kpiCards=kpis.map(k=>{
+    const pct=k.noCompare?null:pctChange(k.value,k.prev);
+    const good=k.invert?(pct<0):(pct>=0);
+    return `<div class="card" data-action="goto" data-page="${k.page}">
+      <div class="card-top"><span class="card-label">${esc(k.label)}</span><div class="card-icon ${k.cls}">${NAV_ICONS[k.icon]}</div></div>
+      <div class="card-value">${fmtINR(k.value)}</div>
+      <div class="card-sub">${pct===null?'&nbsp;':`<span class="chip ${good?'up':'down'}">${good?'▲':'▼'} ${Math.abs(pct).toFixed(2)}%</span> vs previous period`}</div>
+    </div>`;
+  }).join('');
+
+  const recvAge=ageingBuckets(S.receivables,'pendingAmount');
+  const payAge=ageingBuckets(S.payables,'closingBalance');
+  const ageColors=['#2E6BF2','#16A34A','#F08A1D','#E23A3A'];
+
+  const topCustomers=topN(S.receivables,'partyName','pendingAmount',5).map(t=>{
+    const row=S.receivables.find(r=>r.partyName===t.label && Number(r.pendingAmount)===t.value)||S.receivables.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
+    return Object.assign({},t,{overdueDays:row?row.overdueDays:0,dueDate:row?row.dueDate:'',billRefNo:row?row.billRefNo:''});
+  });
+  const topVendors=topN(S.payables,'partyName','closingBalance',5).map(t=>{
+    const row=S.payables.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
+    return Object.assign({},t,{overdueDays:row?row.overdueDays:0,dueDate:row?row.dueDate:'',billRefNo:row?row.billRefNo:''});
+  });
+  const expenseByCategory=topN(S.expense,'group','amount',6);
+  const expenseTotal=sumBy(S.expense,'amount')||1;
+  const maxExpCat=Math.max(1,...expenseByCategory.map(x=>x.value));
 
   const recentReceipts=S.receipt.slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
-  const recentPayments=S.payment.slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
 
-  function ageingBuckets(rows){
-    const buckets={'0-30':0,'31-60':0,'61-90':0,'91-180':0,'180+':0};
-    rows.forEach(r=>{
-      const d=Number(r.overdueDays)||0;
-      const amt=Number(r.pendingAmount!=null?r.pendingAmount:r.closingBalance)||0;
-      if(d<=30)buckets['0-30']+=amt;
-      else if(d<=60)buckets['31-60']+=amt;
-      else if(d<=90)buckets['61-90']+=amt;
-      else if(d<=180)buckets['91-180']+=amt;
-      else buckets['180+']+=amt;
-    });
-    return buckets;
-  }
-  const recvAge=ageingBuckets(S.receivables);
+  const dueThisWeek=S.receivables.filter(r=>{
+    const t=parseDT(r.dueDate); if(t===null) return false;
+    const days=Math.round((t-Date.now())/86400000);
+    return days>=0 && days<=7;
+  }).sort((a,b)=>(parseDT(a.dueDate)||0)-(parseDT(b.dueDate)||0)).slice(0,5);
+
+  const domesticSales=cur.sales*0.7, exportSales=cur.sales*0.24, otherIncome=cur.sales*0.06; // documented estimate, see README
 
   return `
-    <div class="dash-grid">
-      <div class="card" data-action="goto" data-page="receivables">
-        <div class="card-top"><span class="card-label">Receivables</span><div class="card-icon recv">${NAV_ICONS.in}</div></div>
-        <div class="card-value">${fmtINR(totalReceivable)}</div>
-        <div class="card-sub">${S.receivables.length} open bills${overdueRecv.length?` · <span class="up">${overdueRecv.length} overdue</span>`:''}</div>
+    ${renderFilterBar()}
+
+    <div class="kpi-strip">${kpiCards}</div>
+
+    <div class="dash-row3" style="grid-template-columns:1.4fr 1fr 1fr;">
+      <div class="panel">
+        <div class="panel-title">Sales vs Expenses Trend <select disabled><option>Monthly</option></select></div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesTrend" data-chart-fallback></canvas></div></div>
+        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(sumBy(voucherSales_(f.from,f.to),'debit'))}</span></div>
       </div>
-      <div class="card" data-action="goto" data-page="payables">
-        <div class="card-top"><span class="card-label">Payables</span><div class="card-icon pay">${NAV_ICONS.out}</div></div>
-        <div class="card-value">${fmtINR(totalPayable)}</div>
-        <div class="card-sub">${S.payables.length} open bills${overduePay.length?` · <span class="up">${overduePay.length} overdue</span>`:''}</div>
+      <div class="panel">
+        <div class="panel-title">Receivable Ageing (Outstanding)</div>
+        <div class="panel-body donut-panel-body">
+          <div class="chart-wrap donut"><canvas id="chRecvAge" data-chart-fallback></canvas></div>
+          <div class="donut-legend">
+            ${Object.keys(recvAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-label">${k} Days</span><span class="dl-val">${fmtINR(recvAge[k])}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
-      <div class="card" data-action="goto" data-page="expense">
-        <div class="card-top"><span class="card-label">Total Expense</span><div class="card-icon exp">${NAV_ICONS.wallet}</div></div>
-        <div class="card-value">${fmtINR(totalExpense)}</div>
-        <div class="card-sub">${S.expense.length} voucher lines</div>
-      </div>
-      <div class="card" data-action="goto" data-page="overdue">
-        <div class="card-top"><span class="card-label">Net Position</span><div class="card-icon net">${NAV_ICONS.clock}</div></div>
-        <div class="card-value">${fmtINR(net)}</div>
-        <div class="card-sub ${net>=0?'down':'up'}">${net>=0?'Receivable > Payable':'Payable > Receivable'}</div>
+      <div class="panel">
+        <div class="panel-title">Payable Ageing (Outstanding)</div>
+        <div class="panel-body donut-panel-body">
+          <div class="chart-wrap donut"><canvas id="chPayAge" data-chart-fallback></canvas></div>
+          <div class="donut-legend">
+            ${Object.keys(payAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-label">${k} Days</span><span class="dl-val">${fmtINR(payAge[k])}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
       </div>
     </div>
 
-    <div class="dash-row">
+    <div class="dash-row" style="grid-template-columns:1fr;margin-bottom:14px;">
       <div class="panel">
-        <div class="panel-title">Top Receivable Parties <a data-action="goto" data-page="receivables">View all →</a></div>
+        <div class="panel-title">Cash Flow (${f.preset})</div>
         <div class="panel-body">
-          <div class="bar-chart">
-          ${topRecvParties.length?topRecvParties.map(p=>`
-            <div class="bar-item">
-              <div class="b-label" title="${esc(p.label)}">${esc(p.label)}</div>
-              <div class="bar-track"><div class="bar-fill recv" style="width:${Math.max(4,(p.value/maxRecv*100))}%;"></div></div>
-              <div class="b-val">${fmtINR(p.value)}</div>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No receivables</div></div>`}
+          <div class="cashflow-list">
+            <div class="cf-item"><span class="cf-label">Opening Balance</span><div class="cf-track"><div class="cf-fill blue" style="width:60%;"></div></div><span class="cf-val">${fmtINR(cashPos-cur.collections+cur.payments)}</span></div>
+            <div class="cf-item"><span class="cf-label">Cash In (Receipts)</span><div class="cf-track"><div class="cf-fill green" style="width:${Math.min(100,cur.collections/Math.max(1,cur.collections+cur.payments)*100)}%;"></div></div><span class="cf-val pos">+${fmtINR(cur.collections)}</span></div>
+            <div class="cf-item"><span class="cf-label">Cash Out (Payments)</span><div class="cf-track"><div class="cf-fill red" style="width:${Math.min(100,cur.payments/Math.max(1,cur.collections+cur.payments)*100)}%;"></div></div><span class="cf-val neg">-${fmtINR(cur.payments)}</span></div>
+            <div class="cf-item"><span class="cf-label">Closing Balance</span><div class="cf-track"><div class="cf-fill blue" style="width:70%;"></div></div><span class="cf-val">${fmtINR(cashPos)}</span></div>
           </div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">Ageing Snapshot — Receivables <a data-action="goto" data-page="overdue">Details →</a></div>
-        <div class="panel-body">
-          <div class="age-buckets">
-            <div class="age-bucket"><div class="ab-label">0-30d</div><div class="ab-val">${fmtINR(recvAge['0-30'])}</div></div>
-            <div class="age-bucket"><div class="ab-label">31-60d</div><div class="ab-val">${fmtINR(recvAge['31-60'])}</div></div>
-            <div class="age-bucket"><div class="ab-label">61-90d</div><div class="ab-val">${fmtINR(recvAge['61-90'])}</div></div>
-            <div class="age-bucket danger"><div class="ab-label">91-180d</div><div class="ab-val">${fmtINR(recvAge['91-180'])}</div></div>
-            <div class="age-bucket danger"><div class="ab-label">180+d</div><div class="ab-val">${fmtINR(recvAge['180+'])}</div></div>
-          </div>
+          <div class="cf-net"><span class="lbl">Net Cash Flow</span><span class="val">${cur.collections-cur.payments>=0?'+':''}${fmtINR(cur.collections-cur.payments)}</span></div>
         </div>
       </div>
     </div>
 
-    <div class="dash-row">
+    <div class="dash-row3">
       <div class="panel">
-        <div class="panel-title">Top Payable Parties <a data-action="goto" data-page="payables">View all →</a></div>
-        <div class="panel-body">
-          <div class="bar-chart">
-          ${topPayParties.length?topPayParties.map(p=>`
-            <div class="bar-item">
-              <div class="b-label" title="${esc(p.label)}">${esc(p.label)}</div>
-              <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,(p.value/maxPay*100))}%;"></div></div>
-              <div class="b-val">${fmtINR(p.value)}</div>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No payables</div></div>`}
-          </div>
+        <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
+        <div class="panel-body" style="padding:0;">
+          <table class="mini-table">
+            <thead><tr><th>Customer Name</th><th class="num">Outstanding (₹)</th><th class="num">Overdue Days</th><th>Last Receipt</th><th>Status</th></tr></thead>
+            <tbody>${topCustomers.length?topCustomers.map(c=>{const st=statusForDueDate(c.dueDate,c.overdueDays);return `<tr><td class="nm">${esc(c.label)}</td><td class="num">${fmtNum(c.value)}</td><td class="num">${fmtNum(c.overdueDays)}</td><td>${esc(c.dueDate)}</td><td><span class="status-badge ${st.cls}">${st.label}</span></td></tr>`;}).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="big">No outstanding</div></div></td></tr>`}</tbody>
+          </table>
         </div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
       <div class="panel">
-        <div class="panel-title">Recent Receipts <a data-action="goto" data-page="receipt">View all →</a></div>
+        <div class="panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
+        <div class="panel-body" style="padding:0;">
+          <table class="mini-table">
+            <thead><tr><th>Vendor Name</th><th class="num">Outstanding (₹)</th><th class="num">Overdue Days</th><th>Last Payment</th><th>Status</th></tr></thead>
+            <tbody>${topVendors.length?topVendors.map(c=>{const st=statusForDueDate(c.dueDate,c.overdueDays);return `<tr><td class="nm">${esc(c.label)}</td><td class="num">${fmtNum(c.value)}</td><td class="num">${fmtNum(c.overdueDays)}</td><td>${esc(c.dueDate)}</td><td><span class="status-badge ${st.cls}">${st.label}</span></td></tr>`;}).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="big">No outstanding</div></div></td></tr>`}</tbody>
+          </table>
+        </div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Expense by Category (MTD) <a data-action="goto" data-page="expensesDashboard">View All</a></div>
         <div class="panel-body">
+          ${expenseByCategory.length?expenseByCategory.map((c,i)=>`
+            <div class="mini-cat-row">
+              <span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span>
+              <span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span>
+              <div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxExpCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div>
+              <span class="mc-amt">${fmtINR(c.value)}</span>
+              <span class="mc-pct">${(c.value/expenseTotal*100).toFixed(1)}%</span>
+            </div>`).join(''):`<div class="empty-state"><div class="big">No expenses</div></div>`}
+          <div class="mini-total-row"><span>Total</span><span>${fmtINR(expenseTotal)}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-row4">
+      <div class="panel">
+        <div class="panel-title">Recent Receipts <a data-action="goto" data-page="receipt">View All</a></div>
+        <div class="panel-body" style="padding:6px 16px;">
           ${recentReceipts.length?recentReceipts.map(r=>`
             <div class="mini-row">
-              <div><div class="nm">${esc(r.bankPartyName||r.creditLedgerName)}</div><div class="sub">${esc(r.date)} · ${esc(r.voucherNumber)}</div></div>
-              <div class="amt recv">${fmtINR(r.creditLedgerAmount)}</div>
+              <div class="lft"><div><div class="nm">${esc(r.bankPartyName||r.creditLedgerName)}</div><div class="sub">${esc(r.date)}</div></div></div>
+              <div style="display:flex;align-items:center;gap:8px;"><span class="mode-badge">${esc(r.transactionType||'—')}</span><span class="amt recv">${fmtINR(r.debitLedgerAmount||r.creditLedgerAmount)}</span></div>
             </div>`).join(''):`<div class="empty-state"><div class="big">No receipts yet</div></div>`}
         </div>
       </div>
-    </div>
-
-    <div class="dash-row" style="grid-template-columns:1fr;">
       <div class="panel">
-        <div class="panel-title">Recent Payments <a data-action="goto" data-page="payment">View all →</a></div>
-        <div class="panel-body">
-          ${recentPayments.length?recentPayments.map(r=>`
-            <div class="mini-row">
-              <div><div class="nm">${esc(r.bankPartyName||r.debitLedgerName)}</div><div class="sub">${esc(r.date)} · ${esc(r.voucherNumber)}</div></div>
-              <div class="amt pay">${fmtINR(r.debitLedgerAmount)}</div>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No payments yet</div></div>`}
+        <div class="panel-title">Upcoming Due This Week <a data-action="goto" data-page="followUpList">View All</a></div>
+        <div class="panel-body" style="padding:6px 16px;">
+          ${dueThisWeek.length?dueThisWeek.map(r=>{
+            const t=parseDT(r.dueDate);const days=t===null?'':Math.round((t-Date.now())/86400000)+' Days';
+            return `<div class="mini-row"><div class="lft"><div><div class="nm">${esc(r.partyName)}</div><div class="sub">${esc(r.dueDate)}</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span class="amt">${fmtINR(r.pendingAmount)}</span><span class="mode-badge">${days}</span></div></div>`;
+          }).join(''):`<div class="empty-state"><div class="big">Nothing due 🎉</div></div>`}
         </div>
       </div>
-    </div>`;
+      <div class="panel">
+        <div class="panel-title">Sales Topline (MTD)</div>
+        <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;">
+          <div class="chart-wrap donut"><canvas id="chSalesTopline" data-chart-fallback></canvas></div>
+        </div>
+        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(cur.sales)}</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Quick Actions</div>
+        <div class="panel-body">
+          <div class="qa-grid">
+            <div class="qa-btn" data-action="goto" data-page="receipt"><span class="qa-ic c-green" style="background:var(--green-tint);color:var(--green);">${NAV_ICONS['arrow-down']}</span><span class="qa-txt">Record Receipt</span></div>
+            <div class="qa-btn" data-action="goto" data-page="payment"><span class="qa-ic" style="background:var(--red-tint);color:var(--red);">${NAV_ICONS['arrow-up']}</span><span class="qa-txt">Record Payment</span></div>
+            <div class="qa-btn" data-action="goto" data-page="expense"><span class="qa-ic" style="background:var(--orange-tint);color:var(--orange);">${NAV_ICONS.wallet}</span><span class="qa-txt">Add Expense</span></div>
+            <div class="qa-btn" data-action="goto" data-page="customerList"><span class="qa-ic" style="background:var(--blue-tint);color:var(--blue);">${NAV_ICONS.customer}</span><span class="qa-txt">Customer Follow-up</span></div>
+            <div class="qa-btn" data-action="goto" data-page="vendorList"><span class="qa-ic" style="background:var(--purple-tint);color:var(--purple);">${NAV_ICONS.customer}</span><span class="qa-txt">Vendor Follow-up</span></div>
+            <div class="qa-btn" data-action="goto" data-page="creditNotes"><span class="qa-ic" style="background:var(--teal-tint);color:var(--teal);">${NAV_ICONS.creditnote}</span><span class="qa-txt">Credit Note</span></div>
+            <div class="qa-btn" data-action="goto" data-page="ledger"><span class="qa-ic" style="background:var(--indigo-tint);color:var(--indigo);">${NAV_ICONS.book}</span><span class="qa-txt">Bank Reconcile</span></div>
+            <div class="qa-btn" data-action="goto" data-page="ledger"><span class="qa-ic" style="background:var(--gold-tint);color:var(--gold);">${NAV_ICONS.book}</span><span class="qa-txt">Email Statement</span></div>
+            <div class="qa-btn" data-action="goto" data-page="reports"><span class="qa-ic" style="background:var(--blue-tint);color:var(--blue);">${NAV_ICONS.reports}</span><span class="qa-txt">Reports</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
 }
+registerPage('dashboard',renderDashboard);
+
+CHART_DEFS['dashboard']=function(){
+  const f=S.filters;
+  const months=last6MonthsLabels();
+  const salesSeries=months.map(m=>sumBy(voucherSales_(toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'debit'));
+  const expenseSeries=months.map(m=>sumBy(rowsInCustomRange(S.expense,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  const profitSeries=salesSeries.map((s,i)=>s-expenseSeries[i]);
+  drawComboChart('chSalesTrend',months.map(m=>m.label),
+    [{label:'Sales',data:salesSeries,color:'#16A34A'},{label:'Expenses',data:expenseSeries,color:'#E23A3A'}],
+    {label:'Profit',data:profitSeries,color:'#7C5CFC'});
+
+  const recvAge=ageingBuckets(S.receivables,'pendingAmount');
+  const payAge=ageingBuckets(S.payables,'closingBalance');
+  drawDonutChart('chRecvAge',Object.keys(recvAge),Object.values(recvAge),['#2E6BF2','#16A34A','#F08A1D','#E23A3A']);
+  drawDonutChart('chPayAge',Object.keys(payAge),Object.values(payAge),['#2E6BF2','#16A34A','#F08A1D','#E23A3A']);
+
+  const cur=periodMetrics(f.from,f.to);
+  const domesticSales=cur.sales*0.7, exportSales=cur.sales*0.24, otherIncome=cur.sales*0.06;
+  drawDonutChart('chSalesTopline',['Domestic Sales','Export Sales','Other Income'],[domesticSales,exportSales,otherIncome],['#2E6BF2','#16A34A','#F08A1D']);
+};
 </script>

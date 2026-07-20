@@ -1,0 +1,87 @@
+<script>
+/* ============================= MISC PAGES ============================= */
+
+function renderExecSummary(){
+  const f=S.filters;
+  const cur=periodMetrics(f.from,f.to);
+  const totalRecv=outstandingReceivable(), totalPay=outstandingPayable(), cashPos=cashInHandBank();
+  const overdueRecv=S.receivables.filter(r=>Number(r.overdueDays)>0);
+  const overduePay=S.payables.filter(r=>Number(r.overdueDays)>0);
+  const netWorking=totalRecv-totalPay;
+
+  return `
+    ${renderFilterBar()}
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Net Profit (Period)</span><div class="card-icon c-indigo">${NAV_ICONS.pl}</div></div><div class="card-value">${fmtINR(cur.netProfit)}</div><div class="card-sub">${cur.netProfit>=0?'Profitable':'Loss-making'} period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Net Working Capital</span><div class="card-icon c-blue">${NAV_ICONS.balance}</div></div><div class="card-value">${fmtINR(netWorking)}</div><div class="card-sub">Receivables − Payables</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Cash Position</span><div class="card-icon c-green">${NAV_ICONS.cashflow}</div></div><div class="card-value">${fmtINR(cashPos)}</div><div class="card-sub">indicative, see Cash Flow page</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Overdue Exposure</span><div class="card-icon c-red">${NAV_ICONS.ageing}</div></div><div class="card-value">${overdueRecv.length+overduePay.length}</div><div class="card-sub">${fmtINR(sumBy(overdueRecv,'pendingAmount')+sumBy(overduePay,'closingBalance'))} combined</div></div>
+    </div>
+    <div class="simple-panel">
+      <h3 style="margin-bottom:14px;font-size:14px;">Leadership Snapshot</h3>
+      <div class="kv-grid">
+        <div class="kv-row"><span class="k">Total Sales (Period)</span><span class="v">${fmtINR(cur.sales)}</span></div>
+        <div class="kv-row"><span class="k">Total Expenses (Period)</span><span class="v">${fmtINR(cur.expense)}</span></div>
+        <div class="kv-row"><span class="k">Collections (Period)</span><span class="v">${fmtINR(cur.collections)}</span></div>
+        <div class="kv-row"><span class="k">Payments (Period)</span><span class="v">${fmtINR(cur.payments)}</span></div>
+        <div class="kv-row"><span class="k">Outstanding Receivables</span><span class="v">${fmtINR(totalRecv)}</span></div>
+        <div class="kv-row"><span class="k">Outstanding Payables</span><span class="v">${fmtINR(totalPay)}</span></div>
+        <div class="kv-row"><span class="k">Overdue Receivable Bills</span><span class="v">${overdueRecv.length}</span></div>
+        <div class="kv-row"><span class="k">Overdue Payable Bills</span><span class="v">${overduePay.length}</span></div>
+      </div>
+    </div>`;
+}
+registerPage('execSummary',renderExecSummary);
+
+function renderAlerts(){
+  const overdueRecv=S.receivables.filter(r=>Number(r.overdueDays)>0).sort((a,b)=>b.overdueDays-a.overdueDays);
+  const overduePay=S.payables.filter(r=>Number(r.overdueDays)>0).sort((a,b)=>b.overdueDays-a.overdueDays);
+  const items=[];
+  overdueRecv.slice(0,10).forEach(r=>items.push({
+    icon:NAV_ICONS.in,cls:'c-red',title:`${r.partyName} — ${fmtNum(r.overdueDays)} days overdue`,
+    desc:`Receivable of ${fmtINR(r.pendingAmount)} (Bill ${r.billRefNo}) is overdue.`,time:'Receivables'}));
+  overduePay.slice(0,10).forEach(r=>items.push({
+    icon:NAV_ICONS.out,cls:'c-orange',title:`${r.partyName} — ${fmtNum(r.overdueDays)} days overdue`,
+    desc:`Payable of ${fmtINR(r.closingBalance)} (Bill ${r.billRefNo}) is overdue.`,time:'Payables'}));
+  items.sort((a,b)=>0);
+  return `
+    <div style="max-width:720px;">
+      <div class="panel-title" style="background:transparent;border:none;padding:0 0 12px;"><span style="font-size:14px;">${items.length} alerts need your attention</span></div>
+      ${items.length?items.map(it=>`
+        <div class="alert-item">
+          <span class="a-ic ${it.cls}" style="background:var(--${it.cls==='c-red'?'red':'orange'}-tint);color:var(--${it.cls==='c-red'?'red':'orange'});">${it.icon}</span>
+          <div class="a-body"><div class="a-title">${esc(it.title)}</div><div class="a-desc">${esc(it.desc)}</div><div class="a-time">${esc(it.time)}</div></div>
+        </div>`).join(''):`<div class="empty-state"><div class="big">All clear 🎉</div>No overdue bills right now.</div>`}
+    </div>`;
+}
+registerPage('alerts',renderAlerts);
+
+function renderSettings(){
+  return `
+    <div style="max-width:640px;">
+      <div class="simple-panel" style="margin-bottom:14px;">
+        <h3 style="margin-bottom:6px;font-size:14px;">Appearance</h3>
+        <div class="settings-row">
+          <div><div class="s-label">Dark Mode</div><div class="s-desc">Switch between light and dark theme</div></div>
+          <div class="toggle ${S.darkMode?'on':''}" data-action="settings-toggle-theme"><div class="knob"></div></div>
+        </div>
+      </div>
+      <div class="simple-panel">
+        <h3 style="margin-bottom:6px;font-size:14px;">Account</h3>
+        <div class="kv-grid" style="grid-template-columns:1fr;">
+          <div class="kv-row"><span class="k">Name</span><span class="v" style="font-family:inherit;">${esc(S.user.name)}</span></div>
+          <div class="kv-row"><span class="k">User ID</span><span class="v" style="font-family:inherit;">${esc(S.user.id)}</span></div>
+          <div class="kv-row"><span class="k">Role</span><span class="v" style="font-family:inherit;">${esc(S.user.role||'Team Member')}</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+registerPage('settings',renderSettings);
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action="settings-toggle-theme"]');if(!el)return;
+  S.darkMode=!S.darkMode;
+  document.documentElement.classList.toggle('dark',S.darkMode);
+  try{localStorage.setItem('tally_dark_mode',S.darkMode?'true':'false');}catch(err){}
+  render();
+});
+</script>

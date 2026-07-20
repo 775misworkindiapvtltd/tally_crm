@@ -1,0 +1,188 @@
+<script>
+/* ============================= RECEIVABLES MODULE ============================= */
+
+function renderRecvDashboard(){
+  const totalRecv=outstandingReceivable();
+  const overdue=S.receivables.filter(r=>Number(r.overdueDays)>0);
+  const current=S.receivables.filter(r=>Number(r.overdueDays)<=0);
+  const age=ageingBuckets(S.receivables,'pendingAmount');
+  const topCustomers=topN(S.receivables,'partyName','pendingAmount',8);
+  const maxTop=Math.max(1,...topCustomers.map(x=>x.value));
+
+  return `
+    ${renderFilterBar()}
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Total Outstanding</span><div class="card-icon c-blue">${NAV_ICONS.in}</div></div><div class="card-value">${fmtINR(totalRecv)}</div><div class="card-sub">${S.receivables.length} open bills</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Overdue Bills</span><div class="card-icon c-red">${NAV_ICONS.ageing}</div></div><div class="card-value">${overdue.length}</div><div class="card-sub">${fmtINR(sumBy(overdue,'pendingAmount'))} at risk</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Current Bills</span><div class="card-icon c-green">${NAV_ICONS.customer}</div></div><div class="card-value">${current.length}</div><div class="card-sub">${fmtINR(sumBy(current,'pendingAmount'))} not yet due</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Avg Overdue Days</span><div class="card-icon c-orange">${NAV_ICONS.clock}</div></div><div class="card-value">${overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0}</div><div class="card-sub">days past due (overdue bills only)</div></div>
+    </div>
+    <div class="dash-row">
+      <div class="panel">
+        <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
+        <div class="panel-body"><div class="bar-chart">${topCustomers.map(c=>`<div class="bar-item"><div class="b-label" title="${esc(c.label)}">${esc(c.label)}</div><div class="bar-track"><div class="bar-fill recv" style="width:${Math.max(4,c.value/maxTop*100)}%;"></div></div><div class="b-val">${fmtINR(c.value)}</div></div>`).join('')||`<div class="empty-state"><div class="big">No data</div></div>`}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Ageing Snapshot</div>
+        <div class="panel-body"><div class="age-buckets">${Object.keys(age).map(k=>`<div class="age-bucket ${k==='90+'?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(age[k])}</div></div>`).join('')}</div></div>
+      </div>
+    </div>`;
+}
+registerPage('recvDashboard',renderRecvDashboard);
+
+function renderAgeing(kind){
+  const rows=kind==='recv'?S.receivables:S.payables;
+  const amtKey=kind==='recv'?'pendingAmount':'closingBalance';
+  const nameLabel=kind==='recv'?'Customer':'Vendor';
+  const buckets={'0-30':{rows:[],total:0},'31-60':{rows:[],total:0},'61-90':{rows:[],total:0},'91-180':{rows:[],total:0},'180+':{rows:[],total:0}};
+  rows.forEach(r=>{
+    const d=Number(r.overdueDays)||0; if(d<=0)return;
+    const key=d<=30?'0-30':d<=60?'31-60':d<=90?'61-90':d<=180?'91-180':'180+';
+    buckets[key].rows.push(r); buckets[key].total+=Number(r[amtKey])||0;
+  });
+  const grandTotal=Object.values(buckets).reduce((s,b)=>s+b.total,0);
+  const bucketCards=Object.keys(buckets).map(k=>`<div class="age-bucket ${(k==='91-180'||k==='180+')?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(buckets[k].total)}</div><div class="card-sub">${buckets[k].rows.length} bills</div></div>`).join('');
+
+  const allRows=rows.filter(r=>(Number(r.overdueDays)||0)>0).sort((a,b)=>(Number(b.overdueDays)||0)-(Number(a.overdueDays)||0));
+  const tableRows=allRows.map((r,i)=>`<tr><td class="nm">${esc(r.partyName)}</td><td>${esc(r.billRefNo)}</td><td>${esc(r.billDate)}</td><td>${esc(r.dueDate)}</td><td class="num">${fmtNum(r.overdueDays)}</td><td class="num">${fmtINR(r[amtKey])}</td></tr>`).join('');
+
+  return `
+    ${renderFilterBar()}
+    <div class="panel-title" style="background:transparent;border:none;padding:0 0 12px;">
+      <span style="font-size:14px;">${nameLabel} Ageing — ${allRows.length} overdue bills, total ${fmtINR(grandTotal)}</span>
+    </div>
+    <div class="age-buckets" style="margin-bottom:16px;">${bucketCards}</div>
+    <div class="panel">
+      <div class="panel-body" style="padding:0;">
+        <table class="mini-table">
+          <thead><tr><th>${nameLabel} Name</th><th>Bill Ref No</th><th>Bill Date</th><th>Due Date</th><th class="num">Overdue Days</th><th class="num">Amount</th></tr></thead>
+          <tbody>${tableRows||`<tr><td colspan="6"><div class="empty-state"><div class="big">No overdue bills 🎉</div></div></td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+registerPage('ageingRecv',()=>renderAgeing('recv'));
+registerPage('ageingPay',()=>renderAgeing('pay'));
+
+function renderPartyList(kind){
+  const rows=kind==='recv'?S.receivables:S.payables;
+  const amtKey=kind==='recv'?'pendingAmount':'closingBalance';
+  const nameLabel=kind==='recv'?'Customer':'Vendor';
+  const byParty={};
+  rows.forEach(r=>{
+    if(!byParty[r.partyName]) byParty[r.partyName]={name:r.partyName,group:r.partyGroup,phone:r.phoneNo,salesPerson:r.salesPerson,total:0,maxOverdue:0,bills:0};
+    byParty[r.partyName].total+=Number(r[amtKey])||0;
+    byParty[r.partyName].maxOverdue=Math.max(byParty[r.partyName].maxOverdue,Number(r.overdueDays)||0);
+    byParty[r.partyName].bills++;
+  });
+  const list=Object.values(byParty).sort((a,b)=>b.total-a.total);
+  const rowsHtml=list.map(p=>{
+    const st=p.maxOverdue>0?{cls:'overdue',label:'Overdue'}:{cls:'current',label:'Current'};
+    return `<tr><td class="nm">${esc(p.name)}</td><td>${esc(p.group)}</td><td>${esc(p.phone)}</td><td>${esc(p.salesPerson)}</td><td class="num">${p.bills}</td><td class="num">${fmtNum(p.maxOverdue)}</td><td class="num">${fmtINR(p.total)}</td><td><span class="status-badge ${st.cls}">${st.label}</span></td></tr>`;
+  }).join('');
+  return `
+    ${renderFilterBar()}
+    <div class="panel">
+      <div class="panel-title">${nameLabel} List <span class="count" style="font-size:11px;color:var(--muted);">${list.length} ${nameLabel.toLowerCase()}s</span></div>
+      <div class="panel-body" style="padding:0;overflow:auto;">
+        <table class="mini-table">
+          <thead><tr><th>${nameLabel} Name</th><th>Group</th><th>Phone</th><th>Sales Person</th><th class="num">Bills</th><th class="num">Max Overdue Days</th><th class="num">Outstanding</th><th>Status</th></tr></thead>
+          <tbody>${rowsHtml||`<tr><td colspan="8"><div class="empty-state"><div class="big">No ${nameLabel.toLowerCase()}s found</div></div></td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+registerPage('customerList',()=>renderPartyList('recv'));
+registerPage('vendorList',()=>renderPartyList('pay'));
+
+/* ---- Collection Analysis: DSO (Days Sales Outstanding) + collection efficiency ---- */
+function renderCollectionAnalysis(){
+  const f=S.filters;
+  const salesInRange=sumBy(voucherSales_(f.from,f.to),'debit');
+  const collectionsInRange=sumBy(rowsInCustomRange(S.receipt,'date',f.from,f.to),'debitLedgerAmount');
+  const totalRecv=outstandingReceivable();
+  const spanDays=Math.max(1,Math.round((fromISO(f.to)-fromISO(f.from))/86400000)+1);
+  // DSO = (Accounts Receivable / Credit Sales) * Number of Days
+  const dso=salesInRange>0?(totalRecv/salesInRange)*spanDays:0;
+  const collectionEfficiency=salesInRange>0?Math.min(100,(collectionsInRange/salesInRange)*100):0;
+
+  const byMonth=last6MonthsLabels().map(m=>{
+    const from=toISO(new Date(m.y,m.m,1)),to=toISO(new Date(m.y,m.m+1,0));
+    return {label:m.label,sales:sumBy(voucherSales_(from,to),'debit'),collected:sumBy(rowsInCustomRange(S.receipt,'date',from,to),'debitLedgerAmount')};
+  });
+
+  return `
+    ${renderFilterBar()}
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">DSO (Days Sales Outstanding)</span><div class="card-icon c-blue">${NAV_ICONS.collection}</div></div><div class="card-value">${dso.toFixed(1)} days</div><div class="card-sub">Lower is better</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Collection Efficiency</span><div class="card-icon c-green">${NAV_ICONS.collection}</div></div><div class="card-value">${collectionEfficiency.toFixed(1)}%</div><div class="card-sub">Collected vs sales, selected period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Collected (Period)</span><div class="card-icon c-teal">${NAV_ICONS['arrow-down']}</div></div><div class="card-value">${fmtINR(collectionsInRange)}</div><div class="card-sub">${S.receipt.filter(r=>inFilterRange(r.date)).length} receipts</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Sales (Period)</span><div class="card-icon c-purple">${NAV_ICONS.sales}</div></div><div class="card-value">${fmtINR(salesInRange)}</div><div class="card-sub">as recorded in Balance tab</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Sales vs Collections — Last 6 Months</div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="chCollection" data-chart-fallback></canvas></div></div>
+    </div>`;
+}
+registerPage('collectionAnalysis',renderCollectionAnalysis);
+CHART_DEFS['collectionAnalysis']=function(){
+  const byMonth=last6MonthsLabels().map(m=>{
+    const from=toISO(new Date(m.y,m.m,1)),to=toISO(new Date(m.y,m.m+1,0));
+    return {label:m.label,sales:sumBy(voucherSales_(from,to),'debit'),collected:sumBy(rowsInCustomRange(S.receipt,'date',from,to),'debitLedgerAmount')};
+  });
+  drawComboChart('chCollection',byMonth.map(m=>m.label),
+    [{label:'Sales',data:byMonth.map(m=>m.sales),color:'#2E6BF2'},{label:'Collected',data:byMonth.map(m=>m.collected),color:'#16A34A'}]);
+};
+
+/* ---- Follow Up List: overdue receivables sorted by urgency, with a client-side "mark done" ---- */
+function renderFollowUpList(){
+  const rows=S.receivables.filter(r=>(Number(r.overdueDays)||0)>0)
+    .sort((a,b)=>(Number(b.overdueDays)||0)-(Number(a.overdueDays)||0));
+  const rowsHtml=rows.map((r,i)=>{
+    const key=r.partyName+'|'+r.billRefNo;
+    const done=!!S.followUpDone[key];
+    return `<tr style="${done?'opacity:.45;':''}">
+      <td class="nm">${esc(r.partyName)}</td><td>${esc(r.billRefNo)}</td><td>${esc(r.phoneNo)}</td>
+      <td>${esc(r.salesPerson)}</td><td>${esc(r.dueDate)}</td>
+      <td class="num">${fmtNum(r.overdueDays)}</td><td class="num">${fmtINR(r.pendingAmount)}</td>
+      <td><button class="btn btn-ghost" style="padding:4px 10px;font-size:10.5px;" data-action="followup-toggle" data-key="${esc(key)}">${done?'Undo':'Mark Followed Up'}</button></td>
+    </tr>`;
+  }).join('');
+  return `
+    ${renderFilterBar()}
+    <div class="panel">
+      <div class="panel-title">Follow Up List <span style="font-size:11px;color:var(--muted);font-weight:600;">${rows.length} overdue bills needing attention</span></div>
+      <div class="panel-body" style="padding:0;overflow:auto;">
+        <table class="mini-table">
+          <thead><tr><th>Customer</th><th>Bill Ref</th><th>Phone</th><th>Sales Person</th><th>Due Date</th><th class="num">Overdue Days</th><th class="num">Amount</th><th></th></tr></thead>
+          <tbody>${rowsHtml||`<tr><td colspan="8"><div class="empty-state"><div class="big">Nothing to follow up 🎉</div></div></td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+registerPage('followUpList',renderFollowUpList);
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action="followup-toggle"]');if(!el)return;
+  const key=el.getAttribute('data-key');
+  S.followUpDone[key]=!S.followUpDone[key];render();
+});
+
+/* ---- Credit Notes: derived from Balance tab voucherType containing "Credit Note" ---- */
+function renderCreditNotes(){
+  const rows=voucherCreditNote_(null,null).sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0));
+  const total=sumBy(rows,'credit')+sumBy(rows,'debit');
+  const rowsHtml=rows.map(r=>`<tr><td class="nm">${esc(r.partyName)}</td><td>${esc(r.date)}</td><td>${esc(r.voucherNo)}</td><td>${esc(r.particular)}</td><td class="num">${fmtINR(r.debit||r.credit)}</td></tr>`).join('');
+  return `
+    ${renderFilterBar()}
+    <div class="panel">
+      <div class="panel-title">Credit Notes <span style="font-size:11px;color:var(--muted);font-weight:600;">${rows.length} credit notes, total ${fmtINR(total)}</span></div>
+      <div class="panel-body" style="padding:0;overflow:auto;">
+        <table class="mini-table">
+          <thead><tr><th>Customer</th><th>Date</th><th>Voucher No</th><th>Particulars</th><th class="num">Amount</th></tr></thead>
+          <tbody>${rowsHtml||`<tr><td colspan="5"><div class="empty-state"><div class="big">No credit notes found</div>Derived from the Balance tab's Voucher Type column containing "Credit Note" — if your sheet uses different wording, this list may be empty.</div></td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+registerPage('creditNotes',renderCreditNotes);
+</script>

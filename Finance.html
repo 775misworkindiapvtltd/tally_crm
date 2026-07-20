@@ -1,0 +1,189 @@
+<script>
+/* ============================= FINANCE MODULE ============================= */
+
+function renderSalesDashboard(){
+  const f=S.filters;
+  const cur=periodMetrics(f.from,f.to);
+  const prevR=comparisonRange(f.from,f.to); const prev=periodMetrics(prevR.from,prevR.to);
+  const pct=pctChange(cur.sales,prev.sales);
+  const months=last6MonthsLabels();
+  const salesSeries=months.map(m=>sumBy(voucherSales_(toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'debit'));
+  const byCustomer=topN(voucherSales_(f.from,f.to),'partyName','debit',8);
+  const maxC=Math.max(1,...byCustomer.map(x=>x.value));
+
+  return `
+    ${renderFilterBar()}
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Total Sales</span><div class="card-icon c-green">${NAV_ICONS.sales}</div></div><div class="card-value">${fmtINR(cur.sales)}</div><div class="card-sub"><span class="chip ${pct>=0?'up':'down'}">${pct>=0?'▲':'▼'} ${Math.abs(pct).toFixed(1)}%</span> vs previous period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Transactions</span><div class="card-icon c-blue">${NAV_ICONS.reports}</div></div><div class="card-value">${voucherSales_(f.from,f.to).length}</div><div class="card-sub">sales vouchers, selected period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Avg. Ticket Size</span><div class="card-icon c-purple">${NAV_ICONS.collection}</div></div><div class="card-value">${fmtINR(voucherSales_(f.from,f.to).length?cur.sales/voucherSales_(f.from,f.to).length:0)}</div><div class="card-sub">per voucher</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Active Customers</span><div class="card-icon c-teal">${NAV_ICONS.customer}</div></div><div class="card-value">${new Set(voucherSales_(f.from,f.to).map(v=>v.partyName)).size}</div><div class="card-sub">billed in selected period</div></div>
+    </div>
+    <div class="dash-row">
+      <div class="panel">
+        <div class="panel-title">Sales Trend — Last 6 Months</div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesOnly" data-chart-fallback></canvas></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Top Customers by Sales</div>
+        <div class="panel-body"><div class="bar-chart">${byCustomer.map(c=>`<div class="bar-item"><div class="b-label" title="${esc(c.label)}">${esc(c.label)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,c.value/maxC*100)}%;"></div></div><div class="b-val">${fmtINR(c.value)}</div></div>`).join('')||`<div class="empty-state"><div class="big">No sales in this period</div></div>`}</div></div>
+      </div>
+    </div>`;
+}
+registerPage('salesDashboard',renderSalesDashboard);
+CHART_DEFS['salesDashboard']=function(){
+  const months=last6MonthsLabels();
+  const salesSeries=months.map(m=>sumBy(voucherSales_(toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'debit'));
+  drawComboChart('chSalesOnly',months.map(m=>m.label),[{label:'Sales',data:salesSeries,color:'#16A34A'}]);
+};
+
+function renderExpensesDashboard(){
+  const f=S.filters;
+  const expRows=rowsInCustomRange(S.expense,'date',f.from,f.to);
+  const total=sumBy(expRows,'amount')||1;
+  const byCategory=topN(expRows,'group','amount',8);
+  const bySubCategory=topN(expRows,'subGroup','amount',8);
+  const maxCat=Math.max(1,...byCategory.map(x=>x.value));
+
+  return `
+    ${renderFilterBar()}
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Total Expenses</span><div class="card-icon c-red">${NAV_ICONS.wallet}</div></div><div class="card-value">${fmtINR(total)}</div><div class="card-sub">${expRows.length} voucher lines, selected period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Categories</span><div class="card-icon c-orange">${NAV_ICONS.reports}</div></div><div class="card-value">${new Set(expRows.map(r=>r.group)).size}</div><div class="card-sub">distinct expense groups</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Largest Category</span><div class="card-icon c-purple">${NAV_ICONS.pl}</div></div><div class="card-value" style="font-size:14px;">${esc(byCategory[0]?byCategory[0].label:'—')}</div><div class="card-sub">${byCategory[0]?fmtINR(byCategory[0].value):''}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Avg per Voucher</span><div class="card-icon c-blue">${NAV_ICONS.collection}</div></div><div class="card-value">${fmtINR(expRows.length?total/expRows.length:0)}</div><div class="card-sub">across all categories</div></div>
+    </div>
+    <div class="dash-row">
+      <div class="panel">
+        <div class="panel-title">Expense by Category</div>
+        <div class="panel-body">${byCategory.map((c,i)=>`
+          <div class="mini-cat-row"><span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span><div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div><span class="mc-amt">${fmtINR(c.value)}</span><span class="mc-pct">${(c.value/total*100).toFixed(1)}%</span></div>`).join('')||`<div class="empty-state"><div class="big">No expenses in this period</div></div>`}
+          <div class="mini-total-row"><span>Total</span><span>${fmtINR(total)}</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Expense by Sub-Category</div>
+        <div class="panel-body" style="padding:0;">
+          <table class="mini-table"><thead><tr><th>Sub Category</th><th class="num">Amount</th><th class="num">% of Total</th></tr></thead>
+          <tbody>${bySubCategory.map(c=>`<tr><td class="nm">${esc(c.label)}</td><td class="num">${fmtINR(c.value)}</td><td class="num">${(c.value/total*100).toFixed(1)}%</td></tr>`).join('')||`<tr><td colspan="3"><div class="empty-state"><div class="big">No data</div></div></td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+registerPage('expensesDashboard',renderExpensesDashboard);
+
+function renderCashFlow(){
+  const f=S.filters;
+  const cur=periodMetrics(f.from,f.to);
+  const cashPos=cashInHandBank();
+  const opening=cashPos-cur.collections+cur.payments;
+  const months=last6MonthsLabels();
+  const inflow=months.map(m=>sumBy(rowsInCustomRange(S.receipt,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'debitLedgerAmount'));
+  const outflow=months.map(m=>sumBy(rowsInCustomRange(S.payment,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'creditLedgerAmount'));
+
+  return `
+    ${renderFilterBar()}
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Opening Balance</span><div class="card-icon c-blue">${NAV_ICONS.cashflow}</div></div><div class="card-value">${fmtINR(opening)}</div><div class="card-sub">start of selected period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Cash In</span><div class="card-icon c-green">${NAV_ICONS['arrow-down']}</div></div><div class="card-value">${fmtINR(cur.collections)}</div><div class="card-sub">receipts, selected period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Cash Out</span><div class="card-icon c-red">${NAV_ICONS['arrow-up']}</div></div><div class="card-value">${fmtINR(cur.payments)}</div><div class="card-sub">payments, selected period</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Closing Balance</span><div class="card-icon c-purple">${NAV_ICONS.cashflow}</div></div><div class="card-value">${fmtINR(cashPos)}</div><div class="card-sub">as of today (all-time)</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Cash In vs Cash Out — Last 6 Months</div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="chCashFlow6m" data-chart-fallback></canvas></div></div>
+    </div>
+    <div class="compare-note" style="margin-top:10px;">Cash position is derived from Receipt/Payment bank ledger legs (no dedicated Cash/Bank book sheet) — treat as indicative and reconcile against Tally directly for statutory reporting.</div>`;
+}
+registerPage('cashFlow',renderCashFlow);
+CHART_DEFS['cashFlow']=function(){
+  const months=last6MonthsLabels();
+  const inflow=months.map(m=>sumBy(rowsInCustomRange(S.receipt,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'debitLedgerAmount'));
+  const outflow=months.map(m=>sumBy(rowsInCustomRange(S.payment,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'creditLedgerAmount'));
+  drawComboChart('chCashFlow6m',months.map(m=>m.label),[{label:'Cash In',data:inflow,color:'#16A34A'},{label:'Cash Out',data:outflow,color:'#E23A3A'}]);
+};
+
+function renderProfitLoss(){
+  const f=S.filters;
+  const cur=periodMetrics(f.from,f.to);
+  const grossProfit=cur.sales-cur.purchase;
+  const netProfit=grossProfit-cur.expense;
+  const expByCategory=topN(rowsInCustomRange(S.expense,'date',f.from,f.to),'group','amount',20);
+
+  return `
+    ${renderFilterBar()}
+    <div class="simple-panel">
+      <h3 style="margin-bottom:14px;font-size:15px;">Profit &amp; Loss Statement — ${fmtDDMMMYYYY(fromISO(f.from))} to ${fmtDDMMMYYYY(fromISO(f.to))}</h3>
+      <div class="kv-grid" style="grid-template-columns:1fr;max-width:520px;">
+        <div class="kv-row"><span class="k">Sales</span><span class="v">${fmtINR(cur.sales)}</span></div>
+        <div class="kv-row"><span class="k">Less: Purchases</span><span class="v">${fmtINR(cur.purchase)}</span></div>
+        <div class="kv-row" style="font-weight:700;"><span class="k">Gross Profit</span><span class="v">${fmtINR(grossProfit)}</span></div>
+        ${expByCategory.map(c=>`<div class="kv-row"><span class="k">Less: ${esc(c.label)}</span><span class="v">${fmtINR(c.value)}</span></div>`).join('')}
+        <div class="kv-row" style="font-weight:700;border-top:2px solid var(--ink);"><span class="k">Net Profit</span><span class="v" style="color:${netProfit>=0?'var(--success)':'var(--danger)'};">${fmtINR(netProfit)}</span></div>
+      </div>
+    </div>`;
+}
+registerPage('profitLoss',renderProfitLoss);
+
+function renderBalanceSheet(){
+  const totalRecv=outstandingReceivable();
+  const totalPay=outstandingPayable();
+  const cashPos=cashInHandBank();
+  const totalAssets=totalRecv+Math.max(0,cashPos);
+  const totalLiabilities=totalPay+Math.max(0,-cashPos);
+  const equity=totalAssets-totalLiabilities;
+  return `
+    ${renderFilterBar()}
+    <div class="dash-row" style="grid-template-columns:1fr 1fr;">
+      <div class="simple-panel">
+        <h3 style="margin-bottom:14px;font-size:14px;">Assets</h3>
+        <div class="kv-grid" style="grid-template-columns:1fr;">
+          <div class="kv-row"><span class="k">Cash &amp; Bank</span><span class="v">${fmtINR(Math.max(0,cashPos))}</span></div>
+          <div class="kv-row"><span class="k">Sundry Debtors (Receivables)</span><span class="v">${fmtINR(totalRecv)}</span></div>
+          <div class="kv-row" style="font-weight:700;border-top:2px solid var(--ink);"><span class="k">Total Assets</span><span class="v">${fmtINR(totalAssets)}</span></div>
+        </div>
+      </div>
+      <div class="simple-panel">
+        <h3 style="margin-bottom:14px;font-size:14px;">Liabilities &amp; Equity</h3>
+        <div class="kv-grid" style="grid-template-columns:1fr;">
+          <div class="kv-row"><span class="k">Sundry Creditors (Payables)</span><span class="v">${fmtINR(totalPay)}</span></div>
+          <div class="kv-row"><span class="k">Bank Overdraft</span><span class="v">${fmtINR(Math.max(0,-cashPos))}</span></div>
+          <div class="kv-row" style="font-weight:700;"><span class="k">Total Liabilities</span><span class="v">${fmtINR(totalLiabilities)}</span></div>
+          <div class="kv-row" style="font-weight:700;border-top:2px solid var(--ink);"><span class="k">Capital / Equity (Balancing figure)</span><span class="v">${fmtINR(equity)}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="compare-note" style="margin-top:10px;">Indicative snapshot only — built from Receivables/Payables/derived cash position, not a full trial balance. For statutory Balance Sheet, use Tally directly.</div>`;
+}
+registerPage('balanceSheet',renderBalanceSheet);
+
+const REPORT_COLOR_VARS={
+  'c-blue':'blue','c-red':'red','c-green':'green','c-orange':'orange','c-purple':'purple','c-teal':'teal','c-indigo':'indigo'
+};
+function renderReports(){
+  const items=[
+    {key:'recvDashboard',label:'Receivables Dashboard',icon:'in',cls:'c-blue'},
+    {key:'ageingRecv',label:'Receivables Ageing',icon:'ageing',cls:'c-blue'},
+    {key:'customerList',label:'Customer List',icon:'customer',cls:'c-blue'},
+    {key:'collectionAnalysis',label:'Collection Analysis',icon:'collection',cls:'c-teal'},
+    {key:'followUpList',label:'Follow Up List',icon:'followup',cls:'c-orange'},
+    {key:'creditNotes',label:'Credit Notes',icon:'creditnote',cls:'c-purple'},
+    {key:'payDashboard',label:'Payables Dashboard',icon:'out',cls:'c-red'},
+    {key:'ageingPay',label:'Payables Ageing',icon:'ageing',cls:'c-red'},
+    {key:'vendorList',label:'Vendor List',icon:'customer',cls:'c-red'},
+    {key:'salesDashboard',label:'Sales Dashboard',icon:'sales',cls:'c-green'},
+    {key:'expensesDashboard',label:'Expenses Dashboard',icon:'wallet',cls:'c-orange'},
+    {key:'cashFlow',label:'Cash Flow',icon:'cashflow',cls:'c-indigo'},
+    {key:'profitLoss',label:'Profit & Loss',icon:'pl',cls:'c-purple'},
+    {key:'balanceSheet',label:'Balance Sheet',icon:'balance',cls:'c-teal'},
+    {key:'ledger',label:'Party Ledger',icon:'book',cls:'c-blue'},
+    {key:'execSummary',label:'Executive Summary',icon:'summary',cls:'c-green'},
+  ];
+  return `
+    <div class="qa-grid" style="grid-template-columns:repeat(4,1fr);">
+      ${items.map(it=>{const cv=REPORT_COLOR_VARS[it.cls]||'blue';return `<div class="qa-btn" style="padding:18px 10px;" data-action="goto" data-page="${it.key}"><span class="qa-ic" style="width:38px;height:38px;background:var(--${cv}-tint);color:var(--${cv});">${NAV_ICONS[it.icon]}</span><span class="qa-txt" style="font-size:11.5px;">${esc(it.label)}</span></div>`;}).join('')}
+    </div>`;
+}
+registerPage('reports',renderReports);
+</script>

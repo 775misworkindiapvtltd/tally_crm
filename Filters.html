@@ -1,0 +1,145 @@
+<script>
+/* ============================= FILTERS ============================= */
+// Global filter state. Company/Branch/SalesPerson lists are derived live from loaded
+// data (see optionsFor* below) so the dropdowns always reflect what's actually in the sheet.
+function defaultFilterState(){
+  const todayRange=presetRange('MTD');
+  return {
+    company:'ALL', branch:'ALL', fy:'ALL', salesPerson:'ALL',
+    preset:'MTD', from:todayRange.from, to:todayRange.to,
+    compare:false, open:false
+  };
+}
+
+function pad2(n){return n<10?'0'+n:''+n;}
+function toISO(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function fromISO(s){ const p=String(s).split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+function fmtDDMMMYYYY(d){ const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return pad2(d.getDate())+' '+months[d.getMonth()]+' '+d.getFullYear(); }
+
+// Financial year runs 1 Apr - 31 Mar (Indian FY), matching the "2024-25" style selector.
+function fyBounds(now){
+  const y=now.getMonth()>=3?now.getFullYear():now.getFullYear()-1;
+  return {start:new Date(y,3,1), end:new Date(y+1,2,31), label:y+'-'+String(y+1).slice(2)};
+}
+function fyOptions(){
+  const now=new Date();const cur=fyBounds(now);const out=[];
+  for(let i=1;i>=-3;i--){
+    const y=(now.getMonth()>=3?now.getFullYear():now.getFullYear()-1)-i+1-1; // placeholder, recomputed below
+  }
+  const curY=now.getMonth()>=3?now.getFullYear():now.getFullYear()-1;
+  const list=[];
+  for(let i=-3;i<=1;i++){ const y=curY-i; list.push({y:y,label:y+'-'+String(y+1).slice(2)}); }
+  list.sort((a,b)=>b.y-a.y);
+  return list;
+}
+
+function presetRange(key,base){
+  const now=base?new Date(base):new Date();
+  const startOfDay=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const today=startOfDay(now);
+  let from=today,to=today;
+  switch(key){
+    case 'Today': from=today; to=today; break;
+    case '7D': from=new Date(today); from.setDate(from.getDate()-6); to=today; break;
+    case '15D': from=new Date(today); from.setDate(from.getDate()-14); to=today; break;
+    case '30D': from=new Date(today); from.setDate(from.getDate()-29); to=today; break;
+    case 'MTD': from=new Date(today.getFullYear(),today.getMonth(),1); to=today; break;
+    case 'QTD': { const qStartMonth=Math.floor(today.getMonth()/3)*3; from=new Date(today.getFullYear(),qStartMonth,1); to=today; break; }
+    case 'YTD': { const fy=fyBounds(today); from=fy.start; to=today; break; }
+    default: from=new Date(today.getFullYear(),today.getMonth(),1); to=today;
+  }
+  return {from:toISO(from),to:toISO(to)};
+}
+
+// Returns the immediately-preceding period of equal length, for the "Compare" toggle.
+function comparisonRange(fromISOStr,toISOStr){
+  const from=fromISO(fromISOStr),to=fromISO(toISOStr);
+  const spanDays=Math.round((to-from)/86400000)+1;
+  const prevTo=new Date(from); prevTo.setDate(prevTo.getDate()-1);
+  const prevFrom=new Date(prevTo); prevFrom.setDate(prevFrom.getDate()-(spanDays-1));
+  return {from:toISO(prevFrom),to:toISO(prevTo)};
+}
+
+function inRange(dateVal,fromISOStr,toISOStr){
+  const t=parseDT(dateVal); if(t===null)return false;
+  const from=fromISO(fromISOStr).getTime();
+  const to=fromISO(toISOStr).getTime()+86399999;
+  return t>=from && t<=to;
+}
+
+function pctChange(cur,prev){
+  if(!prev) return cur?100:0;
+  return ((cur-prev)/Math.abs(prev))*100;
+}
+
+function optionsFromField(arr,key){
+  const set=new Set();
+  arr.forEach(r=>{ const v=r[key]; if(v) set.add(v); });
+  return Array.from(set).sort();
+}
+function salesPersonOptions(){
+  return optionsFromField(S.receivables,'salesPerson').concat(optionsFromField(S.payables,'salesPerson'))
+    .filter((v,i,a)=>a.indexOf(v)===i && v && v.toUpperCase()!=='NULL').sort();
+}
+
+/* ============================= FILTER BAR RENDER ============================= */
+function renderFilterBar(opts){
+  opts=opts||{};
+  const f=S.filters;
+  const presets=[['Today','Today'],['7D','7D'],['15D','15D'],['30D','30D'],['MTD','MTD'],['QTD','QTD'],['YTD','YTD']];
+  const spOptions=salesPersonOptions();
+  const fys=fyOptions();
+  return `
+  <div class="fbar">
+    <div class="fbar-group">
+      <label>Company</label>
+      <select data-action="f-set" data-field="company"><option value="ALL" ${f.company==='ALL'?'selected':''}>All Companies</option></select>
+    </div>
+    <div class="fbar-group">
+      <label>Branch</label>
+      <select data-action="f-set" data-field="branch"><option value="ALL" ${f.branch==='ALL'?'selected':''}>All Branches</option></select>
+    </div>
+    <div class="fbar-group">
+      <label>Financial Year</label>
+      <select data-action="f-set" data-field="fy">
+        <option value="ALL" ${f.fy==='ALL'?'selected':''}>All Years</option>
+        ${fys.map(y=>`<option value="${y.label}" ${f.fy===y.label?'selected':''}>${y.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fbar-group">
+      <label>Sales Person</label>
+      <select data-action="f-set" data-field="salesPerson">
+        <option value="ALL" ${f.salesPerson==='ALL'?'selected':''}>All</option>
+        ${spOptions.map(sp=>`<option value="${esc(sp)}" ${f.salesPerson===sp?'selected':''}>${esc(sp)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fbar-group">
+      <label>Date Range</label>
+      <div class="fbar-daterange">
+        <input type="date" data-action="f-date" data-field="from" value="${f.from}"> – <input type="date" data-action="f-date" data-field="to" value="${f.to}">
+      </div>
+    </div>
+    <div class="fbar-presets">
+      ${presets.map(p=>`<button class="${f.preset===p[0]?'active':''}" data-action="f-preset" data-val="${p[0]}">${p[1]}</button>`).join('')}
+    </div>
+    <label class="fbar-compare"><input type="checkbox" data-action="f-compare" ${f.compare?'checked':''}> Compare</label>
+    <div class="spacer"></div>
+    <button class="fbar-btn-filters" data-action="f-apply">🔽 Filters</button>
+  </div>
+  ${f.compare?`<div class="compare-note">Comparing against previous period: <b>${fmtDDMMMYYYY(fromISO(comparisonRange(f.from,f.to).from))} – ${fmtDDMMMYYYY(fromISO(comparisonRange(f.from,f.to).to))}</b></div>`:''}
+  `;
+}
+
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.getAttribute('data-action')==='f-set'){ S.filters[el.getAttribute('data-field')]=el.value; render(); return; }
+  if(el.getAttribute('data-action')==='f-date'){ S.filters[el.getAttribute('data-field')]=el.value; S.filters.preset='Custom'; render(); return; }
+  if(el.getAttribute('data-action')==='f-compare'){ S.filters.compare=el.checked; render(); return; }
+});
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');if(!el)return;
+  const a=el.getAttribute('data-action');
+  if(a==='f-preset'){ const val=el.getAttribute('data-val'); S.filters.preset=val; const r=presetRange(val); S.filters.from=r.from; S.filters.to=r.to; render(); return; }
+  if(a==='f-apply'){ showToast('Filters applied.',false); return; }
+});
+</script>

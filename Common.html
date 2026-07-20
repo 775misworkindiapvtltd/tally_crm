@@ -8,13 +8,15 @@ function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},filterOpen
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
-  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[],
+  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[],
   users:[], missingSheets:[],
   toast:null, loginError:"",
   dt:{ expense:dtState(), payables:dtState(), receivables:dtState(), receipt:dtState(), payment:dtState() },
   colMenuOpen:null, logoutAt:0,
   ledger:{ search:'', selected:null, detail:null, loading:false },
   darkMode:false, fontSize:100,
+  filters:null,
+  followUpDone:{}, // client-side "marked as followed up" set (not persisted to sheet)
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
@@ -34,6 +36,7 @@ function runServer(fnName,arg){
 function applyBootstrap(data){
   S.expense=data.expense||[]; S.payables=data.payables||[]; S.receivables=data.receivables||[];
   S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
+  S.balanceVouchers=data.balanceVouchers||[];
   S.users=data.users||[]; S.missingSheets=data.missingSheets||[];
 }
 
@@ -51,8 +54,14 @@ function permsPayload(){
   return S.user?{
     dashboard:S.user.dashboard, expense:S.user.expense, payables:S.user.payables,
     receivables:S.user.receivables, receipt:S.user.receipt, payment:S.user.payment,
-    ledger:S.user.ledger, overdue:S.user.overdue
+    ledger:S.user.ledger, finance:S.user.finance
   }:null;
+}
+
+function markSynced(){
+  const d=new Date();
+  const pad=n=>n<10?'0'+n:''+n;
+  S.lastSync=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' · '+pad(d.getHours())+':'+pad(d.getMinutes());
 }
 
 async function loadHeavyData(){
@@ -63,7 +72,7 @@ async function loadHeavyData(){
       const f=S.users.find(u=>u.id.toLowerCase()===S.user.id.toLowerCase());
       if(f)S.user=Object.assign({},S.user,f);
     }
-    S.loadError="";
+    S.loadError="";markSynced();
   }catch(err){ showToast("Data load error: "+err.message,true); }
   S.syncing=false;render();
 }
@@ -78,7 +87,7 @@ async function refreshData(){
       const item=NAV_ITEMS.find(n=>n.key===S.page);
       if(item&&!S.user[item.perm])S.page=firstAllowedPage();
     }
-    S.loadError="";S.syncing=false;
+    S.loadError="";S.syncing=false;markSynced();
     Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
     showToast("Sheet se latest data mil gaya.",false);
   }catch(err){S.syncing=false;showToast("Refresh nahi ho paya: "+err.message,true);}
@@ -98,6 +107,7 @@ function fmtINR(n){
   return (neg?'-':'')+'₹'+formatted;
 }
 function fmtNum(n){ n=Number(n)||0; return n.toLocaleString('en-IN',{maximumFractionDigits:2}); }
+function fmtPct(n){ n=Number(n)||0; return (n>=0?'+':'')+n.toFixed(1)+'%'; }
 
 function parseDT(v){
   if(v==null)return null;
@@ -146,13 +156,13 @@ function startClock(){
 function renderLogin(){
   return `
   <div class="login-wrap"><div class="login-card">
-    <div class="login-top"><div class="login-eyebrow">Tally · Accounts Desk</div><h1>Tally Dashboard</h1></div>
+    <div class="login-top"><div class="login-eyebrow">Finance 360° · Tally Integrated</div><h1>Finance Command Center</h1></div>
     <div class="login-body">
       ${S.loginError?`<div class="login-error">${esc(S.loginError)}</div>`:""}
       <form id="loginForm">
         <div class="field"><label>User ID</label><input type="text" id="loginId" autocomplete="username" placeholder="Enter your ID" required></div>
         <div class="field"><label>Password</label><input type="password" id="loginPw" autocomplete="current-password" placeholder="••••••" required></div>
-        <button type="submit" class="btn btn-gold btn-block">Sign In</button>
+        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
       </form>
       <div class="login-hint">Credentials aur permissions aapki <b>LOGIN PAGE</b> sheet mein hain. Jis column mein <b>YES</b> hoga wahi page milega.</div>
     </div>
@@ -162,7 +172,7 @@ function firstAllowedPage(){ const f=NAV_ITEMS.find(n=>S.user&&S.user[n.perm]); 
 async function doLogin(id,pw){
   const u=S.users.find(x=>x.id.toLowerCase()===id.trim().toLowerCase()&&String(x.password)===pw);
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
-  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.page=firstAllowedPage();render();
+  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();render();
   await loadHeavyData();
   try{
     const fresh=await runServer('getUserPermissions',S.user.id);
@@ -172,63 +182,140 @@ async function doLogin(id,pw){
 
 /* ============================= NAV ============================= */
 const NAV_ITEMS=[
-  {key:'dashboard',   label:'Dashboard',   perm:'dashboard',   group:'Overview', icon:'grid'},
-  {key:'receivables', label:'Receivables', perm:'receivables', group:'Reports',  icon:'in'},
-  {key:'payables',    label:'Payables',    perm:'payables',    group:'Reports',  icon:'out'},
-  {key:'overdue',     label:'Overdue / Ageing', perm:'overdue', group:'Reports', icon:'clock'},
-  {key:'ledger',      label:'Party Ledger',perm:'ledger',      group:'Reports',  icon:'book'},
-  {key:'receipt',     label:'Receipt',     perm:'receipt',     group:'Vouchers', icon:'arrow-down'},
-  {key:'payment',     label:'Payment',     perm:'payment',     group:'Vouchers', icon:'arrow-up'},
-  {key:'expense',     label:'Expense',     perm:'expense',     group:'Vouchers', icon:'wallet'},
+  {key:'dashboard',      label:'Dashboard',            perm:'dashboard',   group:null, icon:'grid'},
+  {key:'execSummary',    label:'Executive Summary',    perm:'dashboard',   group:null, icon:'summary'},
+
+  {key:'recvDashboard',  label:'Receivables Dashboard',perm:'receivables', group:'Receivables', icon:'in'},
+  {key:'ageingRecv',     label:'Ageing Summary',       perm:'receivables', group:'Receivables', icon:'ageing'},
+  {key:'customerList',   label:'Customer List',        perm:'receivables', group:'Receivables', icon:'customer'},
+  {key:'receipt',        label:'Receipt List',         perm:'receipt',     group:'Receivables', icon:'arrow-down'},
+  {key:'collectionAnalysis',label:'Collection Analysis',perm:'receivables',group:'Receivables', icon:'collection'},
+  {key:'followUpList',   label:'Follow Up List',       perm:'receivables', group:'Receivables', icon:'followup'},
+  {key:'creditNotes',    label:'Credit Notes',         perm:'receivables', group:'Receivables', icon:'creditnote'},
+
+  {key:'payDashboard',   label:'Payables Dashboard',   perm:'payables',    group:'Payables', icon:'out'},
+  {key:'ageingPay',      label:'Ageing Summary',       perm:'payables',    group:'Payables', icon:'ageing'},
+  {key:'vendorList',     label:'Vendor List',          perm:'payables',    group:'Payables', icon:'customer'},
+  {key:'payment',        label:'Payment List',         perm:'payment',     group:'Payables', icon:'arrow-up'},
+
+  {key:'salesDashboard', label:'Sales Dashboard',      perm:'finance',     group:'Finance', icon:'sales'},
+  {key:'expensesDashboard',label:'Expenses Dashboard', perm:'finance',     group:'Finance', icon:'wallet'},
+  {key:'cashFlow',       label:'Cash Flow',            perm:'finance',     group:'Finance', icon:'cashflow'},
+  {key:'profitLoss',     label:'Profit & Loss',        perm:'finance',     group:'Finance', icon:'pl'},
+  {key:'balanceSheet',   label:'Balance Sheet',        perm:'finance',     group:'Finance', icon:'balance'},
+  {key:'reports',        label:'Reports',              perm:'finance',     group:'Finance', icon:'reports'},
+
+  {key:'ledger',         label:'Party Ledger',         perm:'ledger',      group:'Finance', icon:'book'},
+  {key:'expense',        label:'Expense Vouchers',     perm:'expense',     group:'Finance', icon:'wallet'},
+
+  {key:'alerts',         label:'Alerts',               perm:'dashboard',   group:null, icon:'bell', badge:()=>alertCount()},
+  {key:'settings',       label:'Settings',             perm:'dashboard',   group:null, icon:'settings'},
 ];
 const PAGE_TITLES={
-  dashboard:'Dashboard', receivables:'Receivables', payables:'Payables', overdue:'Overdue / Ageing Analysis',
-  ledger:'Party Ledger', receipt:'Receipt Vouchers', payment:'Payment Vouchers', expense:'Expense Vouchers'
+  dashboard:{t:'Finance Command Center',s:'Complete Overview of Your Business Performance'},
+  execSummary:{t:'Executive Summary',s:'High-level snapshot for leadership'},
+  recvDashboard:{t:'Receivables Dashboard',s:'Outstanding customer bills at a glance'},
+  ageingRecv:{t:'Receivables Ageing Summary',s:'Bucketed by overdue days'},
+  customerList:{t:'Customer List',s:'All customers with outstanding balances'},
+  receipt:{t:'Receipt List',s:'All recorded receipt vouchers'},
+  collectionAnalysis:{t:'Collection Analysis',s:'DSO and collection efficiency'},
+  followUpList:{t:'Follow Up List',s:'Overdue bills needing attention this week'},
+  creditNotes:{t:'Credit Notes',s:'Credit notes issued to customers'},
+  payDashboard:{t:'Payables Dashboard',s:'Outstanding vendor bills at a glance'},
+  ageingPay:{t:'Payables Ageing Summary',s:'Bucketed by overdue days'},
+  vendorList:{t:'Vendor List',s:'All vendors with outstanding balances'},
+  payment:{t:'Payment List',s:'All recorded payment vouchers'},
+  salesDashboard:{t:'Sales Dashboard',s:'Sales performance overview'},
+  expensesDashboard:{t:'Expenses Dashboard',s:'Expense breakdown by category'},
+  cashFlow:{t:'Cash Flow',s:'Opening / inflow / outflow / closing'},
+  profitLoss:{t:'Profit & Loss',s:'Income and expenditure summary'},
+  balanceSheet:{t:'Balance Sheet',s:'Assets, liabilities & equity snapshot'},
+  reports:{t:'Reports',s:'All reports in one place'},
+  ledger:{t:'Party Ledger',s:'Statement of account, printable & PDF'},
+  expense:{t:'Expense Vouchers',s:'All expense voucher lines'},
+  alerts:{t:'Alerts',s:'Things that need your attention'},
+  settings:{t:'Settings',s:'Preferences for this dashboard'}
 };
 const NAV_ICONS={
   grid:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+  summary:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8 13 13.7l-3-3L3.7 17"/></svg>',
   in:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12l7 7 7-7"/></svg>',
   out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>',
   clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+  ageing:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
   'arrow-down':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
   'arrow-up':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
-  wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>'
+  wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>',
+  customer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  collection:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  followup:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>',
+  creditnote:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+  sales:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
+  cashflow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>',
+  pl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><rect x="4" y="6" width="16" height="12" rx="2"/></svg>',
+  balance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M3 21h18"/><path d="M4 8l4-3 4 3"/><path d="M12 8l4-3 4 3"/><path d="M5 8v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V8"/><path d="M13 8v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V8"/></svg>',
+  reports:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>',
+  bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.44.57.78 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
 };
+
+function alertCount(){
+  const overdueRecv=S.receivables.filter(r=>Number(r.overdueDays)>0).length;
+  const overduePay=S.payables.filter(r=>Number(r.overdueDays)>0).length;
+  return overdueRecv+overduePay;
+}
 
 /* ============================= SHELL ============================= */
 function renderShell(inner){
   const items=NAV_ITEMS.filter(n=>S.user[n.perm]);
   const initials=(S.user.name||'U').substring(0,2).toUpperCase();
   let navHtml='';
-  let lastGroup=null;
+  let lastGroup=undefined;
   items.forEach(n=>{
-    if(n.group!==lastGroup){ navHtml+=`<div class="nav-group-label">${esc(n.group)}</div>`; lastGroup=n.group; }
-    navHtml+=`<div class="nav-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}</div>`;
+    if(n.group!==lastGroup){ if(n.group) navHtml+=`<div class="nav-group-label">${esc(n.group.toUpperCase())}</div>`; lastGroup=n.group; }
+    const badge=n.badge?n.badge():0;
+    navHtml+=`<div class="nav-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}${badge?`<span class="nav-badge">${badge}</span>`:''}</div>`;
   });
   if(!items.length) navHtml=`<div class="nav-empty">No pages assigned. Contact admin.</div>`;
 
-  const bottomItems=items.slice(0,5);
-  const bottomNav=bottomItems.length?`<div class="bottom-nav">${bottomItems.map(n=>`<div class="bn-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span style="width:18px;height:18px;display:inline-block;">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}</div>`).join('')}</div>`:'';
+  const bottomItems=[items.find(n=>n.key==='dashboard'),items.find(n=>n.group==='Receivables'),items.find(n=>n.group==='Payables'),items.find(n=>n.group==='Finance'),items.find(n=>n.key==='alerts')].filter(Boolean);
+  const bottomNav=bottomItems.length?`<div class="bottom-nav">${bottomItems.map(n=>`<div class="bn-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span style="width:18px;height:18px;display:inline-block;">${NAV_ICONS[n.icon]||''}</span>${esc(n.label.split(' ')[0])}</div>`).join('')}</div>`:'';
+
+  const title=PAGE_TITLES[S.page]||{t:'Dashboard',s:''};
+  const alerts=alertCount();
 
   return `
   <div class="shell">
     <div class="sidebar-overlay ${S.sidebarOpen?'show':''}" data-action="close-sidebar"></div>
     <div class="sidebar ${S.sidebarOpen?'open':''}">
       <div class="brand">
-        <div class="brand-inner"><div class="brand-icon">TD</div><div class="eyebrow">Tally Data</div><h1>Tally Dashboard</h1></div>
+        <div class="brand-inner">
+          <div class="brand-icon"><span></span><span></span><span></span><span></span></div>
+          <div class="brand-text"><div class="eyebrow">Finance 360°</div><h1>Tally Integrated</h1></div>
+        </div>
         <button class="sidebar-close" data-action="close-sidebar">✕</button>
       </div>
       <div class="nav">${navHtml}</div>
       <div class="sidebar-foot">
-        <div class="logout-btn" data-action="syncnow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${S.syncing?'Refreshing…':'Refresh from Sheet'}</div>
-        <div class="logout-btn" data-action="logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
+        <div class="su">Data Last Updated<br><b style="color:#D7DCEA;">${esc(S.lastSync||'just now')}</b></div>
+        <button class="btn sync-btn btn-ghost" data-action="syncnow" style="color:#AAB2C8;border-color:var(--sidebar-line);">${S.syncing?'⟳ Syncing…':'⟳ Sync with Tally'}</button>
+        <div class="logout-btn" data-action="logout" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
       </div>
     </div>
     <div class="main">
       <div class="topbar">
-        <div class="topbar-left"><button class="hamburger" data-action="open-sidebar">☰</button><h2>${PAGE_TITLES[S.page]||'Dashboard'}</h2></div>
-        <div class="topbar-right"><div class="topbar-controls"><button data-action="toggle-theme" title="Toggle dark/light mode">${S.darkMode?'☀️':'🌙'}</button></div><div class="topbar-welcome">Welcome, <b>${esc(S.user.name)}</b></div><div class="avatar">${initials}</div></div>
+        <div class="topbar-left">
+          <button class="hamburger" data-action="open-sidebar">☰</button>
+          <div class="tb-title"><h2>${esc(title.t)} <span style="font-size:10px;color:var(--muted);">ⓘ</span></h2><div class="sub">${esc(title.s)}</div></div>
+        </div>
+        <div class="topbar-right">
+          <div class="tb-search">🔍 Search Customer / Invoice / Receipt / Voucher…</div>
+          <div class="tb-icon-btn" data-action="nav" data-page="alerts" title="Alerts">${NAV_ICONS.bell}${alerts?`<span class="dot">${alerts}</span>`:''}</div>
+          <div class="topbar-controls"><button data-action="toggle-theme" title="Toggle dark/light mode">${S.darkMode?'☀️':'🌙'}</button></div>
+          <div class="topbar-welcome"><b>${esc(S.user.name)}</b><span>${esc(S.user.role||'Team Member')}</span></div>
+          <div class="avatar">${initials}</div>
+        </div>
       </div>
       <div class="content">${inner}</div>
     </div>
@@ -426,25 +513,34 @@ document.addEventListener('mouseup',e=>{
 });
 
 /* ============================= RENDER ============================= */
+const PAGE_RENDERERS={};
+function registerPage(key,fn){ PAGE_RENDERERS[key]=fn; }
+
 function render(){
   const app=document.getElementById('app');
   if(!S.ready){app.innerHTML=`<div class="loading-screen"><div class="spinner"></div><div>Loading dashboard…</div></div>`;return;}
-  if(S.loadError){app.innerHTML=`<div class="login-wrap"><div class="login-card"><div class="login-top"><div class="login-eyebrow">Setup</div><h1>Sheet load failed</h1></div><div class="login-body"><div class="login-error">${esc(S.loadError)}</div><div class="login-hint">1) Open via the Apps Script <b>/exec</b> URL. 2) Required tabs: LOGIN PAGE, EXPENSE, PAYABLES, RECEIVABLES, Receipt, PAYMENT, Balance. 3) Deploy access = "Anyone".</div><button class="btn btn-gold btn-block" style="margin-top:14px;" data-action="syncnow">Retry</button></div></div></div>`;return;}
+  if(S.loadError){app.innerHTML=`<div class="login-wrap"><div class="login-card"><div class="login-top"><div class="login-eyebrow">Setup</div><h1>Sheet load failed</h1></div><div class="login-body"><div class="login-error">${esc(S.loadError)}</div><div class="login-hint">1) Open via the Apps Script <b>/exec</b> URL. 2) Required tabs: LOGIN PAGE, EXPENSE, PAYABLES, RECEIVABLES, Receipt, PAYMENT, Balance. 3) Deploy access = "Anyone".</div><button class="btn btn-primary btn-block" style="margin-top:14px;" data-action="syncnow">Retry</button></div></div></div>`;return;}
   if(!S.user){app.innerHTML=renderLogin();return;}
+  if(!S.filters)S.filters=defaultFilterState();
   const dtScroll=document.querySelector('.dt-scroll');
   const savedDtScrollLeft=dtScroll?dtScroll.scrollLeft:0;
   const savedDtScrollTop=dtScroll?dtScroll.scrollTop:0;
   let inner="";
   if(S.syncing && !S.expense.length && !S.payables.length && !S.receivables.length && !S.balanceParties.length){
     inner=`<div class="empty-state" style="padding-top:80px;"><div class="spinner" style="margin:0 auto 16px;"></div><div class="big">Loading data…</div><div style="margin-top:6px;">Aapka data background mein load ho raha hai, kuch seconds lagenge.</div></div>`;
-  } else if(S.page==='dashboard')inner=renderDashboard();
-  else if(S.page==='overdue')inner=renderOverdue();
-  else if(S.page==='ledger')inner=renderLedgerPage();
-  else if(GRID_DEFS[S.page])inner=renderGrid(S.page);
-  else inner=`<div class="empty-state"><div class="big">Select a page</div>Left mein menu se apna page choose karein.</div>`;
+  } else if(PAGE_RENDERERS[S.page]){
+    inner=PAGE_RENDERERS[S.page]();
+  } else if(S.page==='ledger'){
+    inner=renderLedgerPage();
+  } else if(GRID_DEFS[S.page]){
+    inner=renderGrid(S.page);
+  } else {
+    inner=`<div class="empty-state"><div class="big">Select a page</div>Left mein menu se apna page choose karein.</div>`;
+  }
   app.innerHTML=renderShell(inner);
   const dtScroll2=document.querySelector('.dt-scroll');
   if(dtScroll2){dtScroll2.scrollLeft=savedDtScrollLeft;dtScroll2.scrollTop=savedDtScrollTop;}
+  setTimeout(paintCharts,0);
 }
 
 loadAll();

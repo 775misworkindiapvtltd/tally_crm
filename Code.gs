@@ -1,21 +1,28 @@
 /**
- * TALLY DASHBOARD — Google Apps Script web app
+ * FINANCE 360° — Tally CRM Dashboard — Google Apps Script web app
  * =============================================================
  * Files in this Apps Script project:
  *   Code.gs        (this file — server side)
  *   Index.html     (root HTML shell)
- *   CSS.html       (all styles — desktop + mobile responsive)
+ *   CSS.html       (all styles — desktop + mobile responsive, Finance 360 dark-sidebar theme)
+ *   Charts.html    (Chart.js-based combo/donut chart helpers)
+ *   Filters.html   (top filter bar: Company/Branch/FY/Sales Person/Date range/Compare)
  *   Common.html    (state, login, shell/nav, generic grid engine, helpers)
- *   Dashboard.html (home page summary cards)
- *   Grids.html     (Expense / Payables / Receivables / Receipt / Payment grids)
- *   Overdue.html   (ageing analysis — Receivables & Payables buckets)
+ *   Dashboard.html (Finance Command Center — KPI cards, trend/ageing/cash-flow charts, tables)
+ *   Grids.html     (Expense / Payables / Receivables / Receipt / Payment grids + column defs)
+ *   Receivables.html (Receivables Dashboard, Ageing Summary, Customer List, Collection
+ *                     Analysis, Follow Up List, Credit Notes)
+ *   Payables.html  (Payables Dashboard, Ageing Summary, Vendor List)
+ *   Finance.html   (Sales Dashboard, Expenses Dashboard, Cash Flow, P&L, Balance Sheet, Reports)
+ *   Misc.html      (Executive Summary, Alerts, Settings)
  *   Ledger.html    (party ledger statement + printable/downloadable PDF view)
  *
  * REQUIRED GOOGLE SHEET TABS (names must match EXACTLY):
  *
- *   LOGIN PAGE  -> NAME | ID | PASSWORD | DASHBOARD | EXPENSE | PAYABLES |
- *                  RECEIVABLES | RECEIPT | PAYMENT | LEDGER | OVERDUE
- *                  (mark YES in a column to grant that user the page)
+ *   LOGIN PAGE  -> NAME | ID | PASSWORD | ROLE | DASHBOARD | EXPENSE | PAYABLES |
+ *                  RECEIVABLES | RECEIPT | PAYMENT | LEDGER | FINANCE
+ *                  (mark YES in a column to grant that user the page; ROLE is any free text
+ *                  shown under the user's name in the top-right corner, e.g. "Finance Manager")
  *
  *   EXPENSE     -> TIMESTAMP | DATE | VOUCHER NUMBER | PARTY NAME | Group |
  *                  Sub_Group | DESIGN NUMBER | ITEM NAME | QTY | RATE | AMOUNT | TYPE
@@ -46,11 +53,21 @@
  *                  (this is the party ledger source — one row per voucher line per party,
  *                  Opening filled on the first row for a party, Closing filled on the last)
  *
- * NOTE ON ASSUMPTIONS: The original screenshots/PDF-formula attachments referenced in
- * chat did not come through to this tool, so the visual layout below (dashboard cards,
- * grid columns, ledger PDF layout) follows the standard/common Tally ledger format and
- * the exact sheet headers you pasted as text. Everything is easy to re-skin once you
- * share the actual screenshots — the data layer (Code.gs) will not need to change.
+ * NOTE ON ASSUMPTIONS (Finance 360° dashboard rebuild):
+ *  - There is no dedicated "Sales"/"Purchase" register sheet in the source spreadsheet,
+ *    so Sales/Purchase/Collections/Payments figures for the KPI cards and the Sales vs
+ *    Expenses chart are derived from the Balance tab's voucherType field (Sales/Purchase/
+ *    Receipt/Payment/Credit Note/Debit Note) plus the EXPENSE, Receipt and PAYMENT tabs.
+ *    If your Balance tab's voucherType text differs from Tally's defaults, adjust the
+ *    VOUCHER_TYPE_MATCH regexes below.
+ *  - "Company" and "Branch" filters are UI-only unless your sheet rows carry a Company/
+ *    Branch column — add a `Company` and/or `Branch` column to Balance/EXPENSE/Receipt/
+ *    PAYMENT and the filter will automatically start filtering by it (see pick_ fallback).
+ *  - "Cash in Hand / Bank" and Opening/Closing cash-flow balances are derived from the
+ *    Receipt/PAYMENT bank ledger legs for the selected period, not from a dedicated
+ *    Cash/Bank book — treat these as indicative, reconcile against Tally directly for
+ *    statutory reporting.
+ *  - AI Insights panel from the reference screenshot was intentionally EXCLUDED per request.
  *
  * Deploy: Deploy > New deployment > type "Web app" > Execute as "Me" > Who has access
  * "Anyone" > Deploy.
@@ -142,6 +159,7 @@ function pick_(r, names) {
 function mapUser_(r) {
   return {
     name: r['NAME'] || '', id: String(r['ID'] || '').trim(), password: String(r['PASSWORD'] || '').trim(),
+    role: fmtValue_(pick_(r, ['ROLE'])) || 'Team Member',
     dashboard:   isYes_(pick_(r, ['DASHBOARD'])),
     expense:     isYes_(pick_(r, ['EXPENSE'])),
     payables:    isYes_(pick_(r, ['PAYABLES'])),
@@ -149,7 +167,8 @@ function mapUser_(r) {
     receipt:     isYes_(pick_(r, ['RECEIPT'])),
     payment:     isYes_(pick_(r, ['PAYMENT'])),
     ledger:      isYes_(pick_(r, ['LEDGER'])),
-    overdue:     isYes_(pick_(r, ['OVERDUE']))
+    finance:     isYes_(pick_(r, ['FINANCE'])),
+    overdue:     isYes_(pick_(r, ['OVERDUE'])) // legacy column, kept for backward compatibility only
   };
 }
 
@@ -235,6 +254,24 @@ function mapBalanceRows_(rows) {
   });
 }
 
+// Flattens the Balance tab into one row per actual voucher line (across all parties),
+// used by the Finance 360 dashboard to derive Sales / Purchase / Credit Note figures
+// (there is no dedicated Sales/Purchase register sheet, so we approximate from the
+// party ledger's voucherType field — see README "Assumptions" section).
+function getBalanceVouchers_() {
+  var rows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
+  var out = [];
+  rows.forEach(function (r) {
+    if (!r.voucherDate && !r.voucherParticular && !r.voucherNo) return;
+    out.push({
+      partyName: r.name, group: r.group, subgroup: r.subgroup, mainGroup: r.mainGroup,
+      date: r.voucherDate, particular: r.voucherParticular, voucherType: r.voucherType,
+      voucherNo: r.voucherNo, debit: r.voucherDebit, credit: r.voucherCredit
+    });
+  });
+  return out;
+}
+
 /* ============================= LOGIN / BOOTSTRAP ============================= */
 function getUserPermissions(id) {
   var usersRaw = sheetToObjects_(SHEETS.login);
@@ -256,9 +293,10 @@ function getBootstrapData(perms) {
   var needExpense     = loadAll || perms.dashboard || perms.expense;
   var needPayables     = loadAll || perms.dashboard || perms.payables || perms.overdue;
   var needReceivables   = loadAll || perms.dashboard || perms.receivables || perms.overdue;
-  var needReceipt       = loadAll || perms.dashboard || perms.receipt;
-  var needPayment      = loadAll || perms.dashboard || perms.payment;
+  var needReceipt       = loadAll || perms.dashboard || perms.receipt || perms.receivables || perms.finance;
+  var needPayment      = loadAll || perms.dashboard || perms.payment || perms.payables || perms.finance;
   var needBalance      = loadAll || perms.dashboard || perms.ledger;
+  var needBalanceVouchers = loadAll || perms.dashboard || perms.receivables || perms.payables || perms.finance;
 
   var result = {
     expense:     needExpense     ? mapExpense_(sheetToObjects_(SHEETS.expense))         : [],
@@ -267,6 +305,7 @@ function getBootstrapData(perms) {
     receipt:     needReceipt     ? mapReceiptRows_(sheetToRows_(SHEETS.receipt))         : [],
     payment:     needPayment     ? mapReceiptRows_(sheetToRows_(SHEETS.payment))         : [],
     balanceParties: needBalance  ? getLedgerPartyList_()                                  : [],
+    balanceVouchers: needBalanceVouchers ? getBalanceVouchers_()                           : [],
     users:       sheetToObjects_(SHEETS.login).map(mapUser_),
     missingSheets: []
   };
