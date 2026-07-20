@@ -9,7 +9,7 @@ function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},filterOpen
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
   expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[],
-  users:[], missingSheets:[],
+  users:[], missingSheets:[], diagnostics:{}, diagBannerDismissed:false,
   toast:null, loginError:"",
   dt:{ expense:dtState(), payables:dtState(), receivables:dtState(), receipt:dtState(), payment:dtState() },
   colMenuOpen:null, logoutAt:0,
@@ -38,6 +38,31 @@ function applyBootstrap(data){
   S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
   S.balanceVouchers=data.balanceVouchers||[];
   S.missingSheets=data.missingSheets||[];
+  S.diagnostics=data.diagnostics||{};
+}
+
+// Builds a plain-language list of problems found in the sheet (missing tabs, missing
+// headers, tabs with zero data rows, Receipt/PAYMENT/Balance tabs with fewer columns
+// than expected). Returns [] if everything looks fine.
+function diagnosticIssues(){
+  const d=S.diagnostics||{}; const issues=[];
+  Object.keys(d).forEach(tab=>{
+    const info=d[tab];
+    if(!info.exists){ issues.push(`Tab "${tab}" not found — check the exact spelling/spacing of this sheet tab's name.`); return; }
+    if(info.missingHeaders && info.missingHeaders.length){
+      issues.push(`Tab "${tab}" is missing column header(s): ${info.missingHeaders.join(', ')} — check spelling/spacing in row 1.`);
+    }
+    if(info.columnCountOk===false){
+      issues.push(`Tab "${tab}" has only ${info.columnCount} column(s), expected at least ${info.expectedMinCols} — some columns may be missing or shifted.`);
+    }
+    if(info.exists && info.dataRowCount===0 && (!info.missingHeaders||!info.missingHeaders.length)){
+      issues.push(`Tab "${tab}" exists but has 0 data rows below the header.`);
+    }
+  });
+  return issues;
+}
+function hasAnyData(){
+  return S.expense.length||S.payables.length||S.receivables.length||S.receipt.length||S.payment.length||S.balanceParties.length;
 }
 
 async function loadAll(){
@@ -57,7 +82,7 @@ function markSynced(){
 }
 
 async function loadHeavyData(){
-  S.syncing=true;render();
+  S.syncing=true;S.diagBannerDismissed=false;render();
   try{
     applyBootstrap(await runServer('getBootstrapData'));
     S.loadError="";markSynced();
@@ -66,7 +91,7 @@ async function loadHeavyData(){
 }
 
 async function refreshData(){
-  S.syncing=true;render();
+  S.syncing=true;S.diagBannerDismissed=false;render();
   try{
     applyBootstrap(await runServer('getBootstrapData'));
     S.loadError="";S.syncing=false;markSynced();
@@ -458,6 +483,7 @@ document.addEventListener('click',e=>{
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='logout'){S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
   if(a==='syncnow'){refreshData();return;}
+  if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=S.dt[t];if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;render();return;}
   if(a==='pagefirst'){S.dt[el.getAttribute('data-table')].page=1;render();return;}
   if(a==='pageprev'){const st=S.dt[el.getAttribute('data-table')];st.page=Math.max(1,st.page-1);render();return;}
@@ -502,7 +528,7 @@ function render(){
   const savedDtScrollLeft=dtScroll?dtScroll.scrollLeft:0;
   const savedDtScrollTop=dtScroll?dtScroll.scrollTop:0;
   let inner="";
-  if(S.syncing && !S.expense.length && !S.payables.length && !S.receivables.length && !S.balanceParties.length){
+  if(S.syncing && !hasAnyData()){
     inner=`<div class="empty-state" style="padding-top:80px;"><div class="spinner" style="margin:0 auto 16px;"></div><div class="big">Loading data…</div><div style="margin-top:6px;">Aapka data background mein load ho raha hai, kuch seconds lagenge.</div></div>`;
   } else if(PAGE_RENDERERS[S.page]){
     inner=PAGE_RENDERERS[S.page]();
@@ -512,6 +538,15 @@ function render(){
     inner=renderGrid(S.page);
   } else {
     inner=`<div class="empty-state"><div class="big">Select a page</div>Left mein menu se apna page choose karein.</div>`;
+  }
+  const issues=(!S.syncing && !hasAnyData() && !S.diagBannerDismissed)?diagnosticIssues():[];
+  if(issues.length){
+    inner=`<div class="login-error" style="margin-bottom:14px;position:relative;padding-right:32px;line-height:1.6;">
+      <div style="font-weight:700;margin-bottom:6px;">⚠ Data Diagnostics — no data came back from your Google Sheet:</div>
+      <ul style="margin:0 0 0 18px;padding:0;">${issues.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>
+      <div style="margin-top:8px;font-size:11px;opacity:.85;">Fix the sheet, then click "Sync with Tally" in the sidebar — no need to redeploy the app.</div>
+      <span data-action="dismiss-diag" style="position:absolute;top:10px;right:12px;cursor:pointer;font-weight:700;">✕</span>
+    </div>${inner}`;
   }
   app.innerHTML=renderShell(inner);
   const dtScroll2=document.querySelector('.dt-scroll');

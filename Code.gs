@@ -291,7 +291,8 @@ function getBootstrapData() {
     payment:     mapReceiptRows_(sheetToRows_(SHEETS.payment)),
     balanceParties:  getLedgerPartyListFromRows_(balanceRows),
     balanceVouchers: getBalanceVouchersFromRows_(balanceRows),
-    missingSheets: []
+    missingSheets: [],
+    diagnostics: getDiagnostics_()
   };
 
   var have = {};
@@ -301,6 +302,62 @@ function getBootstrapData() {
   });
 
   return result;
+}
+
+/* ============================= DIAGNOSTICS =============================
+ * Explains WHY a tab returned no data, instead of silently returning empty
+ * arrays. Checked per-tab: does the sheet exist (exact name match)? How many
+ * data rows does it have? For the object-keyed tabs (where we read columns
+ * by header name), are any of the expected header names actually missing?
+ * This is surfaced in the UI as a "Data Diagnostics" banner whenever the
+ * dashboard totals come back all-zero, so a sheet/header mismatch is
+ * immediately obvious without needing another round of screenshots.
+ */
+var EXPECTED_HEADERS = {
+  'LOGIN PAGE':  ['NAME', 'ID', 'PASSWORD'],
+  'EXPENSE':     ['TIMESTAMP', 'DATE', 'VOUCHER NUMBER', 'PARTY NAME', 'Group', 'Sub_Group', 'AMOUNT'],
+  'PAYABLES':    ['TIMESTAMP', 'Bill_Date', 'Bill_Ref_No', 'Party_Name', 'Closing_Balance', 'Due_Date', 'Overdue_Days'],
+  'RECEIVABLES': ['TIMESTAMP', 'Bill_Date', 'Bill_Ref_No', 'Party_Name', 'Pending Amount', 'Due_Date', 'Overdue_Days']
+};
+var EXPECTED_MIN_COLS = { 'Receipt': 18, 'PAYMENT': 18, 'Balance': 35 };
+
+function headerMatches_(actualHeaders, expected) {
+  var norm = actualHeaders.map(function (h) { return String(h).replace(/\s+/g, ' ').trim().toUpperCase(); });
+  var target = expected.replace(/\s+/g, ' ').trim().toUpperCase();
+  return norm.indexOf(target) !== -1;
+}
+
+function getDiagnostics_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var out = {};
+  Object.keys(SHEETS).forEach(function (key) {
+    var tabName = SHEETS[key];
+    var sh = ss.getSheetByName(tabName);
+    if (!sh) {
+      out[tabName] = { exists: false, dataRowCount: 0, columnCount: 0, missingHeaders: [] };
+      return;
+    }
+    var lastRow = sh.getLastRow();
+    var lastCol = sh.getLastColumn();
+    var dataRowCount = Math.max(0, lastRow - 1);
+    var headerRow = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+    var missingHeaders = [];
+    if (EXPECTED_HEADERS[tabName]) {
+      EXPECTED_HEADERS[tabName].forEach(function (h) {
+        if (!headerMatches_(headerRow, h)) missingHeaders.push(h);
+      });
+    }
+    var expectedMinCols = EXPECTED_MIN_COLS[tabName];
+    out[tabName] = {
+      exists: true,
+      dataRowCount: dataRowCount,
+      columnCount: lastCol,
+      missingHeaders: missingHeaders,
+      columnCountOk: expectedMinCols ? lastCol >= expectedMinCols : null,
+      expectedMinCols: expectedMinCols || null
+    };
+  });
+  return out;
 }
 
 /* ============================= LEDGER (Balance tab) ============================= */
