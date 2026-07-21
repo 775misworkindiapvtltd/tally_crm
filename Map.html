@@ -42,15 +42,37 @@ function normalizeStateName_(raw){
   return found||raw;
 }
 
+// Multiple mirrors, tried in order — the first one that returns a valid
+// FeatureCollection wins. Any single source going down (404/CORS/etc, exactly
+// what happened with the old single hardcoded URL) no longer breaks the map.
+const INDIA_GEOJSON_SOURCES=[
+  'https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson',
+  'https://cdn.jsdelivr.net/gh/udit-001/india-maps-data/geojson/india.geojson',
+  'https://cdn.jsdelivr.net/gh/adarshbiradar/maps-geojson/geojson/india.geojson'
+];
 function ensureIndiaGeoJson(){
   if(INDIA_GEOJSON)return Promise.resolve(INDIA_GEOJSON);
   if(indiaGeoLoadPromise)return indiaGeoLoadPromise;
-  indiaGeoLoadPromise=fetch('https://cdn.jsdelivr.net/gh/Subhash9325/GeoJson-Data@master/india_states.geojson')
-    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-    .then(gj=>{ INDIA_GEOJSON=gj; return gj; })
-    .catch(err=>{ mapLoadError=err.message; throw err; });
+  indiaGeoLoadPromise=(async()=>{
+    let lastErr=new Error('No map sources configured');
+    for(const url of INDIA_GEOJSON_SOURCES){
+      try{
+        const r=await fetch(url);
+        if(!r.ok) throw new Error('HTTP '+r.status+' from '+url);
+        const gj=await r.json();
+        if(!gj||!Array.isArray(gj.features)||!gj.features.length) throw new Error('Empty/invalid GeoJSON from '+url);
+        INDIA_GEOJSON=gj;
+        return gj;
+      }catch(err){ lastErr=err; }
+    }
+    mapLoadError=lastErr.message;
+    throw lastErr;
+  })();
   return indiaGeoLoadPromise;
 }
+// Lets the user retry after every source failed (e.g. temporary network issue),
+// instead of being stuck with the first failed attempt for the rest of the session.
+function retryIndiaMap(){ INDIA_GEOJSON=null;indiaGeoLoadPromise=null;mapLoadError='';paintIndiaMap(); }
 
 /* ============================= DATA AGGREGATION ============================= */
 function salesByState_(){
@@ -133,8 +155,9 @@ function geometryBounds_(geometry){
 
 function paintIndiaMap(){
   const wrap=document.getElementById('mapCanvasWrap'); if(!wrap)return;
+  wrap.innerHTML=`<div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map…</div></div>`;
   ensureIndiaGeoJson().then(gj=>drawIndiaMap_(gj)).catch(()=>{
-    wrap.innerHTML=`<div class="empty-state"><div class="big">Map shapes unavailable</div>${esc(mapLoadError||'Internet se GeoJSON load nahi ho paya.')}<br>State list side mein still available hai — wahan se bhi city-wise data dekh sakte hain.</div>`;
+    wrap.innerHTML=`<div class="empty-state"><div class="big">Map shapes unavailable</div>${esc(mapLoadError||'Internet se GeoJSON load nahi ho paya.')}<br>State list side mein still available hai — wahan se bhi city-wise data dekh sakte hain.<br><button class="btn btn-ghost" style="margin-top:12px;" data-action="map-retry">⟳ Retry loading map</button></div>`;
   });
 }
 
@@ -156,7 +179,7 @@ function drawIndiaMap_(gj){
   const selState=S.map.selectedState;
   let viewBounds=bounds;
   if(selState){
-    const feat=gj.features.find(f=>(f.properties.st_nm||'')===selState);
+    const feat=gj.features.find(f=>{const p=f.properties||{};return (p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'')===selState;});
     if(feat) viewBounds=geometryBounds_(feat.geometry);
   }
   const pad=(viewBounds.maxX-viewBounds.minX)*0.06||0.3;
@@ -173,7 +196,11 @@ function drawIndiaMap_(gj){
   };
 
   const paths=gj.features.map(f=>{
-    const name=f.properties.st_nm||''; const data=byState[name];
+    // Different mirrors use different property casing for the state name
+    // (st_nm / ST_NM / NAME_1 / name) — check all of them so any source works.
+    const p=f.properties||{};
+    const name=p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'';
+    const data=byState[name];
     const d=geoPathD_(f.geometry,project);
     const isSel=name===selState;
     return `<path d="${d}" fill="${colorFor(data?data.amount:0)}" stroke="${isSel?'#111729':'#ffffff'}" stroke-width="${isSel?2:1}" data-action="map-select-state" data-state="${esc(name)}" class="map-state-path"><title>${esc(name)}${data?': '+fmtINR(data.amount):': No sales data'}</title></path>`;
@@ -194,6 +221,7 @@ document.addEventListener('click',e=>{
     S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;render();return;
   }
   if(a==='map-back'){ S.map.selectedState='';S.map.zoom=1;render();return; }
+  if(a==='map-retry'){ retryIndiaMap();return; }
   if(a==='map-zoom'){
     const dir=el.getAttribute('data-dir');
     if(dir==='in')S.map.zoom=Math.min(3,(S.map.zoom||1)+0.25);

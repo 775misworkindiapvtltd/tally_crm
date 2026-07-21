@@ -65,6 +65,9 @@ function renderDashboard(){
   const totalSales=totalSalesFromSalesSheet();
   const overdueRecvRows=dataForFY('receivables').filter(r=>Number(r.overdueDays)>0);
   const overduePayRows=dataForFY('payables').filter(r=>Number(r.overdueDays)>0);
+  const custSt=tableState('topCustomersDash'),vendSt=tableState('topVendorsDash');
+  if(!custSt.sort){custSt.sort='value';custSt.dir=-1;}
+  if(!vendSt.sort){vendSt.sort='value';vendSt.dir=-1;}
 
   // "vs previous period" comparison chips removed along with the Date Range/Compare UI
   // (there is no period to compare against anymore) — cards now show plain totals.
@@ -90,11 +93,11 @@ function renderDashboard(){
   const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
   const ageColors=['#2E6BF2','#16A34A','#F08A1D','#E23A3A'];
 
-  const topCustomers=topN(dataForFY('receivables'),'partyName','pendingAmount',5).map(t=>{
+  const topCustomers=topN(dataForFY('receivables'),'partyName','pendingAmount',10).map(t=>{
     const row=dataForFY('receivables').find(r=>r.partyName===t.label && Number(r.pendingAmount)===t.value)||dataForFY('receivables').filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
     return Object.assign({},t,{overdueDays:row?row.overdueDays:0,dueDate:row?row.dueDate:'',billRefNo:row?row.billRefNo:''});
   });
-  const topVendors=topN(dataForFY('payables'),'partyName','closingBalance',5).map(t=>{
+  const topVendors=topN(dataForFY('payables'),'partyName','closingBalance',10).map(t=>{
     const row=dataForFY('payables').filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
     return Object.assign({},t,{overdueDays:row?row.overdueDays:0,dueDate:row?row.dueDate:'',billRefNo:row?row.billRefNo:''});
   });

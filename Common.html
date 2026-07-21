@@ -414,6 +414,7 @@ function navigateTo(pageKey){
 // GRID_DEFS is populated in Grids.html: { key: {cols:[{key,label,width,pill,num,date}], data:()=>[...] } }
 function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
+  const compact=!!def.compact; // compact grids: no pagination UI, just a scrollable box, sort still works
   Object.entries(st.filters).forEach(([k,v])=>{if(!v)return;rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));});
   Object.entries(st.dateFilters||{}).forEach(([k,range])=>{
     if(!range||(!range.from&&!range.to))return;
@@ -440,9 +441,9 @@ function renderGrid(tableKey){
       if(x<y)return-1*st.dir;if(x>y)return 1*st.dir;return 0;
     });
   }
-  const total=rows.length;const ps=st.pageSize;const tp=Math.max(1,Math.ceil(total/ps));
+  const total=rows.length;const ps=compact?total||1:st.pageSize;const tp=Math.max(1,Math.ceil(total/ps));
   if(st.page>tp)st.page=tp;if(st.page<1)st.page=1;
-  const si=(st.page-1)*ps;const pageRows=rows.slice(si,si+ps);
+  const si=compact?0:(st.page-1)*ps;const pageRows=compact?rows:rows.slice(si,si+ps);
   const baseKeys=def.cols.map(c=>c.key);
   if(!st.order.length)st.order=baseKeys.slice();
   st.order=st.order.filter(k=>baseKeys.indexOf(k)!==-1).concat(baseKeys.filter(k=>st.order.indexOf(k)===-1));
@@ -479,6 +480,12 @@ function renderGrid(tableKey){
   const rf=total===0?0:si+1;const rt=Math.min(si+ps,total);
 
   const mcards=pageRows.length?pageRows.map((r,idx)=>renderMobileCard(tableKey,r,si+idx+1)).join(''):`<div class="empty-state"><div class="big">No matching rows</div></div>`;
+
+  if(compact){
+    // Compact mode (dashboard mini-tables): no pagination footer/toolbar, just a
+    // fixed-height scrollable table. Sorting by clicking a header still works.
+    return `<div class="dt-table-wrap compact"><div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
+  }
 
   return `
     <div class="dt-toolbar">
