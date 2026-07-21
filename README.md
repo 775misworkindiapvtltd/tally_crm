@@ -122,6 +122,20 @@ The sidebar footer of the app shows a **"Build: ..."** version string (from
 you expect after a fix, your live deployment hasn't picked up the new code
 yet — repeat the steps above.
 
+## Dashboard data sources (per user instruction, 21-Jul-2026)
+
+- **Total Sales** (Dashboard KPI card) is now read from a dedicated **`SALES`** sheet
+  tab, **column M** (13th column) = sale amount, summed across all rows. **Column N**
+  (14th column) = product category — used to break down the "Sales Topline" donut by
+  category if present, otherwise it falls back to an illustrative 70/24/6 split.
+  Both are read **positionally by column letter**, not by header text, so renaming the
+  header cell text will never break this figure.
+- **Total Receivables** (Dashboard KPI card, labelled "Total Receivables") is read from
+  the **`RECEIVABLES`** sheet, **column K** (11th column) = Pending Amount, summed
+  across all rows. Also read positionally by column letter for the same reason.
+- Add a `SALES` tab to your spreadsheet with at least 14 columns (A through N) for this
+  to work — column M must be numeric.
+
 ## Performance notes
 
 - Login only reads the `LOGIN PAGE` sheet. All other tabs (`EXPENSE`,
@@ -134,6 +148,10 @@ yet — repeat the steps above.
 - The `Balance` tab (often the largest tab) is read from the sheet only
   once per sync and reused for both the Party Ledger list and the
   Sales/Purchase/Credit Note figures, instead of being read twice.
+- Bootstrap data (everything the dashboard needs) is now cached server-side for
+  45 seconds via `CacheService`. Logging in or reloading the page within that
+  window serves the cached copy instantly instead of re-reading all 8 tabs.
+  Clicking **"Sync with Tally"** always bypasses the cache and re-reads live.
 - If the app still feels slow to you, the most likely cause is sheet size —
   Apps Script's `getDataRange().getValues()` cost scales with total rows
   across all 7 tabs. Consider archiving old financial years to a separate

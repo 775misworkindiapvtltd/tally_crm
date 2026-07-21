@@ -23,8 +23,12 @@ function periodMetrics(from,to){
   return {sales,purchase,expense,collections,payments,netProfit};
 }
 
-function outstandingReceivable(){ return sumBy(S.receivables,'pendingAmount'); }
+function outstandingReceivable(){ return sumBy(S.receivables,'pendingAmount'); } // RECEIVABLES sheet, column K
 function outstandingPayable(){ return sumBy(S.payables,'closingBalance'); }
+// Total Sales — per user instruction, read from the dedicated SALES sheet, column M
+// (column N holds product category, reserved for a future category breakdown). This
+// sheet has no date column as described, so there's no period comparison for it yet.
+function totalSalesFromSalesSheet(){ return sumBy(S.salesRows,'amount'); }
 function cashInHandBank(){
   // All-time collections minus all-time payments, as a proxy for current bank position
   // (no dedicated cash/bank book is available — see Code.gs assumptions).
@@ -69,13 +73,14 @@ function renderDashboard(){
   const prev=periodMetrics(prevR.from,prevR.to);
 
   const totalRecv=outstandingReceivable(), totalPay=outstandingPayable(), cashPos=cashInHandBank();
+  const totalSales=totalSalesFromSalesSheet();
   const overdueRecvRows=S.receivables.filter(r=>Number(r.overdueDays)>0);
   const overduePayRows=S.payables.filter(r=>Number(r.overdueDays)>0);
 
   const kpis=[
-    {label:'Total Sales (MTD)',value:cur.sales,prev:prev.sales,icon:'sales',cls:'c-green',page:'salesDashboard'},
+    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard',noCompare:true},
     {label:'Total Expenses (MTD)',value:cur.expense,prev:prev.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard',invert:true},
-    {label:'Outstanding Receivables',value:totalRecv,prev:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard',noCompare:true},
+    {label:'Total Receivables',value:totalRecv,prev:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard',noCompare:true},
     {label:'Outstanding Payables',value:totalPay,prev:totalPay,icon:'out',cls:'c-red',page:'payDashboard',noCompare:true,invert:true},
     {label:'Collections (MTD)',value:cur.collections,prev:prev.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
     {label:'Payments (MTD)',value:cur.payments,prev:prev.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard',invert:true},
@@ -117,7 +122,11 @@ function renderDashboard(){
     return days>=0 && days<=7;
   }).sort((a,b)=>(parseDT(a.dueDate)||0)-(parseDT(b.dueDate)||0)).slice(0,5);
 
-  const domesticSales=cur.sales*0.7, exportSales=cur.sales*0.24, otherIncome=cur.sales*0.06; // documented estimate, see README
+  // Sales Topline donut: break Total Sales down by the SALES sheet's column-N category
+  // if categories are present; otherwise fall back to the documented 70/24/6 estimate.
+  const salesByCategory=topN(S.salesRows,'category','amount',6);
+  const useRealCategories=salesByCategory.length>0;
+  const domesticSales=totalSales*0.7, exportSales=totalSales*0.24, otherIncome=totalSales*0.06; // fallback estimate, see README
 
   return `
     ${renderFilterBar()}
@@ -225,11 +234,11 @@ function renderDashboard(){
         </div>
       </div>
       <div class="panel">
-        <div class="panel-title">Sales Topline (MTD)</div>
+        <div class="panel-title">Sales Topline${useRealCategories?' (by Category)':' (MTD)'}</div>
         <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;">
           <div class="chart-wrap donut"><canvas id="chSalesTopline" data-chart-fallback></canvas></div>
         </div>
-        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(cur.sales)}</span></div>
+        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
       </div>
       <div class="panel">
         <div class="panel-title">Quick Actions</div>
@@ -267,8 +276,13 @@ CHART_DEFS['dashboard']=function(){
   drawDonutChart('chRecvAge',Object.keys(recvAge),Object.values(recvAge),['#2E6BF2','#16A34A','#F08A1D','#E23A3A']);
   drawDonutChart('chPayAge',Object.keys(payAge),Object.values(payAge),['#2E6BF2','#16A34A','#F08A1D','#E23A3A']);
 
-  const cur=periodMetrics(f.from,f.to);
-  const domesticSales=cur.sales*0.7, exportSales=cur.sales*0.24, otherIncome=cur.sales*0.06;
-  drawDonutChart('chSalesTopline',['Domestic Sales','Export Sales','Other Income'],[domesticSales,exportSales,otherIncome],['#2E6BF2','#16A34A','#F08A1D']);
+  const salesByCategory=topN(S.salesRows,'category','amount',6);
+  if(salesByCategory.length){
+    drawDonutChart('chSalesTopline',salesByCategory.map(c=>c.label),salesByCategory.map(c=>c.value),CHART_PALETTE);
+  } else {
+    const totalSales=totalSalesFromSalesSheet();
+    const domesticSales=totalSales*0.7, exportSales=totalSales*0.24, otherIncome=totalSales*0.06;
+    drawDonutChart('chSalesTopline',['Domestic Sales','Export Sales','Other Income'],[domesticSales,exportSales,otherIncome],['#2E6BF2','#16A34A','#F08A1D']);
+  }
 };
 </script>

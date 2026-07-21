@@ -18,7 +18,7 @@ function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},filterOpen
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
-  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[],
+  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], salesRows:[],
   users:[], missingSheets:[], diagnostics:{}, diagBannerDismissed:false,
   toast:null, loginError:"",
   dt:{ expense:dtState(), payables:dtState(), receivables:dtState(), receipt:dtState(), payment:dtState() },
@@ -47,6 +47,7 @@ function applyBootstrap(data){
   S.expense=data.expense||[]; S.payables=data.payables||[]; S.receivables=data.receivables||[];
   S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
   S.balanceVouchers=data.balanceVouchers||[];
+  S.salesRows=data.salesRows||[]; // from the SALES sheet: {amount (col M), category (col N)}
   S.missingSheets=data.missingSheets||[];
   S.diagnostics=data.diagnostics||{};
 }
@@ -72,7 +73,7 @@ function diagnosticIssues(){
   return issues;
 }
 function hasAnyData(){
-  return S.expense.length||S.payables.length||S.receivables.length||S.receipt.length||S.payment.length||S.balanceParties.length;
+  return S.expense.length||S.payables.length||S.receivables.length||S.receipt.length||S.payment.length||S.balanceParties.length||S.salesRows.length;
 }
 
 async function loadAll(){
@@ -103,7 +104,7 @@ async function loadHeavyData(){
 async function refreshData(){
   S.syncing=true;S.diagBannerDismissed=false;render();
   try{
-    applyBootstrap(await runServer('getBootstrapData'));
+    applyBootstrap(await runServer('getBootstrapData',true)); // true = force-refresh, bypass server cache
     S.loadError="";S.syncing=false;markSynced();
     Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
     showToast("Sheet se latest data mil gaya.",false);

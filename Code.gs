@@ -34,6 +34,14 @@
  *   RECEIVABLES -> TIMESTAMP | Bill_Date | Bill_Ref_No | Party_Name | Party_Group |
  *                  Sub_Group | Main_Group | Sales Person | Phone No. | Payment Terms |
  *                  Pending Amount | Due_Date | Overdue_Days
+ *                  (read POSITIONALLY by column letter, NOT by header text — column K
+ *                  (11th column) is always treated as Pending Amount, per explicit user
+ *                  instruction. This makes it immune to header text being renamed/retyped.)
+ *
+ *   SALES       -> (any columns before M) | ... | Column M = Sale Amount | Column N = Product Category | ...
+ *                  (read POSITIONALLY by column letter — column M (13th column) is the sale
+ *                  amount used for the Dashboard's "Total Sales" KPI; column N (14th column)
+ *                  is the product category, reserved for future category breakdowns)
  *
  *   Receipt     -> Timestamp | Voucher_Number | Date | Group | Sub_Group |
  *                  Ledger_Name(Cr) | Ledger_Amount(Cr) | Bill_Type | Bill_Name | Bill_Amount |
@@ -81,7 +89,8 @@ var SHEETS = {
   receivables: 'RECEIVABLES',
   receipt:     'Receipt',
   payment:     'PAYMENT',
-  balance:     'Balance'
+  balance:     'Balance',
+  sales:       'SALES'
 };
 
 function doGet(e) {
@@ -190,15 +199,36 @@ function mapPayables_(rows) {
   });
 }
 
-function mapReceivables_(rows) {
-  return rows.map(function (r) {
+// RECEIVABLES is read POSITIONALLY (by column letter), not by header text, per explicit
+// user instruction: "total receivables will be pick from sheet RECEIVABLES and col K".
+// Column K (11th column, 0-based index 10) is always Pending Amount, regardless of what
+// text is actually typed into that header cell — this makes the figure immune to the
+// header-renaming issue that caused problems previously.
+var RECEIVABLES_COLS_POSITIONAL = [
+  'timestamp', 'billDate', 'billRefNo', 'partyName', 'partyGroup', 'subGroup', 'mainGroup',
+  'salesPerson', 'phoneNo', 'paymentTerms', 'pendingAmount' /* column K */, 'dueDate', 'overdueDays'
+];
+function mapReceivablesRows_(rows) {
+  return rows.map(function (row) {
     return {
-      timestamp: fmtTimestamp_(r['TIMESTAMP']), billDate: fmtDateOnly_(r['Bill_Date']),
-      billRefNo: fmtValue_(r['Bill_Ref_No']), partyName: r['Party_Name'] || '',
-      partyGroup: r['Party_Group'] || '', subGroup: r['Sub_Group'] || '', mainGroup: r['Main_Group'] || '',
-      salesPerson: fmtValue_(pick_(r, ['Sales Person'])), phoneNo: fmtValue_(pick_(r, ['Phone No.', 'Phone No'])),
-      paymentTerms: fmtValue_(r['Payment Terms']), pendingAmount: numOrZero_(pick_(r, ['Pending Amount'])),
-      dueDate: fmtDateOnly_(r['Due_Date']), overdueDays: numOrZero_(r['Overdue_Days'])
+      timestamp: fmtTimestamp_(row[0]), billDate: fmtDateOnly_(row[1]), billRefNo: fmtValue_(row[2]),
+      partyName: fmtValue_(row[3]) || '', partyGroup: fmtValue_(row[4]) || '', subGroup: fmtValue_(row[5]) || '',
+      mainGroup: fmtValue_(row[6]) || '', salesPerson: fmtValue_(row[7]), phoneNo: fmtValue_(row[8]),
+      paymentTerms: fmtValue_(row[9]), pendingAmount: numOrZero_(row[10]) /* column K */,
+      dueDate: fmtDateOnly_(row[11]), overdueDays: numOrZero_(row[12])
+    };
+  });
+}
+
+// SALES tab reader — per explicit user instruction: "total sales will come from NEW SHEET
+// ... col M ka total lena hai, col N mein category hai". Read positionally by column
+// letter: column M (13th column, 0-based index 12) = sale amount, column N (14th column,
+// 0-based index 13) = product category.
+function mapSalesRows_(rows) {
+  return rows.map(function (row) {
+    return {
+      amount: numOrZero_(row[12]) /* column M */,
+      category: fmtValue_(row[13]) /* column N */
     };
   });
 }
@@ -276,7 +306,25 @@ function getLoginData() {
   return { users: usersRaw.map(mapUser_) };
 }
 
-function getBootstrapData() {
+// Short-lived cache to speed up repeat loads (this is the main fix for "data taking too
+// long to load"). getBootstrapData(true) (used by the "Sync with Tally" button) always
+// bypasses the cache and re-reads the live sheet. A plain call (used right after login)
+// serves a cached copy if one was written in the last CACHE_TTL_SECONDS, which makes a
+// second user logging in — or the same user reloading the page — nearly instant instead
+// of re-reading every tab from scratch. If the payload is too large for CacheService's
+// 100KB-per-key limit, caching is silently skipped (no error, just no speed-up).
+var BOOTSTRAP_CACHE_KEY = 'tally360_bootstrap_v1';
+var CACHE_TTL_SECONDS = 45;
+
+function getBootstrapData(forceRefresh) {
+  var cache = CacheService.getScriptCache();
+  if (!forceRefresh) {
+    try {
+      var cached = cache.get(BOOTSTRAP_CACHE_KEY);
+      if (cached) return JSON.parse(cached);
+    } catch (e) { /* ignore cache read errors, fall through to a live read */ }
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   // Read the Balance tab's rows ONCE and reuse for both the ledger party list and the
@@ -286,9 +334,10 @@ function getBootstrapData() {
   var result = {
     expense:     mapExpense_(sheetToObjects_(SHEETS.expense)),
     payables:    mapPayables_(sheetToObjects_(SHEETS.payables)),
-    receivables: mapReceivables_(sheetToObjects_(SHEETS.receivables)),
+    receivables: mapReceivablesRows_(sheetToRows_(SHEETS.receivables)),
     receipt:     mapReceiptRows_(sheetToRows_(SHEETS.receipt)),
     payment:     mapReceiptRows_(sheetToRows_(SHEETS.payment)),
+    salesRows:   mapSalesRows_(sheetToRows_(SHEETS.sales)),
     balanceParties:  getLedgerPartyListFromRows_(balanceRows),
     balanceVouchers: getBalanceVouchersFromRows_(balanceRows),
     missingSheets: [],
@@ -300,6 +349,8 @@ function getBootstrapData() {
   Object.keys(SHEETS).forEach(function (k) {
     if (!have[SHEETS[k].toUpperCase()]) result.missingSheets.push(SHEETS[k]);
   });
+
+  try { cache.put(BOOTSTRAP_CACHE_KEY, JSON.stringify(result), CACHE_TTL_SECONDS); } catch (e) { /* payload too large for cache; skip silently, no functional impact */ }
 
   return result;
 }
@@ -313,13 +364,16 @@ function getBootstrapData() {
  * dashboard totals come back all-zero, so a sheet/header mismatch is
  * immediately obvious without needing another round of screenshots.
  */
+// NOTE: RECEIVABLES and SALES are intentionally NOT in EXPECTED_HEADERS — both are read
+// POSITIONALLY by column letter (see mapReceivablesRows_/mapSalesRows_ above), so their
+// header row TEXT doesn't matter and is not checked here. They ARE checked for column
+// COUNT below (EXPECTED_MIN_COLS), since a missing/inserted column would shift every field.
 var EXPECTED_HEADERS = {
   'LOGIN PAGE':  ['NAME', 'ID', 'PASSWORD'],
   'EXPENSE':     ['TIMESTAMP', 'DATE', 'VOUCHER NUMBER', 'PARTY NAME', 'Group', 'Sub_Group', 'AMOUNT'],
-  'PAYABLES':    ['TIMESTAMP', 'Bill_Date', 'Bill_Ref_No', 'Party_Name', 'Closing_Balance', 'Due_Date', 'Overdue_Days'],
-  'RECEIVABLES': ['TIMESTAMP', 'Bill_Date', 'Bill_Ref_No', 'Party_Name', 'Pending Amount', 'Due_Date', 'Overdue_Days']
+  'PAYABLES':    ['TIMESTAMP', 'Bill_Date', 'Bill_Ref_No', 'Party_Name', 'Closing_Balance', 'Due_Date', 'Overdue_Days']
 };
-var EXPECTED_MIN_COLS = { 'Receipt': 18, 'PAYMENT': 18, 'Balance': 35 };
+var EXPECTED_MIN_COLS = { 'Receipt': 18, 'PAYMENT': 18, 'Balance': 35, 'RECEIVABLES': 13, 'SALES': 14 };
 
 function headerMatches_(actualHeaders, expected) {
   var norm = actualHeaders.map(function (h) { return String(h).replace(/\s+/g, ' ').trim().toUpperCase(); });
@@ -528,18 +582,32 @@ function runDiagnosticsNow() {
   }
 
   try {
-    var recvRows = mapReceivables_(sheetToObjects_(SHEETS.receivables));
-    Logger.log('RECEIVABLES: mapped %s row(s).', recvRows.length);
+    var recvRows = mapReceivablesRows_(sheetToRows_(SHEETS.receivables));
+    Logger.log('RECEIVABLES: mapped %s row(s) (read positionally — column K = Pending Amount).', recvRows.length);
     if (recvRows.length) {
-      Logger.log('First Receivables row -> partyName="%s", pendingAmount=%s, dueDate="%s", overdueDays=%s',
+      Logger.log('First Receivables row -> partyName="%s", pendingAmount(col K)=%s, dueDate="%s", overdueDays=%s',
         recvRows[0].partyName, recvRows[0].pendingAmount, recvRows[0].dueDate, recvRows[0].overdueDays);
       var totalRecv = recvRows.reduce(function (s, r) { return s + (Number(r.pendingAmount) || 0); }, 0);
-      Logger.log('SUM of pendingAmount across all Receivables rows = %s  (this is your "Outstanding Receivables" KPI card)', totalRecv);
+      Logger.log('SUM of column K (pendingAmount) across all Receivables rows = %s  (this is your "Total Receivables" KPI card)', totalRecv);
     } else {
       Logger.log('⚠ No Receivables rows were mapped — see the RECEIVABLES section above for why.');
     }
   } catch (e) {
     Logger.log('❌ ERROR while reading RECEIVABLES: %s', e.message);
+  }
+
+  try {
+    var salesRows = mapSalesRows_(sheetToRows_(SHEETS.sales));
+    Logger.log('SALES: mapped %s row(s) (read positionally — column M = amount, column N = category).', salesRows.length);
+    if (salesRows.length) {
+      Logger.log('First Sales row -> amount(col M)=%s, category(col N)="%s"', salesRows[0].amount, salesRows[0].category);
+      var totalSales = salesRows.reduce(function (s, r) { return s + (Number(r.amount) || 0); }, 0);
+      Logger.log('SUM of column M (amount) across all Sales rows = %s  (this is your Dashboard "Total Sales" KPI card)', totalSales);
+    } else {
+      Logger.log('⚠ No Sales rows were mapped — see the SALES section above for why.');
+    }
+  } catch (e) {
+    Logger.log('❌ ERROR while reading SALES: %s', e.message);
   }
 
   Logger.log('');
