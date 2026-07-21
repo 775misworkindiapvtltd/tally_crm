@@ -147,17 +147,22 @@ removed, and it can be re-added later if needed.
 
 ## Dashboard data sources (per user instruction, 21-Jul-2026)
 
-- **Total Sales** (Dashboard KPI card) is now read from a dedicated **`SALES`** sheet
-  tab, **column M** (13th column) = sale amount, summed across all rows. **Column N**
-  (14th column) = product category — used to break down the "Sales Topline" donut by
-  category if present, otherwise it falls back to an illustrative 70/24/6 split.
-  Both are read **positionally by column letter**, not by header text, so renaming the
-  header cell text will never break this figure.
+- **Total Sales** (Dashboard KPI card) is read from a dedicated **`SALES`** sheet tab.
+  Column A is read positionally (always the Timestamp/date). The **sale amount** and
+  **category** columns are located by **searching the header row for text** containing
+  "TOTAL PRICE"/"AMOUNT" and "CATEG" respectively — **not** a hardcoded column letter.
+  This was changed from an original column-M/N approach after discovering the real
+  sheet has 2 **hidden columns** (I, J) that silently shift every fixed column-letter
+  guess to the right. Header-text search is immune to hidden/inserted/reordered
+  columns going forward. If no matching header is found, it falls back to columns
+  M/N as a last resort.
 - **Total Receivables** (Dashboard KPI card, labelled "Total Receivables") is read from
   the **`RECEIVABLES`** sheet, **column K** (11th column) = Pending Amount, summed
   across all rows. Also read positionally by column letter for the same reason.
-- Add a `SALES` tab to your spreadsheet with at least 14 columns (A through N) for this
-  to work — column M must be numeric.
+- Add a `SALES` tab to your spreadsheet with at least 14 columns and a header row
+  containing a column with "TOTAL PRICE" (or "AMOUNT") in its name, and ideally a
+  "CATEGORY" column too. **Hidden columns are fine** — the reader searches by header
+  text, not position, so it doesn't matter how many columns are hidden or where.
 
 ## Performance notes
 

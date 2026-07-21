@@ -37,12 +37,15 @@
  *                  (11th column) is always treated as Pending Amount, per explicit user
  *                  instruction. This makes it immune to header text being renamed/retyped.)
  *
- *   SALES       -> Column A = Sale Date | (any columns) | ... | Column M = Sale Amount |
- *                  Column N = Product Category | ...
- *                  (read POSITIONALLY by column letter — column A (1st column) is the sale
- *                  date, used by the "Sales vs Expenses Trend" chart; column M (13th column)
- *                  is the sale amount used for the Dashboard's "Total Sales" KPI; column N
- *                  (14th column) is the product category, used for the Sales Topline donut)
+ *   SALES       -> Column A = TimeStamp/Sale Date | ... | "TOTAL PRICE" column = Sale
+ *                  Amount | "CATEGORY" column = Product Category | ...
+ *                  (Column A is read positionally, since it's always the first column.
+ *                  The amount and category columns are located by SEARCHING the header
+ *                  row for text containing "TOTAL PRICE"/"AMOUNT" and "CATEG"
+ *                  respectively — NOT a hardcoded column letter. This is deliberate: the
+ *                  real sheet has 2 HIDDEN columns (I, J) between the visible columns,
+ *                  which silently shifts every fixed column-letter guess. Header-text
+ *                  search is immune to hidden/inserted/reordered columns.)
  *
  *   Receipt     -> Timestamp | Voucher_Number | Date | Group | Sub_Group |
  *                  Ledger_Name(Cr) | Ledger_Amount(Cr) | Bill_Type | Bill_Name | Bill_Amount |
@@ -225,17 +228,49 @@ function mapReceivablesRows_(rows) {
   });
 }
 
-// SALES tab reader — per explicit user instruction: "total sales will come from NEW SHEET
-// ... col M ka total lena hai, col N mein category hai". Read positionally by column
-// letter: column A (1st column, 0-based index 0) = sale date, column M (13th column,
-// 0-based index 12) = sale amount, column N (14th column, 0-based index 13) = product
-// category. The date field is used by the Dashboard's "Sales vs Expenses Trend" chart.
-function mapSalesRows_(rows) {
+// Finds the first column index whose header text CONTAINS any of the given substrings
+// (case-insensitive). Returns -1 if none match. Used for SALES below, where the user's
+// original "column M / column N" instruction turned out to be off by one because
+// columns I and J are HIDDEN in the actual sheet (confirmed from a screenshot) — hidden
+// columns still count for array-index purposes, silently shifting every fixed column
+// letter to the right. Searching by header TEXT instead of a hardcoded index makes this
+// immune to hidden/inserted columns going forward.
+function findColIndexByHeaderContains_(headerRow, substrings) {
+  for (var i = 0; i < headerRow.length; i++) {
+    var h = String(headerRow[i] || '').toUpperCase();
+    for (var j = 0; j < substrings.length; j++) {
+      if (h.indexOf(substrings[j]) !== -1) return i;
+    }
+  }
+  return -1;
+}
+
+function getHeaderRow_(name) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(name);
+  if (!sh) return [];
+  var lastCol = sh.getLastColumn();
+  if (lastCol === 0) return [];
+  return sh.getRange(1, 1, 1, lastCol).getValues()[0];
+}
+
+// SALES tab reader. Column A = sale date (Timestamp), used by the "Sales vs Expenses
+// Trend" chart. The amount ("TOTAL PRICE") and category columns are located by
+// SEARCHING the actual header row for matching text, NOT by a hardcoded column letter —
+// this was originally column M/N by count, but the real sheet has 2 hidden columns
+// (I, J), which silently shifted TOTAL PRICE to column N and CATEGORY to column O.
+// Falls back to the original M/N indices only if no header match is found at all.
+function mapSalesRows_(rows, headerRow) {
+  headerRow = headerRow || [];
+  var amountIdx = findColIndexByHeaderContains_(headerRow, ['TOTAL PRICE', 'TOTAL AMOUNT', 'SALE AMOUNT', 'AMOUNT']);
+  if (amountIdx === -1) amountIdx = 12; // fallback: column M
+  var categoryIdx = findColIndexByHeaderContains_(headerRow, ['CATEG']);
+  if (categoryIdx === -1) categoryIdx = 13; // fallback: column N
   return rows.map(function (row) {
     return {
       date: fmtDateOnly_(row[0]) /* column A */,
-      amount: numOrZero_(row[12]) /* column M */,
-      category: fmtValue_(row[13]) /* column N */
+      amount: numOrZero_(row[amountIdx]),
+      category: fmtValue_(row[categoryIdx])
     };
   });
 }
@@ -361,7 +396,7 @@ function getBootstrapData(forceRefresh) {
     receivables: mapReceivablesRows_(sheetToRows_(SHEETS.receivables)),
     receipt:     mapReceiptRows_(sheetToRows_(SHEETS.receipt)),
     payment:     mapReceiptRows_(sheetToRows_(SHEETS.payment)),
-    salesRows:   mapSalesRows_(sheetToRows_(SHEETS.sales)),
+    salesRows:   mapSalesRows_(sheetToRows_(SHEETS.sales), getHeaderRow_(SHEETS.sales)),
     expenseTrendRows: mapExpenseTrendRows_(sheetToRows_(SHEETS.expense)),
     balanceParties:  getLedgerPartyListFromRows_(balanceRows),
     balanceVouchers: getBalanceVouchersFromRows_(balanceRows),
@@ -622,12 +657,18 @@ function runDiagnosticsNow() {
   }
 
   try {
-    var salesRows = mapSalesRows_(sheetToRows_(SHEETS.sales));
-    Logger.log('SALES: mapped %s row(s) (read positionally — column M = amount, column N = category).', salesRows.length);
+    var salesHeaderRow = getHeaderRow_(SHEETS.sales);
+    var salesAmountIdx = findColIndexByHeaderContains_(salesHeaderRow, ['TOTAL PRICE', 'TOTAL AMOUNT', 'SALE AMOUNT', 'AMOUNT']);
+    var salesCategoryIdx = findColIndexByHeaderContains_(salesHeaderRow, ['CATEG']);
+    Logger.log('SALES header-text search -> amount column found at index %s (%s), category column found at index %s (%s)',
+      salesAmountIdx, salesAmountIdx === -1 ? 'NOT FOUND, falling back to column M' : 'column letter ' + String.fromCharCode(65 + salesAmountIdx),
+      salesCategoryIdx, salesCategoryIdx === -1 ? 'NOT FOUND, falling back to column N' : 'column letter ' + String.fromCharCode(65 + salesCategoryIdx));
+    var salesRows = mapSalesRows_(sheetToRows_(SHEETS.sales), salesHeaderRow);
+    Logger.log('SALES: mapped %s row(s).', salesRows.length);
     if (salesRows.length) {
-      Logger.log('First Sales row -> amount(col M)=%s, category(col N)="%s"', salesRows[0].amount, salesRows[0].category);
+      Logger.log('First Sales row -> amount=%s, category="%s"', salesRows[0].amount, salesRows[0].category);
       var totalSales = salesRows.reduce(function (s, r) { return s + (Number(r.amount) || 0); }, 0);
-      Logger.log('SUM of column M (amount) across all Sales rows = %s  (this is your Dashboard "Total Sales" KPI card)', totalSales);
+      Logger.log('SUM of amount across all Sales rows = %s  (this is your Dashboard "Total Sales" KPI card)', totalSales);
     } else {
       Logger.log('⚠ No Sales rows were mapped — see the SALES section above for why.');
     }
