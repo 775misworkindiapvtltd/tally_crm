@@ -94,8 +94,7 @@ function shouldShowDiagBanner(){
 async function loadAll(){
   S.ready=false;render();
   try{
-    const loginData=await runServer('getLoginData');
-    S.users=loginData.users||[];
+    S.users=await runServer('getLoginUsers')||[];
     S.loadError="";
   }catch(err){ S.loadError=err.message; }
   S.ready=true;render();startClock();
@@ -107,23 +106,46 @@ function markSynced(){
   S.lastSync=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' · '+pad(d.getHours())+':'+pad(d.getMinutes());
 }
 
+// Load data ONE TAB AT A TIME to avoid google.script.run response-size limits.
+// Dashboard renders progressively as each chunk arrives (cards update live).
+const CHUNK_KEYS=['expense','expenseTrend','payables','receivables','receipt','payment','sales','balance','diagnostics'];
+
+async function loadChunks(){
+  for(const key of CHUNK_KEYS){
+    try{
+      const data=await runServer('getChunk',key);
+      if(data===null||data===undefined) continue;
+      switch(key){
+        case 'expense': S.expense=data||[]; break;
+        case 'expenseTrend': S.expenseTrendRows=data||[]; break;
+        case 'payables': S.payables=data||[]; break;
+        case 'receivables': S.receivables=data||[]; break;
+        case 'receipt': S.receipt=data||[]; break;
+        case 'payment': S.payment=data||[]; break;
+        case 'sales': S.salesRows=data||[]; break;
+        case 'balance': S.balanceParties=data.balanceParties||[]; S.balanceVouchers=data.balanceVouchers||[]; break;
+        case 'diagnostics': S.diagnostics=data||{}; break;
+      }
+      render(); // progressive update — dashboard numbers appear as each chunk lands
+    }catch(err){
+      console.error('Chunk load error ['+key+']:', err.message);
+      // Continue loading other tabs even if one fails
+    }
+  }
+}
+
 async function loadHeavyData(){
   S.syncing=true;S.diagBannerDismissed=false;render();
-  try{
-    applyBootstrap(await runServer('getBootstrapData'));
-    S.loadError="";markSynced();
-  }catch(err){ showToast("Data load error: "+err.message,true); }
-  S.syncing=false;render();
+  await loadChunks();
+  S.syncing=false;markSynced();render();
 }
 
 async function refreshData(){
   S.syncing=true;S.diagBannerDismissed=false;render();
-  try{
-    applyBootstrap(await runServer('getBootstrapData',true)); // true = force-refresh, bypass server cache
-    S.loadError="";S.syncing=false;markSynced();
-    Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
-    showToast("Sheet se latest data mil gaya.",false);
-  }catch(err){S.syncing=false;showToast("Refresh nahi ho paya: "+err.message,true);}
+  await loadChunks();
+  S.syncing=false;markSynced();
+  Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
+  showToast("Sheet se latest data mil gaya.",false);
 }
 
 /* ============================= HELPERS ============================= */

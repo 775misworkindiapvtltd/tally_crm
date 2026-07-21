@@ -359,72 +359,29 @@ function getBalanceVouchersFromRows_(rows) {
  * LOGIN PAGE sheet just to re-check permissions.
  */
 function getLoginData() {
-  // Read positionally (column B = ID, column C = Password) — see mapUserRow_ above.
-  // sheetToRows_ already skips the header row, matching the old sheetToObjects_ behavior.
   var usersRaw = sheetToRows_(SHEETS.login);
   return { users: usersRaw.map(mapUserRow_).filter(function (u) { return u.id; }) };
 }
 
-// Short-lived cache to speed up repeat loads (this is the main fix for "data taking too
-// long to load"). getBootstrapData(true) (used by the "Sync with Tally" button) always
-// bypasses the cache and re-reads the live sheet. A plain call (used right after login)
-// serves a cached copy if one was written in the last CACHE_TTL_SECONDS, which makes a
-// second user logging in — or the same user reloading the page — nearly instant instead
-// of re-reading every tab from scratch. If the payload is too large for CacheService's
-// 100KB-per-key limit, caching is silently skipped (no error, just no speed-up).
-var BOOTSTRAP_CACHE_KEY = 'tally360_bootstrap_v1';
-var CACHE_TTL_SECONDS = 45;
-
-function getBootstrapData(forceRefresh) {
-  var cache = CacheService.getScriptCache();
-  if (!forceRefresh) {
-    try {
-      var cached = cache.get(BOOTSTRAP_CACHE_KEY);
-      if (cached) {
-        var parsed = JSON.parse(cached);
-        if (parsed && parsed.expense) return parsed; // only use cache if it's a valid object with expected fields
-      }
-    } catch (e) { /* ignore cache read errors, fall through to a live read */ }
+// DATA LOADED IN CHUNKS — one tab per server call — to avoid exceeding
+// google.script.run's response-size limit (~100-200KB). With 8000+ rows
+// (growing to 10-20K), the old single-call approach silently returned null.
+function getChunk(tabKey) {
+  switch (tabKey) {
+    case 'expense':         return mapExpense_(sheetToObjects_(SHEETS.expense));
+    case 'expenseTrend':    return mapExpenseTrendRows_(sheetToRows_(SHEETS.expense));
+    case 'payables':        return mapPayables_(sheetToObjects_(SHEETS.payables));
+    case 'receivables':     return mapReceivablesRows_(sheetToRows_(SHEETS.receivables));
+    case 'receipt':         return mapReceiptRows_(sheetToRows_(SHEETS.receipt));
+    case 'payment':         return mapReceiptRows_(sheetToRows_(SHEETS.payment));
+    case 'sales':           return mapSalesRows_(sheetToRows_(SHEETS.sales), getHeaderRow_(SHEETS.sales));
+    case 'balance': {
+      var rows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
+      return { balanceParties: getLedgerPartyListFromRows_(rows), balanceVouchers: getBalanceVouchersFromRows_(rows) };
+    }
+    case 'diagnostics':     return getDiagnostics_();
+    default: return [];
   }
-
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // Read the Balance tab's rows ONCE and reuse for both the ledger party list and the
-  // sales/purchase voucher extraction (previously read twice — this halves that cost).
-  var balanceRows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
-
-  var result = {
-    expense:     mapExpense_(sheetToObjects_(SHEETS.expense)),
-    payables:    mapPayables_(sheetToObjects_(SHEETS.payables)),
-    receivables: mapReceivablesRows_(sheetToRows_(SHEETS.receivables)),
-    receipt:     mapReceiptRows_(sheetToRows_(SHEETS.receipt)),
-    payment:     mapReceiptRows_(sheetToRows_(SHEETS.payment)),
-    salesRows:   mapSalesRows_(sheetToRows_(SHEETS.sales), getHeaderRow_(SHEETS.sales)),
-    expenseTrendRows: mapExpenseTrendRows_(sheetToRows_(SHEETS.expense)),
-    balanceParties:  getLedgerPartyListFromRows_(balanceRows),
-    balanceVouchers: getBalanceVouchersFromRows_(balanceRows),
-    missingSheets: [],
-    diagnostics: getDiagnostics_()
-  };
-
-  var have = {};
-  ss.getSheets().forEach(function (s) { have[s.getName().trim().toUpperCase()] = true; });
-  Object.keys(SHEETS).forEach(function (k) {
-    if (!have[SHEETS[k].toUpperCase()]) result.missingSheets.push(SHEETS[k]);
-  });
-
-  // NOTE: CacheService DISABLED — the total payload from this spreadsheet (~8000+ rows
-  // across all tabs) far exceeds CacheService's 100KB-per-key limit. When the payload
-  // is too large, cache.put() silently truncates it, and the next cache.get() returns a
-  // truncated/corrupt JSON string that JSON.parse() turns into null — which then causes
-  // the client-side error "Cannot read properties of null (reading 'expense')". Since
-  // this was the EXACT reported error, caching is now disabled entirely. The 45-second
-  // cache was a premature optimization for a dataset this large; the 10-second load
-  // time is acceptable for a Tally-to-Sheet sync that only happens once after login
-  // and once per manual "Sync with Tally" click.
-  // try { cache.put(BOOTSTRAP_CACHE_KEY, JSON.stringify(result), CACHE_TTL_SECONDS); } catch (e) { }
-
-  return result;
 }
 
 /* ============================= DIAGNOSTICS =============================
