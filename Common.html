@@ -122,7 +122,11 @@ function markSynced(){
 
 // Load data ONE TAB AT A TIME to avoid google.script.run response-size limits.
 // Dashboard renders progressively as each chunk arrives (cards update live).
-const CHUNK_KEYS=['expense','expenseTrend','payables','receivables','receipt','payment','sales','balance','diagnostics'];
+// Order matters: receivables/payables feed the two slowest-feeling dashboard panels
+// (Top Customers by Outstanding, Top Vendors by Payable) plus their KPI cards, so
+// they're loaded FIRST — this makes those panels populate almost immediately instead
+// of sitting on "No matching rows" while expense/sales/balance load ahead of them.
+const CHUNK_KEYS=['receivables','payables','expense','expenseTrend','receipt','payment','sales','balance','diagnostics'];
 
 async function loadChunks(){
   for(const key of CHUNK_KEYS){

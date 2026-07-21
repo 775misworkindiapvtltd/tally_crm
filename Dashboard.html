@@ -93,13 +93,17 @@ function renderDashboard(){
   const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
   const ageColors=['#2E6BF2','#16A34A','#F08A1D','#E23A3A'];
 
-  const topCustomers=topN(dataForFY('receivables'),'partyName','pendingAmount',10).map(t=>{
-    const row=dataForFY('receivables').find(r=>r.partyName===t.label && Number(r.pendingAmount)===t.value)||dataForFY('receivables').filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
-    return Object.assign({},t,{overdueDays:row?row.overdueDays:0,dueDate:row?row.dueDate:'',billRefNo:row?row.billRefNo:''});
+  // All parties (not just a top-N slice) so the scroll box on the dashboard has real
+  // content to scroll through — min 10 rows visible at once via the fixed-height
+  // compact box, sortable by clicking any of the 3 headers (default: Outstanding desc).
+  const recvRowsAll=dataForFY('receivables'), payRowsAll=dataForFY('payables');
+  const topCustomers=topN(recvRowsAll,'partyName','pendingAmount',9999).map(t=>{
+    const row=recvRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
   });
-  const topVendors=topN(dataForFY('payables'),'partyName','closingBalance',10).map(t=>{
-    const row=dataForFY('payables').filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
-    return Object.assign({},t,{overdueDays:row?row.overdueDays:0,dueDate:row?row.dueDate:'',billRefNo:row?row.billRefNo:''});
+  const topVendors=topN(payRowsAll,'partyName','closingBalance',9999).map(t=>{
+    const row=payRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
   });
   const expenseByCategory=topN(dataForFY('expense'),'subGroup','amount',6);
   const expenseTotal=sumBy(dataForFY('expense'),'amount');
@@ -156,12 +160,18 @@ function renderDashboard(){
     <div class="dash-row3">
       <div class="panel">
         <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
-        <div class="panel-body" style="padding:0;">${(()=>{S.dashTopCustomers=topCustomers.map(c=>{const st=statusForDueDate(c.dueDate,c.overdueDays);return Object.assign({},c,{statusLabel:st.label,statusCls:st.cls});});return renderGrid('topCustomersDash');})()}</div>
+        <div class="panel-body" style="padding:0;">${(()=>{
+          if(S.syncing&&!recvRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading receivables…</div></div>`;
+          S.dashTopCustomers=topCustomers;return renderGrid('topCustomersDash');
+        })()}</div>
         <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
       <div class="panel">
         <div class="panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
-        <div class="panel-body" style="padding:0;">${(()=>{S.dashTopVendors=topVendors.map(c=>{const st=statusForDueDate(c.dueDate,c.overdueDays);return Object.assign({},c,{statusLabel:st.label,statusCls:st.cls});});return renderGrid('topVendorsDash');})()}</div>
+        <div class="panel-body" style="padding:0;">${(()=>{
+          if(S.syncing&&!payRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading payables…</div></div>`;
+          S.dashTopVendors=topVendors;return renderGrid('topVendorsDash');
+        })()}</div>
         <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
       </div>
       <div class="panel">

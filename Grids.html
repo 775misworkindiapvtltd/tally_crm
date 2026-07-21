@@ -53,14 +53,12 @@ const CREDIT_NOTE_COLS=[
   {key:'particular',label:'Particulars',width:280},{key:'amount',label:'Amount',width:150,num:true}
 ];
 const TOP_CUSTOMERS_COLS=[
-  {key:'label',label:'Customer Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
-  {key:'overdueDays',label:'Overdue Days',width:130,num:true},{key:'dueDate',label:'Last Due Date',width:130,date:true},
-  {key:'statusLabel',label:'Status',width:120,render:r=>`<span class="status-badge ${r.statusCls}">${esc(r.statusLabel)}</span>`}
+  {key:'label',label:'Party Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
+  {key:'overdueDays',label:'Overdue Days',width:130,num:true}
 ];
 const TOP_VENDORS_COLS=[
-  {key:'label',label:'Vendor Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
-  {key:'overdueDays',label:'Overdue Days',width:130,num:true},{key:'dueDate',label:'Last Due Date',width:130,date:true},
-  {key:'statusLabel',label:'Status',width:120,render:r=>`<span class="status-badge ${r.statusCls}">${esc(r.statusLabel)}</span>`}
+  {key:'label',label:'Party Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
+  {key:'overdueDays',label:'Overdue Days',width:130,num:true}
 ];
 const SUBCATEGORY_COLS=[
   {key:'label',label:'Sub Category',width:220},{key:'value',label:'Amount',width:160,num:true},{key:'pct',label:'% of Total',width:130}
