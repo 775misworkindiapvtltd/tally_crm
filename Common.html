@@ -19,7 +19,7 @@ function tableState(key){if(!S.dt[key])S.dt[key]=dtState();return S.dt[key];}
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
-  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], salesRows:[], expenseTrendRows:[],
+  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], balanceLedgers:{}, salesRows:[], expenseTrendRows:[],
   users:[], missingSheets:[], diagnostics:{}, diagBannerDismissed:false,
   toast:null, loginError:"",
   dt:{ expense:dtState(), payables:dtState(), receivables:dtState(), receipt:dtState(), payment:dtState() },
@@ -137,7 +137,7 @@ async function loadChunks(){
         case 'receipt': S.receipt=data||[]; break;
         case 'payment': S.payment=data||[]; break;
         case 'sales': S.salesRows=data||[]; break;
-        case 'balance': S.balanceParties=data.balanceParties||[]; S.balanceVouchers=data.balanceVouchers||[]; break;
+        case 'balance': S.balanceParties=data.balanceParties||[]; S.balanceVouchers=data.balanceVouchers||[]; S.balanceLedgers=data.balanceLedgers||{}; break;
         case 'diagnostics': S.diagnostics=data||{}; break;
       }
       render(); // progressive update — dashboard numbers appear as each chunk lands

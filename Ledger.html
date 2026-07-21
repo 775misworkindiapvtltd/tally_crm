@@ -1,12 +1,22 @@
 <script>
-/* ============================= LEDGER (party statement + print/PDF) ============================= */
-async function selectLedgerParty(name){
-  S.ledger.selected=name;S.ledger.detail=null;S.ledger.loading=true;render();
-  try{
-    const detail=await runServer('getLedgerForParty',name);
-    S.ledger.detail=detail;
-  }catch(err){ showToast("Ledger load error: "+err.message,true); }
-  S.ledger.loading=false;render();
+/* ============================= LEDGER (party statement + print/PDF) =============================
+ * Every party's full ledger statement is precomputed on the server ONCE, as part of
+ * the 'balance' chunk during login / Sync with Tally (see buildAllLedgers_ in Code.gs),
+ * and cached client-side in S.balanceLedgers. Switching the selected party is therefore
+ * a pure, instant client-side lookup — NO server round-trip, no "please wait" delay.
+ * getLedgerForParty() is only called as a fallback for a party that isn't in the cache
+ * yet (e.g. added to the sheet after the last sync).
+ */
+function selectLedgerParty(name){
+  S.ledger.selected=name;
+  const cached=S.balanceLedgers&&S.balanceLedgers[name];
+  if(cached){ S.ledger.detail=cached;S.ledger.loading=false;render();return; }
+  // Fallback: not in the cached map (new party since last sync) — fetch just this one.
+  S.ledger.detail=null;S.ledger.loading=true;render();
+  runServer('getLedgerForParty',name).then(detail=>{
+    S.ledger.detail=detail;S.balanceLedgers[name]=detail;
+  }).catch(err=>{ showToast("Ledger load error: "+err.message,true); })
+    .finally(()=>{ S.ledger.loading=false;render(); });
 }
 
 function renderLedgerPage(){

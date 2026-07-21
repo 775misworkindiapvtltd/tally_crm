@@ -355,6 +355,63 @@ function mapBalanceRows_(rows) {
   });
 }
 
+// Builds the FULL statement for EVERY party in ONE pass over the Balance rows
+// (grouped by name), instead of re-reading + re-scanning the whole Balance sheet
+// on every single ledger click (which is what made switching party name feel slow).
+// Returned shape matches getLedgerForParty()'s single-party result, keyed by party
+// name: { [partyName]: {header, opening, entries, closing} }. This is computed once
+// as part of the 'balance' chunk during initial load / Sync with Tally, and the
+// client caches the whole map — clicking a different party is then a pure
+// client-side lookup with zero server round-trip.
+function buildAllLedgers_(rows) {
+  var byName = {};
+  rows.forEach(function (r) {
+    if (!r.name) return;
+    if (!byName[r.name]) byName[r.name] = [];
+    byName[r.name].push(r);
+  });
+
+  var ledgers = {};
+  Object.keys(byName).forEach(function (name) {
+    var partyRows = byName[name];
+    var first = partyRows[0];
+    var header = {
+      name: first.name, alias: first.alias, subgroup: first.subgroup, group: first.group,
+      mainGroup: first.mainGroup, state: first.state, country: first.country, pincode: first.pincode,
+      email: first.email, emailCC: first.emailCC, contactPerson: first.contactPerson, mobile: first.mobile,
+      creditPeriod: first.creditPeriod, creditLimit: first.creditLimit, billByBill: first.billByBill,
+      address: first.guid /* GUID column often holds the registered address text in this export */
+    };
+
+    var openingRow = partyRows.find(function (r) { return r.openingParticular; }) || first;
+    var opening = {
+      date: openingRow.openingDate, particular: openingRow.openingParticular || 'Opening Balance',
+      debit: openingRow.openingDebit, credit: openingRow.openingCredit, balance: openingRow.openingBalance
+    };
+
+    var running = opening.debit - opening.credit;
+    var entries = [];
+    partyRows.forEach(function (r) {
+      if (!r.voucherDate && !r.voucherParticular && !r.voucherNo) return;
+      running += (r.voucherDebit - r.voucherCredit);
+      entries.push({
+        date: r.voucherDate, particular: r.voucherParticular, vchType: r.voucherType, vchNo: r.voucherNo,
+        debit: r.voucherDebit, credit: r.voucherCredit, balance: running
+      });
+    });
+
+    var closingRow = partyRows.slice().reverse().find(function (r) { return r.closingParticular; }) || partyRows[partyRows.length - 1];
+    var closing = {
+      date: closingRow.closingDate, particular: closingRow.closingParticular || 'Closing Balance',
+      debit: closingRow.closingDebit, credit: closingRow.closingCredit,
+      balance: (closingRow.closingDebit || closingRow.closingCredit) ? (closingRow.closingDebit - closingRow.closingCredit) : running
+    };
+
+    ledgers[name] = { header: header, opening: opening, entries: entries, closing: closing };
+  });
+  return ledgers;
+}
+
 // Flattens the Balance tab into one row per actual voucher line (across all parties),
 // used by the Finance 360 dashboard to derive Sales / Purchase / Credit Note figures
 // (there is no dedicated Sales/Purchase register sheet, so we approximate from the
@@ -405,7 +462,13 @@ function getChunk(tabKey) {
     case 'sales':           return mapSalesRows_(sheetToRows_(SHEETS.sales), getHeaderRow_(SHEETS.sales));
     case 'balance': {
       var rows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
-      return { balanceParties: getLedgerPartyListFromRows_(rows), balanceVouchers: getBalanceVouchersFromRows_(rows) };
+      // balanceLedgers = every party's full statement, precomputed once here so the
+      // client never has to call getLedgerForParty() again just to switch party name.
+      return {
+        balanceParties: getLedgerPartyListFromRows_(rows),
+        balanceVouchers: getBalanceVouchersFromRows_(rows),
+        balanceLedgers: buildAllLedgers_(rows)
+      };
     }
     case 'diagnostics':     return getDiagnostics_();
     default: return [];
@@ -502,7 +565,11 @@ function getLedgerPartyListFromRows_(rows) {
 }
 
 /**
- * Builds the full statement for one party from the Balance tab.
+ * Builds the full statement for ONE party from the Balance tab. Kept only as a
+ * fallback server call for a party that isn't in the client's cached
+ * balanceLedgers map yet (e.g. a brand-new party added to the sheet after the
+ * last "Sync with Tally"). Normal party switching no longer calls this — see
+ * buildAllLedgers_() above, which precomputes every party's ledger in one pass.
  * Returns { header:{...party info...}, opening:{date,particular,debit,credit,balance},
  *           entries:[{date,particular,vchType,vchNo,debit,credit,balance}],
  *           closing:{date,particular,debit,credit,balance} }
