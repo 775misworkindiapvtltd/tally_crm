@@ -105,6 +105,23 @@ The data layer (`Code.gs`) is fully decoupled from the presentation layer,
 so figures/formulas above can be refined without touching the UI, and the
 UI can be restyled without touching how data is read from the sheet.
 
+## ⚠️ IMPORTANT: How to actually update your live app
+
+**Editing/saving files in the Apps Script editor does NOT update your published
+`/exec` URL by itself.** This is the #1 reason a fix "doesn't work" even though
+the code is correct — the live app is still running an old deployment.
+
+Every time you paste in updated code, you must:
+1. Click **Deploy → Manage deployments**
+2. Click the pencil/edit icon next to your existing "Web app" deployment
+3. Under **Version**, choose **New version**
+4. Click **Deploy**
+
+The sidebar footer of the app shows a **"Build: ..."** version string (from
+`APP_BUILD` at the top of `Common.html`). If that string doesn't match what
+you expect after a fix, your live deployment hasn't picked up the new code
+yet — repeat the steps above.
+
 ## Performance notes
 
 - Login only reads the `LOGIN PAGE` sheet. All other tabs (`EXPENSE`,

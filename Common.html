@@ -1,5 +1,15 @@
 <script>
-/* ============================= CONFIG ============================= */
+/* ============================= CONFIG =============================
+ * APP_BUILD: bump this on every fix. Shown in the sidebar footer so you can
+ * confirm at a glance whether your LIVE Apps Script deployment is actually
+ * running the latest code — editing/saving files in the Apps Script editor
+ * does NOT update your published /exec URL by itself. You must go to
+ * Deploy > Manage deployments > (pencil/edit icon) > Version: New version
+ * > Deploy, every time you paste in updated code. If the version number
+ * shown in your app doesn't match the one below, that's why a fix "isn't
+ * working" — it simply hasn't been deployed yet.
+ */
+const APP_BUILD = "2026-07-21.1 (diagnostics banner)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 
@@ -305,6 +315,7 @@ function renderShell(inner){
       <div class="sidebar-foot">
         <div class="su">Data Last Updated<br><b style="color:#D7DCEA;">${esc(S.lastSync||'just now')}</b></div>
         <button class="btn sync-btn btn-ghost" data-action="syncnow" style="color:#AAB2C8;border-color:var(--sidebar-line);">${S.syncing?'⟳ Syncing…':'⟳ Sync with Tally'}</button>
+        <div class="su" style="margin-top:8px;opacity:.6;">Build: ${esc(APP_BUILD)}</div>
         <div class="logout-btn" data-action="logout" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
       </div>
     </div>
