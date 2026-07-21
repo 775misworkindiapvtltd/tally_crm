@@ -3,7 +3,7 @@
 function renderRecvDashboard(){
   const rows=dataForFY('receivables'),overdue=rows.filter(r=>Number(r.overdueDays)>0),current=rows.filter(r=>Number(r.overdueDays)<=0);
   const total=sumBy(rows,'pendingAmount'),age=ageingBuckets(rows,'pendingAmount'),top=topN(rows,'partyName','pendingAmount',8),max=Math.max(1,...top.map(x=>x.value));
-  return `${renderFilterBar()}<div class="dash-grid">
+  return `<div class="dash-grid">
     <div class="card"><div class="card-label">Total Outstanding</div><div class="card-value">${fmtINR(total)}</div><div class="card-sub">${rows.length} open bills</div></div>
     <div class="card"><div class="card-label">Overdue Bills</div><div class="card-value">${overdue.length}</div><div class="card-sub">${fmtINR(sumBy(overdue,'pendingAmount'))} was due but not received</div></div>
     <div class="card"><div class="card-label">Not Yet Due</div><div class="card-value">${current.length}</div><div class="card-sub">${fmtINR(sumBy(current,'pendingAmount'))} still to come</div></div>
@@ -22,16 +22,16 @@ function renderAgeing(kind){
 }
 registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=>renderAgeing('pay'));
 
-function renderPartyList(kind){const key=kind==='recv'?'customerList':'vendorList',label=kind==='recv'?'Customer List from SALES':'Vendor List';return `${renderFilterBar()}<div class="panel-title" style="background:transparent;border:0;padding:0 0 10px">${label}</div>${renderGrid(key)}`;}
+function renderPartyList(kind){const key=kind==='recv'?'customerList':'vendorList',label=kind==='recv'?'Customer List from SALES':'Vendor List';return `<div class="panel-title" style="background:transparent;border:0;padding:0 0 10px">${label}</div>${renderGrid(key)}`;}
 registerPage('customerList',()=>renderPartyList('recv'));registerPage('vendorList',()=>renderPartyList('pay'));
 
 function renderCollectionAnalysis(){
   const sales=sumBy(voucherSales_(),'debit'),collections=sumBy(dataForFY('receipt'),'debitLedgerAmount'),recv=outstandingReceivable();
   const dso=sales?recv/sales*selectedFYDayCount():0,eff=sales?Math.min(100,collections/sales*100):0;
-  return `${renderFilterBar()}<div class="dash-grid"><div class="card"><div class="card-label">DSO</div><div class="card-value">${dso.toFixed(1)} days</div></div><div class="card"><div class="card-label">Collection Efficiency</div><div class="card-value">${eff.toFixed(1)}%</div></div><div class="card"><div class="card-label">Collected</div><div class="card-value">${fmtINR(collections)}</div></div><div class="card"><div class="card-label">Sales</div><div class="card-value">${fmtINR(sales)}</div></div></div>`;
+  return `<div class="dash-grid"><div class="card"><div class="card-label">DSO</div><div class="card-value">${dso.toFixed(1)} days</div></div><div class="card"><div class="card-label">Collection Efficiency</div><div class="card-value">${eff.toFixed(1)}%</div></div><div class="card"><div class="card-label">Collected</div><div class="card-value">${fmtINR(collections)}</div></div><div class="card"><div class="card-label">Sales</div><div class="card-value">${fmtINR(sales)}</div></div></div>`;
 }
 registerPage('collectionAnalysis',renderCollectionAnalysis);
-function renderFollowUpList(){return `${renderFilterBar()}${renderGrid('followUpList')}`;}registerPage('followUpList',renderFollowUpList);
-function renderCreditNotes(){return `${renderFilterBar()}${renderGrid('creditNotes')}`;}registerPage('creditNotes',renderCreditNotes);
+function renderFollowUpList(){return renderGrid('followUpList');}registerPage('followUpList',renderFollowUpList);
+function renderCreditNotes(){return renderGrid('creditNotes');}registerPage('creditNotes',renderCreditNotes);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(!el)return;const a=el.getAttribute('data-action');if(a==='followup-toggle'){const k=el.getAttribute('data-key');S.followUpDone[k]=!S.followUpDone[k];render();}if(a==='ageing-mode'){S.ageingMode=el.getAttribute('data-mode');tableState(S.page).page=1;render();}});
 </script>

@@ -9,7 +9,6 @@ function renderSalesDashboard(){
   const fyLabel=selectedFYLabel();
 
   return `
-    ${renderFilterBar()}
     <div class="dash-grid">
       <div class="card"><div class="card-top"><span class="card-label">Total Sales</span><div class="card-icon c-green">${NAV_ICONS.sales}</div></div><div class="card-value">${fmtINR(cur.sales)}</div><div class="card-sub">${esc(fyLabel)}</div></div>
       <div class="card"><div class="card-top"><span class="card-label">Transactions</span><div class="card-icon c-blue">${NAV_ICONS.reports}</div></div><div class="card-value">${salesRows.length}</div><div class="card-sub">sales vouchers — ${esc(fyLabel)}</div></div>
@@ -45,7 +44,6 @@ function renderExpensesDashboard(){
   const fyLabel=selectedFYLabel();
 
   return `
-    ${renderFilterBar()}
     <div class="dash-grid">
       <div class="card"><div class="card-top"><span class="card-label">Total Expenses</span><div class="card-icon c-red">${NAV_ICONS.wallet}</div></div><div class="card-value">${fmtINR(total)}</div><div class="card-sub">${expRows.length} voucher lines — ${esc(fyLabel)}</div></div>
       <div class="card"><div class="card-top"><span class="card-label">Categories</span><div class="card-icon c-orange">${NAV_ICONS.reports}</div></div><div class="card-value">${new Set(expRows.map(r=>r.group)).size}</div><div class="card-sub">distinct expense groups</div></div>
@@ -76,7 +74,6 @@ function renderCashFlow(){
   const fyLabel=selectedFYLabel();
 
   return `
-    ${renderFilterBar()}
     <div class="dash-grid">
       <div class="card"><div class="card-top"><span class="card-label">Receipt Transactions</span><div class="card-icon c-blue">${NAV_ICONS.cashflow}</div></div><div class="card-value">${receiptRows.length}</div><div class="card-sub">${esc(fyLabel)}</div></div>
       <div class="card"><div class="card-top"><span class="card-label">Cash In</span><div class="card-icon c-green">${NAV_ICONS['arrow-down']}</div></div><div class="card-value">${fmtINR(cur.collections)}</div><div class="card-sub">receipts — ${esc(fyLabel)}</div></div>
@@ -107,7 +104,6 @@ function renderProfitLoss(){
   const fyLabel=selectedFYLabel();
 
   return `
-    ${renderFilterBar()}
     <div class="simple-panel">
       <h3 style="margin-bottom:14px;font-size:15px;">Profit &amp; Loss Statement — ${esc(fyLabel)}</h3>
       <div class="kv-grid" style="grid-template-columns:1fr;max-width:520px;">
@@ -130,7 +126,6 @@ function renderBalanceSheet(){
   const equity=totalAssets-totalLiabilities;
   const fyLabel=selectedFYLabel();
   return `
-    ${renderFilterBar()}
     <div class="dash-row" style="grid-template-columns:1fr 1fr;">
       <div class="simple-panel">
         <h3 style="margin-bottom:14px;font-size:14px;">Assets — ${esc(fyLabel)}</h3>

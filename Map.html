@@ -102,7 +102,7 @@ function renderMapView(){
   const selData=selState?byState[selState]:null;
   const cityRows=selData?cityRowsForState_(selData):[];
 
-  return `${renderFilterBar()}
+  return `
   <div class="map-shell">
     <div class="map-panel">
       <div class="map-toolbar">

@@ -10,7 +10,6 @@ function renderExecSummary(){
   const netWorking=totalRecv-totalPay;
 
   return `
-    ${renderFilterBar()}
     <div class="dash-grid">
       <div class="card"><div class="card-top"><span class="card-label">Net Profit</span><div class="card-icon c-indigo">${NAV_ICONS.pl}</div></div><div class="card-value">${fmtINR(cur.netProfit)}</div><div class="card-sub">${cur.netProfit>=0?'Profitable':'Loss-making'} — ${esc(fyLabel)}</div></div>
       <div class="card"><div class="card-top"><span class="card-label">Net Working Capital</span><div class="card-icon c-blue">${NAV_ICONS.balance}</div></div><div class="card-value">${fmtINR(netWorking)}</div><div class="card-sub">Receivables − Payables</div></div>

@@ -640,7 +640,7 @@ function render(){
   } else if(S.page==='ledger'){
     inner=renderLedgerPage();
   } else if(GRID_DEFS[S.page]){
-    inner=renderFilterBar()+renderGrid(S.page);
+    inner=renderGrid(S.page);
   } else {
     inner=`<div class="empty-state"><div class="big">Select a page</div>Left mein menu se apna page choose karein.</div>`;
   }
