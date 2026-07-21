@@ -94,7 +94,8 @@ function shouldShowDiagBanner(){
 async function loadAll(){
   S.ready=false;render();
   try{
-    S.users=await runServer('getLoginUsers')||[];
+    const loginData=await runServer('getLoginData');
+    S.users=(loginData&&loginData.users)||[];
     S.loadError="";
   }catch(err){ S.loadError=err.message; }
   S.ready=true;render();startClock();
