@@ -12,13 +12,112 @@ function renderRecvDashboard(){
 }
 registerPage('recvDashboard',renderRecvDashboard);
 
+/* ============================= AGEING — PARTY PIVOT ============================= *
+ * One row per party. Party Name sits in the middle. LEFT of it are OVERDUE buckets
+ * (bill's due date has already passed — "paisa aana tha, aaya nahi"), ordered with
+ * the OLDEST overdue amount furthest from the Party Name column (90+ Days far left,
+ * 0-30 Days right next to the name). RIGHT of Party Name are NOT-YET-DUE buckets
+ * ("paisa abhi aana hai" — due date is still in the future), ordered with the
+ * soonest-due amount right next to the name (0-30 Days) and furthest-out amount at
+ * the far right (90+ Days). Total Amount is the last column.
+ *
+ * Example from the user: an invoice cut on 1-Jul with a 10-day credit period whose
+ * payment hasn't come in yet → its due date has passed → it lands in the LEFT
+ * "0-30 Days" bucket. A party that reliably pays within 20 days, billed today →
+ * its due date is still ahead → it lands in the RIGHT "0-30 Days" bucket.
+ */
+function ageingPivotRows(kind){
+  const isRecv=kind==='recv';
+  const rows=dataForFY(isRecv?'receivables':'payables');
+  const amtKey=isRecv?'pendingAmount':'closingBalance';
+  const byParty={};
+  rows.forEach(r=>{
+    const name=r.partyName||'Unknown';
+    if(!byParty[name])byParty[name]={partyName:name,od90:0,od6190:0,od3160:0,od030:0,nd030:0,nd3160:0,nd6190:0,nd90:0,total:0};
+    const p=byParty[name];
+    const amt=Number(r[amtKey])||0;
+    const days=Number(r.overdueDays)||0;
+    p.total+=amt;
+    if(days>0){ // overdue — due date already passed
+      if(days>90)p.od90+=amt; else if(days>60)p.od6190+=amt; else if(days>30)p.od3160+=amt; else p.od030+=amt;
+    } else { // not yet due — due date still ahead
+      const dueIn=-days;
+      if(dueIn>90)p.nd90+=amt; else if(dueIn>60)p.nd6190+=amt; else if(dueIn>30)p.nd3160+=amt; else p.nd030+=amt;
+    }
+  });
+  return Object.values(byParty);
+}
+
+const AGEING_PIVOT_COLS=[
+  {key:'od90',label:'90+ Days',side:'od',width:110},{key:'od6190',label:'61-90 Days',side:'od',width:110},
+  {key:'od3160',label:'31-60 Days',side:'od',width:110},{key:'od030',label:'0-30 Days',side:'od',width:110},
+  {key:'partyName',label:'Party Name',side:'name',width:240},
+  {key:'nd030',label:'0-30 Days',side:'nd',width:110},{key:'nd3160',label:'31-60 Days',side:'nd',width:110},
+  {key:'nd6190',label:'61-90 Days',side:'nd',width:110},{key:'nd90',label:'90+ Days',side:'nd',width:110},
+  {key:'total',label:'Total Amount',side:'total',width:150}
+];
+
+function renderAgeingPivot(kind){
+  const isRecv=kind==='recv';
+  const tableKey=isRecv?'ageingPivotRecv':'ageingPivotPay';
+  const st=tableState(tableKey);
+  if(!st.sort){st.sort='total';st.dir=-1;}
+  let rows=ageingPivotRows(kind);
+  const q=(st.filters.partyName||'').toLowerCase();
+  if(q) rows=rows.filter(r=>r.partyName.toLowerCase().includes(q));
+  rows.sort((a,b)=>{
+    if(st.sort==='partyName'){
+      const x=a.partyName.toLowerCase(),y=b.partyName.toLowerCase();
+      if(x<y)return -1*st.dir; if(x>y)return 1*st.dir; return 0;
+    }
+    return ((Number(a[st.sort])||0)-(Number(b[st.sort])||0))*st.dir;
+  });
+  const totals={}; AGEING_PIVOT_COLS.forEach(c=>{ if(c.key!=='partyName') totals[c.key]=rows.reduce((s,r)=>s+(Number(r[c.key])||0),0); });
+
+  const hdr=AGEING_PIVOT_COLS.map(c=>{
+    const active=st.sort===c.key; const arrow=active?(st.dir===1?'▲':'▼'):'';
+    return `<th class="apv-th apv-${c.side}${active?' apv-sorted':''}" style="width:${c.width}px;min-width:${c.width}px;max-width:${c.width}px;" data-action="sort" data-table="${tableKey}" data-col="${c.key}">
+      <div class="apv-th-inner"><span>${esc(c.label)}</span><span class="apv-sort-ic">${arrow}</span></div>
+    </th>`;
+  }).join('');
+
+  const totalsRow=AGEING_PIVOT_COLS.map(c=>{
+    const w=`width:${c.width}px;min-width:${c.width}px;max-width:${c.width}px;`;
+    if(c.key==='partyName') return `<td class="apv-tot-name" style="${w}">PARTY NAME</td>`;
+    return `<td class="apv-tot apv-${c.side}" style="${w}">${fmtINR(totals[c.key]||0)}</td>`;
+  }).join('');
+
+  const body=rows.length?rows.map(r=>`<tr>${AGEING_PIVOT_COLS.map(c=>{
+      const w=`width:${c.width}px;min-width:${c.width}px;max-width:${c.width}px;`;
+      if(c.key==='partyName') return `<td class="apv-name" style="${w}">${esc(r.partyName)}</td>`;
+      const v=Number(r[c.key])||0;
+      return `<td class="apv-cell apv-${c.side}${v===0?' apv-zero':''}" style="${w}">${fmtINR(v)}</td>`;
+    }).join('')}</tr>`).join(''):`<tr><td colspan="${AGEING_PIVOT_COLS.length}"><div class="empty-state"><div class="big">No matching parties</div></div></td></tr>`;
+
+  return `
+    <div class="apv-searchbar">
+      <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(st.filters.partyName||'')}">
+      <span class="apv-count">${rows.length} parties</span>
+    </div>
+    <div class="dt-table-wrap">
+      <div class="dt-scroll">
+        <table class="dt apv-table">
+          <thead>
+            <tr class="apv-totals-row">${totalsRow}</tr>
+            <tr>${hdr}</tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 function renderAgeing(kind){
   const isRecv=kind==='recv',rows=dataForFY(isRecv?'receivables':'payables'),amtKey=isRecv?'pendingAmount':'closingBalance';
   const overdue=rows.filter(r=>Number(r.overdueDays)>0),upcoming=rows.filter(r=>Number(r.overdueDays)<=0),mode=S.ageingMode||'all';
-  const pageKey=isRecv?'ageingRecv':'ageingPay';
   return `<div class="view-toggle"><button class="${mode==='all'?'active':''}" data-action="ageing-mode" data-mode="all">All Data</button><button class="${mode==='ageing'?'active':''}" data-action="ageing-mode" data-mode="ageing">Ageing Wise</button></div>
     ${mode==='ageing'?`<div class="dash-grid ageing-summary-cards"><div class="card"><div class="card-label">${isRecv?'Paisa Aana Tha, Aaya Nahi':'Payment Karna Tha, Hua Nahi'}</div><div class="card-value">${fmtINR(sumBy(overdue,amtKey))}</div><div class="card-sub">${overdue.length} overdue bills</div></div><div class="card"><div class="card-label">${isRecv?'Paisa Abhi Aana Hai':'Payment Abhi Karna Hai'}</div><div class="card-value">${fmtINR(sumBy(upcoming,amtKey))}</div><div class="card-sub">${upcoming.length} not-yet-due bills</div></div><div class="card"><div class="card-label">Total Amount</div><div class="card-value">${fmtINR(sumBy(rows,amtKey))}</div><div class="card-sub">${rows.length} total bills</div></div></div>`:''}
-    ${renderGrid(pageKey)}`;
+    ${renderAgeingPivot(kind)}`;
 }
 registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=>renderAgeing('pay'));
 

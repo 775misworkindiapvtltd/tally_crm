@@ -164,6 +164,32 @@ input,select,button{font-family:inherit;font-size:13px;}
 .view-toggle{display:inline-flex;align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:4px;margin-bottom:14px;gap:3px;}
 .view-toggle button{border:0;background:transparent;color:var(--ink-secondary);padding:8px 16px;border-radius:6px;font-weight:700;cursor:pointer;}.view-toggle button.active{background:var(--accent);color:#fff;}.ageing-summary-cards{grid-template-columns:repeat(3,1fr);}
 
+/* ---------- AGEING PARTY PIVOT (party-in-middle, overdue-left, not-yet-due-right) ---------- */
+.apv-searchbar{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex:none;}
+.apv-searchbar input{flex:none;width:280px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);font-size:12.5px;}
+.apv-searchbar input:focus{outline:none;border-color:var(--accent);}
+.apv-count{font-size:11.5px;color:var(--muted);font-weight:600;}
+table.apv-table{table-layout:fixed;}
+table.apv-table thead tr.apv-totals-row th{display:none;} /* keep header cell semantics but hide duplicate; totals rendered as td row */
+table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11.5px;text-align:center;padding:8px 6px;border-bottom:1px solid var(--line);}
+table.apv-table thead .apv-totals-row td.apv-name{background:var(--surface);}
+table.apv-table thead .apv-totals-row td.apv-tot-name{background:var(--surface);color:var(--muted);font-family:inherit;font-size:9.5px;letter-spacing:.06em;}
+table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:37px;z-index:4;background:#1E4FC4;color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+table.apv-table thead tr:not(.apv-totals-row) th.apv-name{background:var(--surface);color:var(--ink);}
+table.apv-table thead .apv-th-inner{display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:normal;overflow-wrap:break-word;line-height:1.25;}
+table.apv-table thead th.apv-name .apv-th-inner{color:var(--ink);}
+table.apv-table thead th.apv-sorted{background:#163C9E;}
+table.apv-table thead th.apv-name.apv-sorted{background:var(--accent-tint);}
+table.apv-table thead .apv-sort-ic{font-size:9px;flex:none;}
+table.apv-table tbody td.apv-name{font-weight:700;color:var(--ink);text-align:center;background:var(--accent-tint2);border-left:1px solid var(--line);border-right:1px solid var(--line);}
+table.apv-table tbody td.apv-cell{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 10px;}
+table.apv-table tbody td.apv-cell.apv-od{color:#B4231E;background:#FEF4F3;}
+table.apv-table tbody td.apv-cell.apv-nd{color:#0E7C3F;background:#F2FBF6;}
+table.apv-table tbody td.apv-cell.apv-total{color:var(--ink);font-weight:700;background:var(--accent-tint2);}
+table.apv-table tbody td.apv-cell.apv-zero{color:#C7CCDA;background:transparent;}
+table.apv-table tbody tr:hover td{filter:brightness(0.97);}
+table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
+
 /* ---------- INDIA MAP VIEW ---------- */
 .map-shell{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;flex:1;min-height:0;}
 .map-shell{min-height:700px;}
