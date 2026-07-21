@@ -18,7 +18,7 @@ function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},filterOpen
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
-  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], salesRows:[],
+  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], salesRows:[], expenseTrendRows:[],
   users:[], missingSheets:[], diagnostics:{}, diagBannerDismissed:false,
   toast:null, loginError:"",
   dt:{ expense:dtState(), payables:dtState(), receivables:dtState(), receipt:dtState(), payment:dtState() },
@@ -47,7 +47,8 @@ function applyBootstrap(data){
   S.expense=data.expense||[]; S.payables=data.payables||[]; S.receivables=data.receivables||[];
   S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
   S.balanceVouchers=data.balanceVouchers||[];
-  S.salesRows=data.salesRows||[]; // from the SALES sheet: {amount (col M), category (col N)}
+  S.salesRows=data.salesRows||[]; // from the SALES sheet: {date (col A), amount (col M), category (col N)}
+  S.expenseTrendRows=data.expenseTrendRows||[]; // from EXPENSE sheet: {date (col B), amount (col K)} — used only by the Sales vs Expenses Trend chart
   S.missingSheets=data.missingSheets||[];
   S.diagnostics=data.diagnostics||{};
 }

@@ -38,10 +38,12 @@
  *                  (11th column) is always treated as Pending Amount, per explicit user
  *                  instruction. This makes it immune to header text being renamed/retyped.)
  *
- *   SALES       -> (any columns before M) | ... | Column M = Sale Amount | Column N = Product Category | ...
- *                  (read POSITIONALLY by column letter — column M (13th column) is the sale
- *                  amount used for the Dashboard's "Total Sales" KPI; column N (14th column)
- *                  is the product category, reserved for future category breakdowns)
+ *   SALES       -> Column A = Sale Date | (any columns) | ... | Column M = Sale Amount |
+ *                  Column N = Product Category | ...
+ *                  (read POSITIONALLY by column letter — column A (1st column) is the sale
+ *                  date, used by the "Sales vs Expenses Trend" chart; column M (13th column)
+ *                  is the sale amount used for the Dashboard's "Total Sales" KPI; column N
+ *                  (14th column) is the product category, used for the Sales Topline donut)
  *
  *   Receipt     -> Timestamp | Voucher_Number | Date | Group | Sub_Group |
  *                  Ledger_Name(Cr) | Ledger_Amount(Cr) | Bill_Type | Bill_Name | Bill_Amount |
@@ -222,13 +224,30 @@ function mapReceivablesRows_(rows) {
 
 // SALES tab reader — per explicit user instruction: "total sales will come from NEW SHEET
 // ... col M ka total lena hai, col N mein category hai". Read positionally by column
-// letter: column M (13th column, 0-based index 12) = sale amount, column N (14th column,
-// 0-based index 13) = product category.
+// letter: column A (1st column, 0-based index 0) = sale date, column M (13th column,
+// 0-based index 12) = sale amount, column N (14th column, 0-based index 13) = product
+// category. The date field is used by the Dashboard's "Sales vs Expenses Trend" chart.
 function mapSalesRows_(rows) {
   return rows.map(function (row) {
     return {
+      date: fmtDateOnly_(row[0]) /* column A */,
       amount: numOrZero_(row[12]) /* column M */,
       category: fmtValue_(row[13]) /* column N */
+    };
+  });
+}
+
+// Expense reader used ONLY for the Dashboard's "Sales vs Expenses Trend" chart, per
+// explicit user instruction: "EXPENSE KA SHEET... COL K MEIN AMOUNT HAI COL B MEIN DATE".
+// Read positionally by column letter — column B (2nd column, 0-based index 1) = date,
+// column K (11th column, 0-based index 10) = amount. This is separate from mapExpense_
+// (used by the Expense Vouchers grid, header-based) so that grid's other columns
+// (voucher no, item name, etc.) are unaffected by this change.
+function mapExpenseTrendRows_(rows) {
+  return rows.map(function (row) {
+    return {
+      date: fmtDateOnly_(row[1]) /* column B */,
+      amount: numOrZero_(row[10]) /* column K */
     };
   });
 }
@@ -338,6 +357,7 @@ function getBootstrapData(forceRefresh) {
     receipt:     mapReceiptRows_(sheetToRows_(SHEETS.receipt)),
     payment:     mapReceiptRows_(sheetToRows_(SHEETS.payment)),
     salesRows:   mapSalesRows_(sheetToRows_(SHEETS.sales)),
+    expenseTrendRows: mapExpenseTrendRows_(sheetToRows_(SHEETS.expense)),
     balanceParties:  getLedgerPartyListFromRows_(balanceRows),
     balanceVouchers: getBalanceVouchersFromRows_(balanceRows),
     missingSheets: [],
@@ -373,7 +393,7 @@ var EXPECTED_HEADERS = {
   'EXPENSE':     ['TIMESTAMP', 'DATE', 'VOUCHER NUMBER', 'PARTY NAME', 'Group', 'Sub_Group', 'AMOUNT'],
   'PAYABLES':    ['TIMESTAMP', 'Bill_Date', 'Bill_Ref_No', 'Party_Name', 'Closing_Balance', 'Due_Date', 'Overdue_Days']
 };
-var EXPECTED_MIN_COLS = { 'Receipt': 18, 'PAYMENT': 18, 'Balance': 35, 'RECEIVABLES': 13, 'SALES': 14 };
+var EXPECTED_MIN_COLS = { 'Receipt': 18, 'PAYMENT': 18, 'Balance': 35, 'RECEIVABLES': 13, 'SALES': 14, 'EXPENSE': 11 };
 
 function headerMatches_(actualHeaders, expected) {
   var norm = actualHeaders.map(function (h) { return String(h).replace(/\s+/g, ' ').trim().toUpperCase(); });

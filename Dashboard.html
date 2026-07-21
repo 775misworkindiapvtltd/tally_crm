@@ -56,6 +56,14 @@ function last6MonthsLabels(){
   return out;
 }
 
+// Last 12 months starting with the current month, oldest first — used by the
+// "Sales vs Expenses Trend" chart per explicit user instruction.
+function last12MonthsLabels(){
+  const now=new Date();const out=[];const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for(let i=11;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); out.push({label:months[d.getMonth()]+' '+d.getFullYear(),y:d.getFullYear(),m:d.getMonth()}); }
+  return out;
+}
+
 function statusForDueDate(dueDateVal,overdueDays){
   const d=Number(overdueDays)||0;
   if(d>0) return {cls:'overdue',label:'Overdue'};
@@ -135,9 +143,9 @@ function renderDashboard(){
 
     <div class="dash-row3" style="grid-template-columns:1.4fr 1fr 1fr;">
       <div class="panel">
-        <div class="panel-title">Sales vs Expenses Trend <select disabled><option>Monthly</option></select></div>
+        <div class="panel-title">Sales vs Expenses Trend <span style="font-size:10px;color:var(--muted);font-weight:600;">Last 12 Months</span></div>
         <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesTrend" data-chart-fallback></canvas></div></div>
-        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(sumBy(voucherSales_(f.from,f.to),'debit'))}</span></div>
+        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
       </div>
       <div class="panel">
         <div class="panel-title">Receivable Ageing (Outstanding)</div>
@@ -263,13 +271,14 @@ registerPage('dashboard',renderDashboard);
 
 CHART_DEFS['dashboard']=function(){
   const f=S.filters;
-  const months=last6MonthsLabels();
-  const salesSeries=months.map(m=>sumBy(voucherSales_(toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'debit'));
-  const expenseSeries=months.map(m=>sumBy(rowsInCustomRange(S.expense,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
-  const profitSeries=salesSeries.map((s,i)=>s-expenseSeries[i]);
-  drawComboChart('chSalesTrend',months.map(m=>m.label),
-    [{label:'Sales',data:salesSeries,color:'#16A34A'},{label:'Expenses',data:expenseSeries,color:'#E23A3A'}],
-    {label:'Profit',data:profitSeries,color:'#7C5CFC'});
+  // Sales vs Expenses Trend — last 12 months (current month included), per explicit
+  // user instruction. Sales from the SALES sheet (col A date, col M amount), Expenses
+  // from the EXPENSE sheet (col B date, col K amount) — Sales = blue line, Expenses = red line.
+  const months12=last12MonthsLabels();
+  const salesTrendSeries=months12.map(m=>sumBy(rowsInCustomRange(S.salesRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  const expenseTrendSeries=months12.map(m=>sumBy(rowsInCustomRange(S.expenseTrendRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  drawLineChart('chSalesTrend',months12.map(m=>m.label),
+    [{label:'Sales',data:salesTrendSeries,color:'#2E6BF2'},{label:'Expenses',data:expenseTrendSeries,color:'#E23A3A'}]);
 
   const recvAge=ageingBuckets(S.receivables,'pendingAmount');
   const payAge=ageingBuckets(S.payables,'closingBalance');

@@ -56,6 +56,34 @@ function drawComboChart(canvasId,labels,barSets,lineSet){
   });
 }
 
+// Plain multi-line chart (no bars) — used by "Sales vs Expenses Trend" so both series
+// are the same chart type (Sales = blue line, Expenses = red line) instead of a
+// bar+line combo.
+function drawLineChart(canvasId,labels,lineSets){
+  const el=document.getElementById(canvasId); if(!el) return;
+  destroyChart(canvasId);
+  const isDark=document.documentElement.classList.contains('dark');
+  const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';
+  const tickColor=isDark?'#A6AEC4':'#8992AA';
+  const datasets=lineSets.map(s=>({
+    type:'line', label:s.label, data:s.data, borderColor:s.color, backgroundColor:'transparent',
+    borderWidth:2.5, tension:.35, pointRadius:3, pointBackgroundColor:s.color
+  }));
+  CHART_REGISTRY[canvasId]=new Chart(el.getContext('2d'),{
+    data:{labels:labels,datasets:datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:9,boxHeight:9,font:{size:10.5},color:tickColor}},
+        tooltip:{callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(ctx.parsed.y)}}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:tickColor,font:{size:10.5}}},
+        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}}
+      }
+    }
+  });
+}
+
 function drawDonutChart(canvasId,labels,data,colors){
   const el=document.getElementById(canvasId); if(!el) return;
   destroyChart(canvasId);

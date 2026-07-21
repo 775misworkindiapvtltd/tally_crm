@@ -122,6 +122,16 @@ The sidebar footer of the app shows a **"Build: ..."** version string (from
 you expect after a fix, your live deployment hasn't picked up the new code
 yet — repeat the steps above.
 
+### Sales vs Expenses Trend chart
+
+- Shows the **last 12 months, starting with the current month** (oldest month on the
+  left, current month on the right).
+- **Sales** (blue line) — from the `SALES` sheet: **column A** = sale date, **column M**
+  = sale amount (same column used for the Total Sales KPI).
+- **Expenses** (red line) — from the `EXPENSE` sheet: **column B** = date, **column K**
+  = amount. Read positionally by column letter, separate from the Expense Vouchers grid
+  (which still reads EXPENSE by header name for its other columns).
+
 ## Dashboard data sources (per user instruction, 21-Jul-2026)
 
 - **Total Sales** (Dashboard KPI card) is now read from a dedicated **`SALES`** sheet
