@@ -461,6 +461,18 @@ function getDiagnostics_() {
         if (!headerMatches_(headerRow, h)) missingHeaders.push(h);
       });
     }
+    // SALES is a special case: its amount/category columns are found by searching header
+    // TEXT (see mapSalesRows_), not a fixed name — so a plain missingHeaders check doesn't
+    // apply. Instead, explicitly report whether the header-text search actually found a
+    // match, so the banner can say "no column with TOTAL PRICE/AMOUNT in its name found"
+    // instead of staying silent (this exact gap was the root cause of a prior "banner
+    // never showed" bug report).
+    if (tabName === SHEETS.sales) {
+      var amtIdx = findColIndexByHeaderContains_(headerRow, ['TOTAL PRICE', 'TOTAL AMOUNT', 'SALE AMOUNT', 'AMOUNT']);
+      var catIdx = findColIndexByHeaderContains_(headerRow, ['CATEG']);
+      if (amtIdx === -1) missingHeaders.push('a column with "TOTAL PRICE" or "AMOUNT" in its header text');
+      if (catIdx === -1) missingHeaders.push('a column with "CATEGORY" in its header text (optional, only affects the Sales Topline chart)');
+    }
     var expectedMinCols = EXPECTED_MIN_COLS[tabName];
     out[tabName] = {
       exists: true,

@@ -164,6 +164,18 @@ removed, and it can be re-added later if needed.
   "CATEGORY" column too. **Hidden columns are fine** — the reader searches by header
   text, not position, so it doesn't matter how many columns are hidden or where.
 
+## Data Diagnostics banner — visibility bug fixed (21-Jul-2026)
+
+A bug was found where the red "Data Diagnostics" banner (meant to explain
+*why* the dashboard shows ₹0 everywhere) never actually appeared, even when
+there was a real problem (e.g. the SALES sheet's amount column wasn't found).
+The banner used to be gated on `!hasAnyData()`, but `hasAnyData()` also checks
+`balanceParties` — the master party ledger from the `Balance` tab — which
+almost always has rows, permanently masking the banner. It's now gated on
+`diagnosticIssues().length > 0` instead, which is independent of whether the
+`Balance` tab happens to have data. If you still see ₹0 with no banner after
+updating, click **"Sync with Tally"** once to refresh the diagnostics.
+
 ## Performance notes
 
 - Login only reads the `LOGIN PAGE` sheet. All other tabs (`EXPENSE`,

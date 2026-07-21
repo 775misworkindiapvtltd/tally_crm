@@ -77,6 +77,19 @@ function hasAnyData(){
   return S.expense.length||S.payables.length||S.receivables.length||S.receipt.length||S.payment.length||S.balanceParties.length||S.salesRows.length;
 }
 
+// BUG FIX (found after user report: dashboard shows all-Rs0 with NO diagnostics banner
+// visible): the Data Diagnostics banner used to be gated on `!hasAnyData()`, but
+// hasAnyData() ORs in S.balanceParties.length — and the Balance tab (the master party
+// ledger) almost always has rows even when EXPENSE/PAYABLES/RECEIVABLES/SALES are
+// empty or misconfigured. That made hasAnyData() return true and PERMANENTLY hid the
+// banner, no matter how broken the other sheets were — exactly the reported symptom.
+// Fix: show the banner whenever diagnosticIssues() finds ANY problem, independent of
+// whether the Balance tab happens to have data. This is a strictly separate signal
+// from the "still loading, show a spinner" case below.
+function shouldShowDiagBanner(){
+  return !S.syncing && !S.diagBannerDismissed && diagnosticIssues().length>0;
+}
+
 async function loadAll(){
   S.ready=false;render();
   try{
@@ -552,7 +565,7 @@ function render(){
   } else {
     inner=`<div class="empty-state"><div class="big">Select a page</div>Left mein menu se apna page choose karein.</div>`;
   }
-  const issues=(!S.syncing && !hasAnyData() && !S.diagBannerDismissed)?diagnosticIssues():[];
+  const issues=shouldShowDiagBanner()?diagnosticIssues():[];
   if(issues.length){
     inner=`<div class="login-error" style="margin-bottom:14px;position:relative;padding-right:32px;line-height:1.6;">
       <div style="font-weight:700;margin-bottom:6px;">⚠ Data Diagnostics — no data came back from your Google Sheet:</div>
