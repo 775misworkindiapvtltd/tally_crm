@@ -19,10 +19,9 @@
  *
  * REQUIRED GOOGLE SHEET TABS (names must match EXACTLY):
  *
- *   LOGIN PAGE  -> NAME | ID | PASSWORD | ROLE
- *                  (simple login only — every logged-in user sees every page. ROLE is
- *                  optional free text shown under the user's name in the top-right
- *                  corner, e.g. "Finance Manager"; defaults to "Team Member" if blank)
+ *   LOGIN PAGE  -> Column A = Name (optional) | Column B = ID | Column C = Password
+ *                  (read POSITIONALLY by column letter, per explicit user instruction —
+ *                  no permission matrix at all, every logged-in user sees every page)
  *
  *   EXPENSE     -> TIMESTAMP | DATE | VOUCHER NUMBER | PARTY NAME | Group |
  *                  Sub_Group | DESIGN NUMBER | ITEM NAME | QTY | RATE | AMOUNT | TYPE
@@ -167,11 +166,15 @@ function pick_(r, names) {
 }
 
 /* ============================= ROW MAPPERS ============================= */
-// Simple login only (no per-page permission matrix) — every logged-in user gets every page.
-function mapUser_(r) {
+// Simple login only (no per-page permission matrix) — every logged-in user gets every
+// page. Per explicit user instruction: "we dont need any permission only id n password
+// in col b and c" — read POSITIONALLY: column A = Name (optional/free text), column B
+// = ID, column C = Password. No other columns are required or read.
+function mapUserRow_(row) {
   return {
-    name: r['NAME'] || '', id: String(r['ID'] || '').trim(), password: String(r['PASSWORD'] || '').trim(),
-    role: fmtValue_(pick_(r, ['ROLE'])) || 'Team Member'
+    name: fmtValue_(row[0]) || '', id: String(row[1] || '').trim() /* column B */,
+    password: String(row[2] || '').trim() /* column C */,
+    role: 'Team Member'
   };
 }
 
@@ -321,8 +324,10 @@ function getBalanceVouchersFromRows_(rows) {
  * LOGIN PAGE sheet just to re-check permissions.
  */
 function getLoginData() {
-  var usersRaw = sheetToObjects_(SHEETS.login);
-  return { users: usersRaw.map(mapUser_) };
+  // Read positionally (column B = ID, column C = Password) — see mapUserRow_ above.
+  // sheetToRows_ already skips the header row, matching the old sheetToObjects_ behavior.
+  var usersRaw = sheetToRows_(SHEETS.login);
+  return { users: usersRaw.map(mapUserRow_).filter(function (u) { return u.id; }) };
 }
 
 // Short-lived cache to speed up repeat loads (this is the main fix for "data taking too
@@ -384,16 +389,16 @@ function getBootstrapData(forceRefresh) {
  * dashboard totals come back all-zero, so a sheet/header mismatch is
  * immediately obvious without needing another round of screenshots.
  */
-// NOTE: RECEIVABLES and SALES are intentionally NOT in EXPECTED_HEADERS — both are read
-// POSITIONALLY by column letter (see mapReceivablesRows_/mapSalesRows_ above), so their
-// header row TEXT doesn't matter and is not checked here. They ARE checked for column
-// COUNT below (EXPECTED_MIN_COLS), since a missing/inserted column would shift every field.
+// NOTE: LOGIN PAGE, RECEIVABLES and SALES are intentionally NOT in EXPECTED_HEADERS —
+// all three are read POSITIONALLY by column letter (see mapUserRow_/mapReceivablesRows_/
+// mapSalesRows_ above), so their header row TEXT doesn't matter and is not checked here.
+// They ARE checked for column COUNT below (EXPECTED_MIN_COLS) where relevant, since a
+// missing/inserted column would shift every field.
 var EXPECTED_HEADERS = {
-  'LOGIN PAGE':  ['NAME', 'ID', 'PASSWORD'],
   'EXPENSE':     ['TIMESTAMP', 'DATE', 'VOUCHER NUMBER', 'PARTY NAME', 'Group', 'Sub_Group', 'AMOUNT'],
   'PAYABLES':    ['TIMESTAMP', 'Bill_Date', 'Bill_Ref_No', 'Party_Name', 'Closing_Balance', 'Due_Date', 'Overdue_Days']
 };
-var EXPECTED_MIN_COLS = { 'Receipt': 18, 'PAYMENT': 18, 'Balance': 35, 'RECEIVABLES': 13, 'SALES': 14, 'EXPENSE': 11 };
+var EXPECTED_MIN_COLS = { 'Receipt': 18, 'PAYMENT': 18, 'Balance': 35, 'RECEIVABLES': 13, 'SALES': 14, 'EXPENSE': 11, 'LOGIN PAGE': 3 };
 
 function headerMatches_(actualHeaders, expected) {
   var norm = actualHeaders.map(function (h) { return String(h).replace(/\s+/g, ' ').trim().toUpperCase(); });

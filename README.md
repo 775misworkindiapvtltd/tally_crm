@@ -52,16 +52,16 @@ Exact column order for every tab is documented at the top of `Code.gs`.
 
 ### LOGIN PAGE — required columns
 
+Read **positionally by column letter** (not by header text):
+
 ```
-NAME | ID | PASSWORD | ROLE
+Column A = Name (optional, any text) | Column B = ID | Column C = Password
 ```
 
-- `ROLE` is optional free text shown under the user's name in the top-right
-  corner (e.g. "Finance Manager"). Defaults to "Team Member" if left blank.
-- No per-page permission columns are needed — every user who logs in sees
-  every page. If your sheet still has old columns like `DASHBOARD`,
-  `RECEIVABLES`, `FINANCE`, `OVERDUE`, etc. from an earlier version, they are
-  simply ignored now and can be left in place or deleted.
+- No permission columns needed at all — every user who logs in sees every
+  page. Any other columns/old headers in this sheet (e.g. `ROLE`,
+  `DASHBOARD`, `RECEIVABLES`, `FINANCE`, `OVERDUE` from an earlier version)
+  are simply ignored and can be left in place or deleted.
 
 ## Deploying
 
@@ -121,6 +121,19 @@ The sidebar footer of the app shows a **"Build: ..."** version string (from
 `APP_BUILD` at the top of `Common.html`). If that string doesn't match what
 you expect after a fix, your live deployment hasn't picked up the new code
 yet — repeat the steps above.
+
+### Date Range / Compare (temporarily removed)
+
+The Date Range picker, preset buttons (Today/7D/15D/30D/MTD/QTD/YTD), Compare
+checkbox, and "Filters" button have been removed from the dashboard's filter
+bar per user request, along with the date-filtering condition on the
+Dashboard's KPI cards. All Dashboard KPIs (Total Sales, Total Expenses, Total
+Receivables, Outstanding Payables, Collections, Payments, Net Profit, Cash in
+Hand/Bank) now show **all-time totals** with no "vs previous period"
+comparison. The underlying date-range code (`presetRange`, `comparisonRange`,
+etc. in `Filters.html`) is untouched and still used by other pages (Sales
+Dashboard, Collection Analysis) — only the Dashboard page's UI/condition was
+removed, and it can be re-added later if needed.
 
 ### Sales vs Expenses Trend chart
 

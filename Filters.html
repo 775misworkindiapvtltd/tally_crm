@@ -82,11 +82,20 @@ function salesPersonOptions(){
     .filter((v,i,a)=>a.indexOf(v)===i && v && v.toUpperCase()!=='NULL').sort();
 }
 
-/* ============================= FILTER BAR RENDER ============================= */
+/* ============================= FILTER BAR RENDER =============================
+ * Date Range / preset buttons (Today,7D,15D,30D,MTD,QTD,YTD) / Compare checkbox /
+ * "Filters" button REMOVED per explicit user instruction ("jo red hai vo mark
+ * nahi chahiye, remove that as of now and remove uski cond bhi"). The underlying
+ * date-range STATE (S.filters.from/to) and helper functions (presetRange,
+ * comparisonRange, fyOptions) are kept intact and untouched, since other pages
+ * (Sales Dashboard, Collection Analysis, etc.) still use them for their own
+ * period math — only the Date Range/preset/compare UI and the Dashboard page's
+ * KPI-card date-filtering condition were removed, as requested. Can be
+ * re-added later.
+ */
 function renderFilterBar(opts){
   opts=opts||{};
   const f=S.filters;
-  const presets=[['Today','Today'],['7D','7D'],['15D','15D'],['30D','30D'],['MTD','MTD'],['QTD','QTD'],['YTD','YTD']];
   const spOptions=salesPersonOptions();
   const fys=fyOptions();
   return `
@@ -113,33 +122,13 @@ function renderFilterBar(opts){
         ${spOptions.map(sp=>`<option value="${esc(sp)}" ${f.salesPerson===sp?'selected':''}>${esc(sp)}</option>`).join('')}
       </select>
     </div>
-    <div class="fbar-group">
-      <label>Date Range</label>
-      <div class="fbar-daterange">
-        <input type="date" data-action="f-date" data-field="from" value="${f.from}"> – <input type="date" data-action="f-date" data-field="to" value="${f.to}">
-      </div>
-    </div>
-    <div class="fbar-presets">
-      ${presets.map(p=>`<button class="${f.preset===p[0]?'active':''}" data-action="f-preset" data-val="${p[0]}">${p[1]}</button>`).join('')}
-    </div>
-    <label class="fbar-compare"><input type="checkbox" data-action="f-compare" ${f.compare?'checked':''}> Compare</label>
     <div class="spacer"></div>
-    <button class="fbar-btn-filters" data-action="f-apply">🔽 Filters</button>
   </div>
-  ${f.compare?`<div class="compare-note">Comparing against previous period: <b>${fmtDDMMMYYYY(fromISO(comparisonRange(f.from,f.to).from))} – ${fmtDDMMMYYYY(fromISO(comparisonRange(f.from,f.to).to))}</b></div>`:''}
   `;
 }
 
 document.addEventListener('change',e=>{
   const el=e.target;
   if(el.getAttribute('data-action')==='f-set'){ S.filters[el.getAttribute('data-field')]=el.value; render(); return; }
-  if(el.getAttribute('data-action')==='f-date'){ S.filters[el.getAttribute('data-field')]=el.value; S.filters.preset='Custom'; render(); return; }
-  if(el.getAttribute('data-action')==='f-compare'){ S.filters.compare=el.checked; render(); return; }
-});
-document.addEventListener('click',e=>{
-  const el=e.target.closest('[data-action]');if(!el)return;
-  const a=el.getAttribute('data-action');
-  if(a==='f-preset'){ const val=el.getAttribute('data-val'); S.filters.preset=val; const r=presetRange(val); S.filters.from=r.from; S.filters.to=r.to; render(); return; }
-  if(a==='f-apply'){ showToast('Filters applied.',false); return; }
 });
 </script>

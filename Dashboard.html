@@ -13,12 +13,15 @@ function voucherSales_(from,to){ return S.balanceVouchers.filter(v=>/sale/i.test
 function voucherPurchase_(from,to){ return S.balanceVouchers.filter(v=>/purchase/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
 function voucherCreditNote_(from,to){ return S.balanceVouchers.filter(v=>/credit\s*note/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
 
+// Date-range filtering condition REMOVED per explicit user instruction ("remove that
+// as of now and remove uski cond bhi"). from/to are accepted but ignored here so other
+// callers don't need changes; all Dashboard KPIs below are now plain all-time totals.
 function periodMetrics(from,to){
-  const sales=sumBy(voucherSales_(from,to),'debit');
-  const purchase=sumBy(voucherPurchase_(from,to),'debit');
-  const expense=sumBy(rowsInCustomRange(S.expense,'date',from,to),'amount');
-  const collections=sumBy(rowsInCustomRange(S.receipt,'date',from,to),'debitLedgerAmount');
-  const payments=sumBy(rowsInCustomRange(S.payment,'date',from,to),'creditLedgerAmount');
+  const sales=sumBy(voucherSales_(),'debit');
+  const purchase=sumBy(voucherPurchase_(),'debit');
+  const expense=sumBy(S.expense,'amount');
+  const collections=sumBy(S.receipt,'debitLedgerAmount');
+  const payments=sumBy(S.payment,'creditLedgerAmount');
   const netProfit=sales-expense-purchase;
   return {sales,purchase,expense,collections,payments,netProfit};
 }
@@ -75,34 +78,30 @@ function statusForDueDate(dueDateVal,overdueDays){
 
 /* ============================= DASHBOARD RENDER ============================= */
 function renderDashboard(){
-  const f=S.filters;
-  const cur=periodMetrics(f.from,f.to);
-  const prevR=comparisonRange(f.from,f.to);
-  const prev=periodMetrics(prevR.from,prevR.to);
+  const cur=periodMetrics(); // all-time totals — date-range filtering removed per user instruction
 
   const totalRecv=outstandingReceivable(), totalPay=outstandingPayable(), cashPos=cashInHandBank();
   const totalSales=totalSalesFromSalesSheet();
   const overdueRecvRows=S.receivables.filter(r=>Number(r.overdueDays)>0);
   const overduePayRows=S.payables.filter(r=>Number(r.overdueDays)>0);
 
+  // "vs previous period" comparison chips removed along with the Date Range/Compare UI
+  // (there is no period to compare against anymore) — cards now show plain totals.
   const kpis=[
-    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard',noCompare:true},
-    {label:'Total Expenses (MTD)',value:cur.expense,prev:prev.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard',invert:true},
-    {label:'Total Receivables',value:totalRecv,prev:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard',noCompare:true},
-    {label:'Outstanding Payables',value:totalPay,prev:totalPay,icon:'out',cls:'c-red',page:'payDashboard',noCompare:true,invert:true},
-    {label:'Collections (MTD)',value:cur.collections,prev:prev.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
-    {label:'Payments (MTD)',value:cur.payments,prev:prev.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard',invert:true},
-    {label:'Net Profit (MTD)',value:cur.netProfit,prev:prev.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss'},
-    {label:'Cash in Hand / Bank',value:cashPos,prev:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow',noCompare:true},
+    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard'},
+    {label:'Total Expenses',value:cur.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard'},
+    {label:'Total Receivables',value:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard'},
+    {label:'Outstanding Payables',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard'},
+    {label:'Collections',value:cur.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
+    {label:'Payments',value:cur.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard'},
+    {label:'Net Profit',value:cur.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss'},
+    {label:'Cash in Hand / Bank',value:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow'},
   ];
 
   const kpiCards=kpis.map(k=>{
-    const pct=k.noCompare?null:pctChange(k.value,k.prev);
-    const good=k.invert?(pct<0):(pct>=0);
     return `<div class="card" data-action="goto" data-page="${k.page}">
       <div class="card-top"><span class="card-label">${esc(k.label)}</span><div class="card-icon ${k.cls}">${NAV_ICONS[k.icon]}</div></div>
       <div class="card-value">${fmtINR(k.value)}</div>
-      <div class="card-sub">${pct===null?'&nbsp;':`<span class="chip ${good?'up':'down'}">${good?'▲':'▼'} ${Math.abs(pct).toFixed(2)}%</span> vs previous period`}</div>
     </div>`;
   }).join('');
 
@@ -171,7 +170,7 @@ function renderDashboard(){
 
     <div class="dash-row" style="grid-template-columns:1fr;margin-bottom:14px;">
       <div class="panel">
-        <div class="panel-title">Cash Flow (${f.preset})</div>
+        <div class="panel-title">Cash Flow (All Time)</div>
         <div class="panel-body">
           <div class="cashflow-list">
             <div class="cf-item"><span class="cf-label">Opening Balance</span><div class="cf-track"><div class="cf-fill blue" style="width:60%;"></div></div><span class="cf-val">${fmtINR(cashPos-cur.collections+cur.payments)}</span></div>
@@ -270,7 +269,6 @@ function renderDashboard(){
 registerPage('dashboard',renderDashboard);
 
 CHART_DEFS['dashboard']=function(){
-  const f=S.filters;
   // Sales vs Expenses Trend — last 12 months (current month included), per explicit
   // user instruction. Sales from the SALES sheet (col A date, col M amount), Expenses
   // from the EXPENSE sheet (col B date, col K amount) — Sales = blue line, Expenses = red line.
