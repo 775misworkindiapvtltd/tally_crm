@@ -22,7 +22,10 @@ function renderAgeing(kind){
 }
 registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=>renderAgeing('pay'));
 
-function renderPartyList(kind){const key=kind==='recv'?'customerList':'vendorList',label=kind==='recv'?'Customer List from SALES':'Vendor List';return `<div class="panel-title" style="background:transparent;border:0;padding:0 0 10px">${label}</div>${renderGrid(key)}`;}
+// No redundant in-page heading here — the topbar already shows the page name
+// (e.g. "Customer List") via PAGE_TITLES, so repeating it above the table just
+// pushed the table down for no reason. renderGrid() is returned directly.
+function renderPartyList(kind){const key=kind==='recv'?'customerList':'vendorList';return renderGrid(key);}
 registerPage('customerList',()=>renderPartyList('recv'));registerPage('vendorList',()=>renderPartyList('pay'));
 
 function renderCollectionAnalysis(){
