@@ -44,6 +44,7 @@ function runServer(fnName,arg){
 }
 
 function applyBootstrap(data){
+  if(!data) { showToast("Server se khaali response aaya — Sync with Tally dabao.",true); return; }
   S.expense=data.expense||[]; S.payables=data.payables||[]; S.receivables=data.receivables||[];
   S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
   S.balanceVouchers=data.balanceVouchers||[];

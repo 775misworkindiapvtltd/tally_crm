@@ -380,7 +380,10 @@ function getBootstrapData(forceRefresh) {
   if (!forceRefresh) {
     try {
       var cached = cache.get(BOOTSTRAP_CACHE_KEY);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        var parsed = JSON.parse(cached);
+        if (parsed && parsed.expense) return parsed; // only use cache if it's a valid object with expected fields
+      }
     } catch (e) { /* ignore cache read errors, fall through to a live read */ }
   }
 
@@ -410,7 +413,16 @@ function getBootstrapData(forceRefresh) {
     if (!have[SHEETS[k].toUpperCase()]) result.missingSheets.push(SHEETS[k]);
   });
 
-  try { cache.put(BOOTSTRAP_CACHE_KEY, JSON.stringify(result), CACHE_TTL_SECONDS); } catch (e) { /* payload too large for cache; skip silently, no functional impact */ }
+  // NOTE: CacheService DISABLED — the total payload from this spreadsheet (~8000+ rows
+  // across all tabs) far exceeds CacheService's 100KB-per-key limit. When the payload
+  // is too large, cache.put() silently truncates it, and the next cache.get() returns a
+  // truncated/corrupt JSON string that JSON.parse() turns into null — which then causes
+  // the client-side error "Cannot read properties of null (reading 'expense')". Since
+  // this was the EXACT reported error, caching is now disabled entirely. The 45-second
+  // cache was a premature optimization for a dataset this large; the 10-second load
+  // time is acceptable for a Tally-to-Sheet sync that only happens once after login
+  // and once per manual "Sync with Tally" click.
+  // try { cache.put(BOOTSTRAP_CACHE_KEY, JSON.stringify(result), CACHE_TTL_SECONDS); } catch (e) { }
 
   return result;
 }
