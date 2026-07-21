@@ -93,6 +93,16 @@ function cityRowsForState_(stateData){
   return Object.values(stateData.cities).sort((a,b)=>b.amount-a.amount);
 }
 
+// Short "₹58.7L / ₹2.98Cr" style label so the pin badge stays small on the map,
+// while the full precise amount is still shown in the side list and tooltip.
+function fmtCompactINR_(n){
+  n=Number(n)||0;
+  if(Math.abs(n)>=1e7) return '₹'+(n/1e7).toFixed(2)+'Cr';
+  if(Math.abs(n)>=1e5) return '₹'+(n/1e5).toFixed(2)+'L';
+  if(Math.abs(n)>=1e3) return '₹'+(n/1e3).toFixed(1)+'K';
+  return fmtINR(n);
+}
+
 /* ============================= RENDER ============================= */
 function renderMapView(){
   const byState=salesByState_();
@@ -103,6 +113,7 @@ function renderMapView(){
   const cityRows=selData?cityRowsForState_(selData):[];
 
   return `
+  ${renderFilterBar()}
   <div class="map-shell">
     <div class="map-panel">
       <div class="map-toolbar">
@@ -153,6 +164,78 @@ function geometryBounds_(geometry){
   return {minX,minY,maxX,maxY};
 }
 
+// Polygon centroid (shoelace-weighted), used to place each state's "location pin"
+// INSIDE its actual shape instead of at the plain bounding-box center (which can
+// land outside oddly-shaped states). Falls back to a plain point average for
+// degenerate rings (near-zero area) so it never divides by zero.
+function ringArea2_(ring){
+  let a=0;
+  for(let i=0;i<ring.length-1;i++){ const x1=ring[i][0],y1=ring[i][1],x2=ring[i+1][0],y2=ring[i+1][1]; a+=x1*y2-x2*y1; }
+  return a/2;
+}
+function ringCentroid_(ring){
+  let cx=0,cy=0,area=0;
+  for(let i=0;i<ring.length-1;i++){
+    const x1=ring[i][0],y1=ring[i][1],x2=ring[i+1][0],y2=ring[i+1][1];
+    const cross=x1*y2-x2*y1;
+    area+=cross; cx+=(x1+x2)*cross; cy+=(y1+y2)*cross;
+  }
+  area/=2;
+  if(Math.abs(area)<1e-9){
+    let sx=0,sy=0; ring.forEach(p=>{sx+=p[0];sy+=p[1];});
+    return [sx/ring.length,sy/ring.length];
+  }
+  return [cx/(6*area),cy/(6*area)];
+}
+function geometryCentroidLonLat_(geometry){
+  if(geometry.type==='Polygon') return ringCentroid_(geometry.coordinates[0]);
+  if(geometry.type==='MultiPolygon'){
+    // Use the largest sub-polygon (e.g. mainland vs. small offshore islands) so the
+    // pin lands on the main landmass rather than an average that could fall in the sea.
+    let best=null,bestArea=-1;
+    geometry.coordinates.forEach(poly=>{
+      const a=Math.abs(ringArea2_(poly[0]));
+      if(a>bestArea){bestArea=a;best=poly[0];}
+    });
+    return best?ringCentroid_(best):[0,0];
+  }
+  return [0,0];
+}
+
+// Evenly spaced grid of points inside a screen-space box — used to place city pins
+// for the selected state, since the SALES sheet has no per-city lat/lon (only
+// state-level shapes exist). This keeps pins spread out and non-overlapping.
+function gridPositions_(n,x0,y0,x1,y1){
+  if(n<=0)return [];
+  const cols=Math.max(1,Math.ceil(Math.sqrt(n)));
+  const rows=Math.max(1,Math.ceil(n/cols));
+  const padX=(x1-x0)*0.14, padY=(y1-y0)*0.14;
+  const gx0=x0+padX, gx1=x1-padX, gy0=y0+padY, gy1=y1-padY;
+  const stepX=cols>1?(gx1-gx0)/(cols-1):0, stepY=rows>1?(gy1-gy0)/(rows-1):0;
+  const pts=[];
+  for(let i=0;i<n;i++){
+    const r=Math.floor(i/cols), c=i%cols;
+    pts.push([cols>1?gx0+c*stepX:(gx0+gx1)/2, rows>1?gy0+r*stepY:(gy0+gy1)/2]);
+  }
+  return pts;
+}
+
+// One "location pin + amount badge" marker. State markers are clickable (drill into
+// that state's cities, same as clicking the shape); city markers are display-only
+// since there's no further drill-down level.
+function markerSvg_(x,y,amount,name,clickable,colorHex){
+  const label=fmtCompactINR_(amount);
+  const labelW=Math.max(38,label.length*6.4+14), labelH=17, r=8.5;
+  const clickAttr=clickable?`data-action="map-select-state" data-state="${esc(name)}"`:'';
+  return `<g class="map-marker" ${clickAttr} style="cursor:${clickable?'pointer':'default'};">
+    <rect x="${(x-labelW/2).toFixed(1)}" y="${(y-r-labelH-3).toFixed(1)}" width="${labelW.toFixed(1)}" height="${labelH}" rx="5" fill="#111729" opacity="0.92"></rect>
+    <text x="${x.toFixed(1)}" y="${(y-r-labelH-3+labelH/2+3.4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ffffff" font-family="'JetBrains Mono',monospace">${esc(label)}</text>
+    <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${colorHex}" stroke="#ffffff" stroke-width="2"></circle>
+    <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#ffffff"></circle>
+    <title>${esc(name)}: ${fmtINR(amount)}</title>
+  </g>`;
+}
+
 function paintIndiaMap(){
   const wrap=document.getElementById('mapCanvasWrap'); if(!wrap)return;
   wrap.innerHTML=`<div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map…</div></div>`;
@@ -166,7 +249,7 @@ function drawIndiaMap_(gj){
   const byState=salesByState_();
   const amounts=Object.values(byState).map(s=>s.amount);
   const maxAmt=Math.max(1,...amounts);
-  const W=760,H=760;
+  const W=920,H=920; // bigger canvas — more room for the map + pin markers
 
   // Whole-country bounds across every feature, used for the default (non-zoomed) view.
   let bounds={minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity};
@@ -206,7 +289,33 @@ function drawIndiaMap_(gj){
     return `<path d="${d}" fill="${colorFor(data?data.amount:0)}" stroke="${isSel?'#111729':'#ffffff'}" stroke-width="${isSel?2:1}" data-action="map-select-state" data-state="${esc(name)}" class="map-state-path"><title>${esc(name)}${data?': '+fmtINR(data.amount):': No sales data'}</title></path>`;
   }).join('');
 
-  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="india-map-svg" style="transform:scale(${S.map.zoom||1});transform-origin:center;">${paths}</svg>`;
+  // Location pin + total-sales badge markers. All-India view: one pin per state
+  // that has any sales. Zoomed-into-a-state view: one pin per city in that state
+  // (grid-placed inside the state's bounding box, since per-city coordinates
+  // aren't available — only state-level shapes exist in the GeoJSON).
+  let markers='';
+  if(!selState){
+    markers=gj.features.map(f=>{
+      const p=f.properties||{};
+      const name=p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'';
+      const data=byState[name];
+      if(!data||!data.amount)return '';
+      const [lon,lat]=geometryCentroidLonLat_(f.geometry);
+      const [x,y]=project(lon,lat);
+      return markerSvg_(x,y,data.amount,name,true,'#1E5ADC');
+    }).join('');
+  }else{
+    const selData=byState[selState];
+    const cityRows=selData?cityRowsForState_(selData):[];
+    const shown=cityRows.slice(0,12); // rest remain visible in the side list
+    if(shown.length){
+      const topLeft=project(vb.minX,vb.maxY), bottomRight=project(vb.maxX,vb.minY);
+      const pts=gridPositions_(shown.length,topLeft[0],topLeft[1],bottomRight[0],bottomRight[1]);
+      markers=shown.map((c,i)=>markerSvg_(pts[i][0],pts[i][1],c.amount,c.city,false,'#16A34A')).join('');
+    }
+  }
+
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="india-map-svg" style="transform:scale(${S.map.zoom||1});transform-origin:center;">${paths}${markers}</svg>`;
 
   wrap.querySelectorAll('.map-state-path').forEach(p=>{
     p.addEventListener('mouseenter',()=>p.classList.add('hover'));
