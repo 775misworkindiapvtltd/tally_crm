@@ -424,3 +424,126 @@ function getLedgerForParty(name) {
 
   return { header: header, opening: opening, entries: entries, closing: closing };
 }
+
+
+/* =============================================================================
+ * ⭐ RUN THIS FIRST — direct diagnostic, no deployment/browser needed ⭐
+ * =============================================================================
+ * HOW TO USE:
+ *   1. Open this script in the Apps Script editor (script.google.com project
+ *      bound to your Google Sheet).
+ *   2. At the top toolbar, in the function dropdown (next to Debug/Run icons),
+ *      select "runDiagnosticsNow".
+ *   3. Click "Run" (▶).
+ *   4. First time only: it will ask you to authorize — click through and allow.
+ *   5. Click "Execution log" (or View > Logs, or Ctrl+Enter) to see the output.
+ *
+ * This talks DIRECTLY to your Google Sheet — it does NOT go through the web
+ * app, the /exec URL, or any deployment. So it is 100% unaffected by "did I
+ * deploy the latest version" issues. Whatever this prints IS the truth about
+ * your sheet right now.
+ *
+ * It will tell you, for every required tab:
+ *   - The EXACT tab name it's looking for, and whether that tab exists
+ *   - If it exists: how many data rows, how many columns, and the first row
+ *     of actual header text (copy-paste this back if headers don't match)
+ *   - For EXPENSE/PAYABLES/RECEIVABLES: whether every expected column header
+ *     was found
+ *   - For Receipt/PAYMENT/Balance (read positionally): the actual column
+ *     count vs the 18/18/35 expected
+ *   - A live sample: the first data row's key totals (e.g. first Payables
+ *     Closing_Balance, first Receivables Pending Amount) so you can see with
+ *     your own eyes whether real numbers are being read out of the sheet.
+ */
+function runDiagnosticsNow() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log('================================================================');
+  Logger.log('TALLY CRM — DIRECT SHEET DIAGNOSTIC');
+  Logger.log('Bound spreadsheet: "%s"', ss.getName());
+  Logger.log('Sheet tabs actually present in this spreadsheet: %s',
+    ss.getSheets().map(function (s) { return '"' + s.getName() + '"'; }).join(', '));
+  Logger.log('================================================================');
+
+  Object.keys(SHEETS).forEach(function (key) {
+    var tabName = SHEETS[key];
+    var sh = ss.getSheetByName(tabName);
+    Logger.log('');
+    Logger.log('--- Tab expected: "%s" ---', tabName);
+    if (!sh) {
+      Logger.log('❌ NOT FOUND. This exact name does not exist as a tab in this spreadsheet.');
+      Logger.log('   FIX: rename your actual tab to exactly "%s" (check for extra spaces / different case / typos).', tabName);
+      return;
+    }
+    var lastRow = sh.getLastRow();
+    var lastCol = sh.getLastColumn();
+    var dataRows = Math.max(0, lastRow - 1);
+    Logger.log('✅ Found. Rows (incl. header): %s | Data rows: %s | Columns: %s', lastRow, dataRows, lastCol);
+    if (lastCol === 0 || lastRow === 0) {
+      Logger.log('❌ Tab is completely empty (no header row even). Nothing can be read from it.');
+      return;
+    }
+    var headerRow = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+    Logger.log('   Header row (row 1) actual text: %s', JSON.stringify(headerRow));
+
+    if (EXPECTED_HEADERS[tabName]) {
+      var missing = EXPECTED_HEADERS[tabName].filter(function (h) { return !headerMatches_(headerRow, h); });
+      if (missing.length) {
+        Logger.log('❌ MISSING expected header(s): %s', missing.join(', '));
+        Logger.log('   FIX: rename the matching column(s) in row 1 to exactly this text (spelling/spacing/underscore matters).');
+      } else {
+        Logger.log('✅ All expected headers found for this tab.');
+      }
+    }
+    if (EXPECTED_MIN_COLS[tabName]) {
+      var expectedMin = EXPECTED_MIN_COLS[tabName];
+      if (lastCol < expectedMin) {
+        Logger.log('❌ This tab is read by COLUMN POSITION (not header name). It has %s columns but %s are expected.', lastCol, expectedMin);
+        Logger.log('   FIX: this usually means a column was deleted/inserted, shifting every field. Compare against the exact column order documented at the top of Code.gs.');
+      } else {
+        Logger.log('✅ Column count OK for positional read (%s columns, %s+ expected).', lastCol, expectedMin);
+      }
+    }
+    if (dataRows === 0) {
+      Logger.log('❌ Tab exists and headers look fine, but there are 0 DATA ROWS below the header. That alone would make every total show ₹0.');
+    }
+  });
+
+  Logger.log('');
+  Logger.log('================================================================');
+  Logger.log('LIVE SAMPLE — actual values read from your PAYABLES / RECEIVABLES tabs');
+  Logger.log('================================================================');
+  try {
+    var payRows = mapPayables_(sheetToObjects_(SHEETS.payables));
+    Logger.log('PAYABLES: mapped %s row(s).', payRows.length);
+    if (payRows.length) {
+      Logger.log('First Payables row -> partyName="%s", closingBalance=%s, dueDate="%s", overdueDays=%s',
+        payRows[0].partyName, payRows[0].closingBalance, payRows[0].dueDate, payRows[0].overdueDays);
+      var totalPay = payRows.reduce(function (s, r) { return s + (Number(r.closingBalance) || 0); }, 0);
+      Logger.log('SUM of closingBalance across all Payables rows = %s  (this is your "Outstanding Payables" KPI card)', totalPay);
+    } else {
+      Logger.log('⚠ No Payables rows were mapped — see the PAYABLES section above for why.');
+    }
+  } catch (e) {
+    Logger.log('❌ ERROR while reading PAYABLES: %s', e.message);
+  }
+
+  try {
+    var recvRows = mapReceivables_(sheetToObjects_(SHEETS.receivables));
+    Logger.log('RECEIVABLES: mapped %s row(s).', recvRows.length);
+    if (recvRows.length) {
+      Logger.log('First Receivables row -> partyName="%s", pendingAmount=%s, dueDate="%s", overdueDays=%s',
+        recvRows[0].partyName, recvRows[0].pendingAmount, recvRows[0].dueDate, recvRows[0].overdueDays);
+      var totalRecv = recvRows.reduce(function (s, r) { return s + (Number(r.pendingAmount) || 0); }, 0);
+      Logger.log('SUM of pendingAmount across all Receivables rows = %s  (this is your "Outstanding Receivables" KPI card)', totalRecv);
+    } else {
+      Logger.log('⚠ No Receivables rows were mapped — see the RECEIVABLES section above for why.');
+    }
+  } catch (e) {
+    Logger.log('❌ ERROR while reading RECEIVABLES: %s', e.message);
+  }
+
+  Logger.log('');
+  Logger.log('================================================================');
+  Logger.log('DONE. Copy everything above (or a screenshot of this log) back to Kiro.');
+  Logger.log('================================================================');
+}
