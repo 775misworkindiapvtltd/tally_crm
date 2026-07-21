@@ -363,6 +363,12 @@ function getLoginData() {
   return { users: usersRaw.map(mapUserRow_).filter(function (u) { return u.id; }) };
 }
 
+// Backward-compatible endpoint for an older deployed Common.html that called
+// getLoginUsers directly. New clients use getLoginData above.
+function getLoginUsers() {
+  return getLoginData().users;
+}
+
 // DATA LOADED IN CHUNKS — one tab per server call — to avoid exceeding
 // google.script.run's response-size limit (~100-200KB). With 8000+ rows
 // (growing to 10-20K), the old single-call approach silently returned null.

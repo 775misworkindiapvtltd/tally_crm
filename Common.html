@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-21.2 (banner-fix + SALES header-search)";
+const APP_BUILD = "2026-07-21.3 (server-dispatch-fix)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 
@@ -38,8 +38,18 @@ function runServer(fnName,arg){
     if(typeof google==='undefined'||!google.script||!google.script.run){
       reject(new Error("google.script.run not available — open this page via the Apps Script /exec URL."));return;
     }
-    let call=google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(new Error(err.message||String(err))));
-    arg===undefined?call[fnName]():call[fnName](arg);
+    const onFailure=err=>reject(new Error((err&&err.message)||String(err)));
+    const call=google.script.run.withSuccessHandler(resolve).withFailureHandler(onFailure);
+
+    // Apps Script's google.script.run is a generated proxy, not a normal object.
+    // Bracket-based dynamic invocation can therefore be undefined even
+    // when the server function exists. Keep the public bridge explicit instead.
+    switch(fnName){
+      case 'getLoginData': call.getLoginData(); break;
+      case 'getChunk': call.getChunk(arg); break;
+      case 'getLedgerForParty': call.getLedgerForParty(arg); break;
+      default: reject(new Error('Unsupported server function: '+fnName));
+    }
   });
 }
 
