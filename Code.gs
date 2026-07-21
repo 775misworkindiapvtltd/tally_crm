@@ -266,9 +266,31 @@ function mapSalesRows_(rows, headerRow) {
   if (amountIdx === -1) amountIdx = 12; // fallback: column M
   var categoryIdx = findColIndexByHeaderContains_(headerRow, ['CATEG']);
   if (categoryIdx === -1) categoryIdx = 13; // fallback: column N
+
+  // Customer-list fields are found from tolerant header aliases because SALES exports
+  // can reorder columns or contain hidden columns. The first matching header wins.
+  var invoiceNoIdx = findColIndexByHeaderContains_(headerRow, ['INVOICE NO', 'INVOICE NUMBER', 'VOUCHER NO', 'BILL NO']);
+  var invoiceToIdx = findColIndexByHeaderContains_(headerRow, ['INVOICE TO', 'CUSTOMER NAME', 'PARTY NAME', 'BUYER NAME']);
+  var addressIdx = findColIndexByHeaderContains_(headerRow, ['BILLING ADDRESS', 'CUSTOMER ADDRESS', 'ADDRESS']);
+  var stateIdx = findColIndexByHeaderContains_(headerRow, ['STATE']);
+  var cityIdx = findColIndexByHeaderContains_(headerRow, ['CITY', 'DISTRICT', 'PLACE']);
+  var gstIdx = findColIndexByHeaderContains_(headerRow, ['GST NO', 'GSTIN', 'GST NUMBER']);
+  var contactIdx = findColIndexByHeaderContains_(headerRow, ['CONTACT PERSON NAME', 'CONTACT PERSON']);
+  var phoneIdx = findColIndexByHeaderContains_(headerRow, ['PHONE', 'MOBILE', 'CONTACT NO']);
+  var emailIdx = findColIndexByHeaderContains_(headerRow, ['EMAIL', 'E-MAIL']);
+
   return rows.map(function (row) {
     return {
       date: fmtDateOnly_(row[0]) /* column A */,
+      invoiceNo: invoiceNoIdx === -1 ? '' : fmtValue_(row[invoiceNoIdx]),
+      invoiceTo: invoiceToIdx === -1 ? '' : fmtValue_(row[invoiceToIdx]),
+      address: addressIdx === -1 ? '' : fmtValue_(row[addressIdx]),
+      state: stateIdx === -1 ? '' : fmtValue_(row[stateIdx]),
+      city: cityIdx === -1 ? '' : fmtValue_(row[cityIdx]),
+      gstNo: gstIdx === -1 ? '' : fmtValue_(row[gstIdx]),
+      contactPerson: contactIdx === -1 ? '' : fmtValue_(row[contactIdx]),
+      phone: phoneIdx === -1 ? '' : fmtValue_(row[phoneIdx]),
+      email: emailIdx === -1 ? '' : fmtValue_(row[emailIdx]),
       amount: numOrZero_(row[amountIdx]),
       category: fmtValue_(row[categoryIdx])
     };

@@ -1,0 +1,207 @@
+<script>
+/* ============================= INDIA SALES MAP =============================
+ * State-wise sales built from the SALES sheet's "state" column (see Code.gs
+ * mapSalesRows_). Click a state to zoom in and see its city-wise breakdown
+ * (SALES sheet's "city"/"district"/"place" column). Falls back to a plain
+ * ranked list (no map shape) if the GeoJSON can't be fetched — e.g. no
+ * internet in the browser viewing the /exec URL — so the feature still works.
+ */
+let INDIA_GEOJSON=null, indiaGeoLoadPromise=null, mapLoadError='';
+
+// Maps free-text state values from the sheet to the exact "st_nm" property used
+// by the GeoJSON, so typos/short forms/alternate spellings still match a shape.
+const STATE_NAME_ALIASES={
+  'ANDAMAN AND NICOBAR ISLANDS':'Andaman & Nicobar Island','ANDAMAN & NICOBAR ISLANDS':'Andaman & Nicobar Island',
+  'ANDHRA PRADESH':'Andhra Pradesh','AP':'Andhra Pradesh',
+  'ARUNACHAL PRADESH':'Arunanchal Pradesh','ARUNANCHAL PRADESH':'Arunanchal Pradesh',
+  'ASSAM':'Assam','BIHAR':'Bihar','CHANDIGARH':'Chandigarh',
+  'CHHATTISGARH':'Chhattisgarh','CHATTISGARH':'Chhattisgarh',
+  'DADRA AND NAGAR HAVELI':'Dadara & Nagar Havelli','DAMAN AND DIU':'Daman & Diu',
+  'GOA':'Goa','GUJARAT':'Gujarat','HARYANA':'Haryana',
+  'HIMACHAL PRADESH':'Himachal Pradesh','HP':'Himachal Pradesh',
+  'JAMMU AND KASHMIR':'Jammu & Kashmir','JAMMU & KASHMIR':'Jammu & Kashmir','J&K':'Jammu & Kashmir',
+  'JHARKHAND':'Jharkhand','KARNATAKA':'Karnataka','KERALA':'Kerala','LAKSHADWEEP':'Lakshadweep',
+  'MADHYA PRADESH':'Madhya Pradesh','MP':'Madhya Pradesh',
+  'MAHARASHTRA':'Maharashtra','MANIPUR':'Manipur','MEGHALAYA':'Meghalaya','MIZORAM':'Mizoram',
+  'NAGALAND':'Nagaland','DELHI':'NCT of Delhi','NEW DELHI':'NCT of Delhi','NCT OF DELHI':'NCT of Delhi',
+  'ODISHA':'Odisha','ORISSA':'Odisha','PUDUCHERRY':'Puducherry','PONDICHERRY':'Puducherry',
+  'PUNJAB':'Punjab','RAJASTHAN':'Rajasthan','SIKKIM':'Sikkim',
+  'TAMIL NADU':'Tamil Nadu','TAMILNADU':'Tamil Nadu','TN':'Tamil Nadu',
+  'TELANGANA':'Telangana','TRIPURA':'Tripura',
+  'UTTAR PRADESH':'Uttar Pradesh','UP':'Uttar Pradesh',
+  'UTTARAKHAND':'Uttarakhand','UTTRANCHAL':'Uttarakhand',
+  'WEST BENGAL':'West Bengal','WB':'West Bengal'
+};
+function normalizeStateName_(raw){
+  const key=String(raw||'').trim().toUpperCase().replace(/\s+/g,' ');
+  if(!key)return '';
+  if(STATE_NAME_ALIASES[key])return STATE_NAME_ALIASES[key];
+  // fall back to a loose contains-match against known canonical names
+  const canon=Object.values(STATE_NAME_ALIASES);
+  const found=canon.find(c=>c.toUpperCase()===key);
+  return found||raw;
+}
+
+function ensureIndiaGeoJson(){
+  if(INDIA_GEOJSON)return Promise.resolve(INDIA_GEOJSON);
+  if(indiaGeoLoadPromise)return indiaGeoLoadPromise;
+  indiaGeoLoadPromise=fetch('https://cdn.jsdelivr.net/gh/Subhash9325/GeoJson-Data@master/india_states.geojson')
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(gj=>{ INDIA_GEOJSON=gj; return gj; })
+    .catch(err=>{ mapLoadError=err.message; throw err; });
+  return indiaGeoLoadPromise;
+}
+
+/* ============================= DATA AGGREGATION ============================= */
+function salesByState_(){
+  const rows=dataForFY('sales'); const map={};
+  rows.forEach(r=>{
+    const raw=String(r.state||'').trim(); if(!raw)return;
+    const canon=normalizeStateName_(raw);
+    if(!map[canon])map[canon]={state:canon,amount:0,invoices:0,cities:{}};
+    map[canon].amount+=Number(r.amount)||0; map[canon].invoices++;
+    const city=String(r.city||'Unspecified').trim()||'Unspecified';
+    if(!map[canon].cities[city])map[canon].cities[city]={city,amount:0,invoices:0};
+    map[canon].cities[city].amount+=Number(r.amount)||0; map[canon].cities[city].invoices++;
+  });
+  return map;
+}
+function cityRowsForState_(stateData){
+  if(!stateData)return [];
+  return Object.values(stateData.cities).sort((a,b)=>b.amount-a.amount);
+}
+
+/* ============================= RENDER ============================= */
+function renderMapView(){
+  const byState=salesByState_();
+  const stateRows=Object.values(byState).sort((a,b)=>b.amount-a.amount);
+  const totalAmt=stateRows.reduce((s,r)=>s+r.amount,0)||1;
+  const selState=S.map.selectedState;
+  const selData=selState?byState[selState]:null;
+  const cityRows=selData?cityRowsForState_(selData):[];
+
+  return `${renderFilterBar()}
+  <div class="map-shell">
+    <div class="map-panel">
+      <div class="map-toolbar">
+        <div class="map-title">${selState?esc(selState):'India — State-wise Sales'}</div>
+        <div class="map-zoom-controls">
+          ${selState?`<button class="btn btn-ghost" data-action="map-back">← All India</button>`:''}
+          <button class="btn btn-ghost" data-action="map-zoom" data-dir="in" title="Zoom in">+</button>
+          <button class="btn btn-ghost" data-action="map-zoom" data-dir="out" title="Zoom out">−</button>
+          <button class="btn btn-ghost" data-action="map-zoom" data-dir="reset" title="Reset zoom">⤾</button>
+        </div>
+      </div>
+      <div class="map-canvas-wrap" id="mapCanvasWrap">
+        <div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map…</div></div>
+      </div>
+      <div class="map-legend">
+        <span>Low</span><div class="map-legend-bar"></div><span>High</span>
+        <span style="margin-left:auto;color:var(--muted);">Click a state to see city-wise sales</span>
+      </div>
+    </div>
+    <div class="map-side">
+      <div class="panel-title" style="background:transparent;border:0;padding:0 0 10px;">${selState?`Cities in ${esc(selState)}`:'Top States by Sales'}</div>
+      <div class="map-list">
+        ${selState?
+          (cityRows.length?cityRows.map(c=>`<div class="map-list-row"><div class="mlr-name">${esc(c.city)}</div><div class="mlr-track"><div class="mlr-fill" style="width:${Math.max(4,c.amount/Math.max(1,cityRows[0].amount)*100)}%;"></div></div><div class="mlr-val">${fmtINR(c.amount)}</div></div>`).join(''):`<div class="empty-state"><div class="big">No city data</div>Is state ke liye SALES sheet mein city/district column nahi mila.</div>`)
+          :
+          (stateRows.length?stateRows.map(s=>`<div class="map-list-row" data-action="map-select-state" data-state="${esc(s.state)}"><div class="mlr-name">${esc(s.state)}</div><div class="mlr-track"><div class="mlr-fill" style="width:${Math.max(4,s.amount/totalAmt*100)}%;"></div></div><div class="mlr-val">${fmtINR(s.amount)}</div></div>`).join(''):`<div class="empty-state"><div class="big">No state data</div>SALES sheet mein State column nahi mila ya khaali hai.</div>`)
+        }
+      </div>
+    </div>
+  </div>`;
+}
+registerPage('mapView',renderMapView);
+
+/* ============================= SVG DRAWING ============================= */
+// Minimal GeoJSON (Polygon/MultiPolygon, lon/lat) -> SVG path converter — no
+// external geo library needed. Equirectangular projection is fine at country scale.
+function geoPathD_(geometry,project){
+  const ring2d=ring=>'M'+ring.map(([lon,lat])=>project(lon,lat).join(',')).join('L')+'Z';
+  if(geometry.type==='Polygon') return geometry.coordinates.map(ring2d).join(' ');
+  if(geometry.type==='MultiPolygon') return geometry.coordinates.map(poly=>poly.map(ring2d).join(' ')).join(' ');
+  return '';
+}
+function geometryBounds_(geometry){
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  const scan=ring=>ring.forEach(([lon,lat])=>{ if(lon<minX)minX=lon; if(lon>maxX)maxX=lon; if(lat<minY)minY=lat; if(lat>maxY)maxY=lat; });
+  if(geometry.type==='Polygon') geometry.coordinates.forEach(scan);
+  else if(geometry.type==='MultiPolygon') geometry.coordinates.forEach(poly=>poly.forEach(scan));
+  return {minX,minY,maxX,maxY};
+}
+
+function paintIndiaMap(){
+  const wrap=document.getElementById('mapCanvasWrap'); if(!wrap)return;
+  ensureIndiaGeoJson().then(gj=>drawIndiaMap_(gj)).catch(()=>{
+    wrap.innerHTML=`<div class="empty-state"><div class="big">Map shapes unavailable</div>${esc(mapLoadError||'Internet se GeoJSON load nahi ho paya.')}<br>State list side mein still available hai — wahan se bhi city-wise data dekh sakte hain.</div>`;
+  });
+}
+
+function drawIndiaMap_(gj){
+  const wrap=document.getElementById('mapCanvasWrap'); if(!wrap)return;
+  const byState=salesByState_();
+  const amounts=Object.values(byState).map(s=>s.amount);
+  const maxAmt=Math.max(1,...amounts);
+  const W=760,H=760;
+
+  // Whole-country bounds across every feature, used for the default (non-zoomed) view.
+  let bounds={minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity};
+  gj.features.forEach(f=>{
+    const b=geometryBounds_(f.geometry);
+    bounds.minX=Math.min(bounds.minX,b.minX);bounds.minY=Math.min(bounds.minY,b.minY);
+    bounds.maxX=Math.max(bounds.maxX,b.maxX);bounds.maxY=Math.max(bounds.maxY,b.maxY);
+  });
+
+  const selState=S.map.selectedState;
+  let viewBounds=bounds;
+  if(selState){
+    const feat=gj.features.find(f=>(f.properties.st_nm||'')===selState);
+    if(feat) viewBounds=geometryBounds_(feat.geometry);
+  }
+  const pad=(viewBounds.maxX-viewBounds.minX)*0.06||0.3;
+  const vb={minX:viewBounds.minX-pad,minY:viewBounds.minY-pad,maxX:viewBounds.maxX+pad,maxY:viewBounds.maxY+pad};
+  const spanX=vb.maxX-vb.minX||1, spanY=vb.maxY-vb.minY||1;
+  const scale=Math.min(W/spanX,H/spanY);
+  const project=(lon,lat)=>[ (lon-vb.minX)*scale, H-(lat-vb.minY)*scale ]; // flip Y (lat increases northward)
+
+  const colorFor=amt=>{
+    if(!amt) return '#E7EAF2';
+    const t=Math.sqrt(amt/maxAmt); // sqrt so mid-range states aren't washed out
+    const r=Math.round(233-(233-30)*t), g=Math.round(240-(240-90)*t), b=Math.round(254-(254-220)*t);
+    return `rgb(${r},${g},${b})`;
+  };
+
+  const paths=gj.features.map(f=>{
+    const name=f.properties.st_nm||''; const data=byState[name];
+    const d=geoPathD_(f.geometry,project);
+    const isSel=name===selState;
+    return `<path d="${d}" fill="${colorFor(data?data.amount:0)}" stroke="${isSel?'#111729':'#ffffff'}" stroke-width="${isSel?2:1}" data-action="map-select-state" data-state="${esc(name)}" class="map-state-path"><title>${esc(name)}${data?': '+fmtINR(data.amount):': No sales data'}</title></path>`;
+  }).join('');
+
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="india-map-svg" style="transform:scale(${S.map.zoom||1});transform-origin:center;">${paths}</svg>`;
+
+  wrap.querySelectorAll('.map-state-path').forEach(p=>{
+    p.addEventListener('mouseenter',()=>p.classList.add('hover'));
+    p.addEventListener('mouseleave',()=>p.classList.remove('hover'));
+  });
+}
+
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]'); if(!el)return;
+  const a=el.getAttribute('data-action');
+  if(a==='map-select-state'){
+    S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;render();return;
+  }
+  if(a==='map-back'){ S.map.selectedState='';S.map.zoom=1;render();return; }
+  if(a==='map-zoom'){
+    const dir=el.getAttribute('data-dir');
+    if(dir==='in')S.map.zoom=Math.min(3,(S.map.zoom||1)+0.25);
+    else if(dir==='out')S.map.zoom=Math.max(0.5,(S.map.zoom||1)-0.25);
+    else S.map.zoom=1;
+    const svg=document.querySelector('.india-map-svg');
+    if(svg){ svg.style.transform=`scale(${S.map.zoom})`; return; }
+    render();
+  }
+});
+</script>
