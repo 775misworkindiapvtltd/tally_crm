@@ -31,6 +31,44 @@ function cashInHandBank(){
   // Receipt ledger inflow minus payment ledger outflow for the selected financial years.
   return sumBy(dataForFY('receipt'),'debitLedgerAmount')-sumBy(dataForFY('payment'),'creditLedgerAmount');
 }
+// Dashboard chart cards use whole rupees, matching the reference's compact absolute
+// figures. This is formatting only; stored/calculated values retain their precision.
+function fmtINRChart(n){ return fmtINR(Math.round(Number(n)||0)).replace(/\.00$/,''); }
+
+// Dashboard cash-flow card: uses the same Receipt/PAYMENT ledger legs as the full
+// Cash Flow page. For the selected FY, Opening Balance is the net ledger movement
+// before the displayed month; Closing Balance is always Opening + Cash In - Cash Out.
+// If today is outside the selected FY, the card uses that FY's final month so the
+// selected-filter result stays meaningful instead of silently mixing financial years.
+// Uses the same SALES (date/amount) and EXPENSE trend (date/amount) series as the
+// original Sales vs Expenses chart. Keeping this in one helper lets the fixed
+// right-side value card and the Chart.js canvas always display identical amounts.
+function dashboardTrendData_(){
+  const months=selectedFYMonths();
+  const salesRows=dataForFY('sales');
+  const expenseTrendRows=dataForFY('expenseTrend');
+  const sales=months.map(m=>sumBy(rowsInCustomRange(salesRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  const expenses=months.map(m=>sumBy(rowsInCustomRange(expenseTrendRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  return {months,sales,expenses,profit:sales.map((value,i)=>value-(expenses[i]||0))};
+}
+
+function dashboardCashFlowMTD_(){
+  const months=selectedFYMonths();
+  const now=new Date();
+  const activeMonth=months.find(m=>m.y===now.getFullYear()&&m.m===now.getMonth())||months[months.length-1];
+  if(!activeMonth)return {opening:0,cashIn:0,cashOut:0,closing:0,net:0,label:''};
+  const start=new Date(activeMonth.y,activeMonth.m,1).getTime();
+  const isCurrentMonth=activeMonth.y===now.getFullYear()&&activeMonth.m===now.getMonth();
+  const end=(isCurrentMonth?new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59):new Date(activeMonth.y,activeMonth.m+1,0,23,59,59)).getTime();
+  const receipts=dataForFY('receipt'),payments=dataForFY('payment');
+  const sumBefore=(rows,key)=>rows.reduce((total,row)=>{const t=parseDT(row.date);return t!==null&&t<start?total+(Number(row[key])||0):total;},0);
+  const sumMTD=(rows,key)=>rows.reduce((total,row)=>{const t=parseDT(row.date);return t!==null&&t>=start&&t<=end?total+(Number(row[key])||0):total;},0);
+  const opening=sumBefore(receipts,'debitLedgerAmount')-sumBefore(payments,'creditLedgerAmount');
+  const cashIn=sumMTD(receipts,'debitLedgerAmount');
+  const cashOut=sumMTD(payments,'creditLedgerAmount');
+  const net=cashIn-cashOut;
+  return {opening,cashIn,cashOut,closing:opening+net,net,label:activeMonth.label};
+}
 
 function topN(arr,groupKey,amtKey,n){
   const map={};
@@ -105,6 +143,14 @@ function renderDashboard(){
 
   const recvAge=ageingBuckets(dataForFY('receivables'),'pendingAmount');
   const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
+  const trendData=dashboardTrendData_();
+  const trendLast=Math.max(0,trendData.months.length-1);
+  const trendLatest={label:trendData.months[trendLast]?trendData.months[trendLast].label:'—',sales:trendData.sales[trendLast]||0,expenses:trendData.expenses[trendLast]||0,profit:trendData.profit[trendLast]||0};
+  // Presentation-only percentages for the reference-style ageing legends. The base
+  // values and their Total Outstanding calculations stay exactly as before.
+  const recvAgeBase=totalRecv||1, payAgeBase=totalPay||1;
+  const cashFlowMtd=dashboardCashFlowMTD_();
+  const cashFlowMax=Math.max(1,Math.abs(cashFlowMtd.opening),cashFlowMtd.cashIn,cashFlowMtd.cashOut,Math.abs(cashFlowMtd.closing));
   const ageColors=['#2E6BF2','#16A34A','#F08A1D','#E23A3A'];
 
   // Keep all party aggregates in the dashboard state so sorting and the full reports
@@ -148,31 +194,42 @@ function renderDashboard(){
 
     <div class="kpi-strip">${kpiCards}</div>
 
-    <div class="dash-row3" style="grid-template-columns:1.4fr 1fr 1fr;">
-      <div class="panel">
-        <div class="panel-title">Sales vs Expenses Trend <span style="font-size:10px;color:var(--muted);font-weight:600;">${esc(fyLabel)}</span></div>
-        <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesTrend" data-chart-fallback></canvas></div></div>
-        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
+    <div class="dashboard-chart-grid">
+      <div class="panel dashboard-chart-card dashboard-sales-card">
+        <div class="panel-title">Sales vs Expenses Trend <span class="chart-title-actions"><span class="chart-info" title="Monthly Sales, Expenses and Profit">ⓘ</span><span class="chart-period">Monthly⌄</span></span></div>
+        <div class="panel-body dashboard-chart-body"><div class="chart-wrap dashboard-sales-chart"><canvas id="chSalesTrend" data-chart-fallback></canvas><div class="dashboard-trend-value-card" aria-label="Latest monthly Sales, Expenses and Profit"><div class="trend-value-month">${esc(trendLatest.label)}</div><div class="trend-value-row"><span class="trend-value-dot sales"></span><span>Sales</span><b>${fmtINRChart(trendLatest.sales)}</b></div><div class="trend-value-row"><span class="trend-value-dot expenses"></span><span>Expenses</span><b>${fmtINRChart(trendLatest.expenses)}</b></div><div class="trend-value-row"><span class="trend-value-dot profit"></span><span>Profit</span><b>${fmtINRChart(trendLatest.profit)}</b></div></div></div></div>
       </div>
-      <div class="panel">
-        <div class="panel-title">Receivable Ageing (Outstanding)</div>
-        <div class="panel-body donut-panel-body">
-          <div class="chart-wrap donut"><canvas id="chRecvAge" data-chart-fallback></canvas></div>
-          <div class="donut-legend">
-            ${Object.keys(recvAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-label">${k} Days</span><span class="dl-val">${fmtINR(recvAge[k])}</span></div>`).join('')}
+      <div class="panel dashboard-chart-card dashboard-ageing-card">
+        <div class="panel-title">Receivable Ageing <span class="chart-title-actions"><span class="chart-title-sub">(Outstanding)</span><span class="chart-info" title="Outstanding receivables grouped by overdue days">ⓘ</span></span></div>
+        <div class="panel-body dashboard-ageing-body">
+          <div class="chart-wrap dashboard-donut"><canvas id="chRecvAge" data-chart-fallback></canvas></div>
+          <div class="donut-legend dashboard-donut-legend">
+            ${Object.keys(recvAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-detail"><span class="dl-label">${esc(k.replace('-',' - '))} Days</span><span class="dl-metric">${fmtINRChart(recvAge[k])} <span class="dl-pct">(${(recvAge[k]/recvAgeBase*100).toFixed(0)}%)</span></span></span></div>`).join('')}
           </div>
         </div>
-        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINRChart(totalRecv)}</span></div>
       </div>
-      <div class="panel">
-        <div class="panel-title">Payable Ageing (Outstanding)</div>
-        <div class="panel-body donut-panel-body">
-          <div class="chart-wrap donut"><canvas id="chPayAge" data-chart-fallback></canvas></div>
-          <div class="donut-legend">
-            ${Object.keys(payAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-label">${k} Days</span><span class="dl-val">${fmtINR(payAge[k])}</span></div>`).join('')}
+      <div class="panel dashboard-chart-card dashboard-ageing-card">
+        <div class="panel-title">Payable Ageing <span class="chart-title-actions"><span class="chart-title-sub">(Outstanding)</span><span class="chart-info" title="Outstanding payables grouped by overdue days">ⓘ</span></span></div>
+        <div class="panel-body dashboard-ageing-body">
+          <div class="chart-wrap dashboard-donut"><canvas id="chPayAge" data-chart-fallback></canvas></div>
+          <div class="donut-legend dashboard-donut-legend">
+            ${Object.keys(payAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-detail"><span class="dl-label">${esc(k.replace('-',' - '))} Days</span><span class="dl-metric">${fmtINRChart(payAge[k])} <span class="dl-pct">(${(payAge[k]/payAgeBase*100).toFixed(0)}%)</span></span></span></div>`).join('')}
           </div>
         </div>
-        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINRChart(totalPay)}</span></div>
+      </div>
+      <div class="panel dashboard-chart-card dashboard-cashflow-card">
+        <div class="panel-title">Cash Flow (MTD) <span class="chart-info" title="${esc(cashFlowMtd.label)}: Receipt ledger inflow less PAYMENT ledger outflow">ⓘ</span></div>
+        <div class="panel-body dashboard-cashflow-body">
+          <div class="cashflow-list dashboard-cashflow-list">
+            <div class="cf-item"><span class="cf-label">Opening Balance</span><div class="cf-track"><div class="cf-fill blue" style="width:${Math.abs(cashFlowMtd.opening)/cashFlowMax*100}%;"></div></div><span class="cf-val">${fmtINRChart(cashFlowMtd.opening)}</span></div>
+            <div class="cf-item"><span class="cf-label">Cash In (Receipts)</span><div class="cf-track"><div class="cf-fill green" style="width:${cashFlowMtd.cashIn/cashFlowMax*100}%;"></div></div><span class="cf-val pos">+ ${fmtINRChart(cashFlowMtd.cashIn)}</span></div>
+            <div class="cf-item"><span class="cf-label">Cash Out (Payments)</span><div class="cf-track"><div class="cf-fill red" style="width:${cashFlowMtd.cashOut/cashFlowMax*100}%;"></div></div><span class="cf-val neg">- ${fmtINRChart(cashFlowMtd.cashOut)}</span></div>
+            <div class="cf-item cashflow-closing"><span class="cf-label">Closing Balance</span><div class="cf-track"><div class="cf-fill blue" style="width:${Math.abs(cashFlowMtd.closing)/cashFlowMax*100}%;"></div></div><span class="cf-val">${fmtINRChart(cashFlowMtd.closing)}</span></div>
+          </div>
+          <div class="cf-net"><span class="lbl">Net Cash Flow</span><span class="val ${cashFlowMtd.net<0?'neg':''}">${cashFlowMtd.net>=0?'+':''}${fmtINRChart(cashFlowMtd.net)}</span></div>
+        </div>
       </div>
     </div>
 
@@ -262,13 +319,17 @@ function renderDashboard(){
 registerPage('dashboard',renderDashboard);
 
 CHART_DEFS['dashboard']=function(){
-  const months=selectedFYMonths();
-  const salesRows=dataForFY('sales');
-  const expenseTrendRows=dataForFY('expenseTrend');
-  const salesTrendSeries=months.map(m=>sumBy(rowsInCustomRange(salesRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
-  const expenseTrendSeries=months.map(m=>sumBy(rowsInCustomRange(expenseTrendRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
-  drawLineChart('chSalesTrend',months.map(m=>m.label),
-    [{label:'Sales',data:salesTrendSeries,color:'#2E6BF2'},{label:'Expenses',data:expenseTrendSeries,color:'#E23A3A'}]);
+  const trendData=dashboardTrendData_();
+  const months=trendData.months;
+  const salesTrendSeries=trendData.sales;
+  const expenseTrendSeries=trendData.expenses;
+  const profitTrendSeries=trendData.profit;
+  // Screenshot-matched dashboard chart: Sales and Expenses retain their existing
+  // monthly series as bars; Profit is the derived Sales minus Expenses line on the
+  // same rupee axis, with absolute INR values in the right-side hover card.
+  drawComboChart('chSalesTrend',months.map(m=>m.label),
+    [{label:'Sales',data:salesTrendSeries,color:'#16A34A'},{label:'Expenses',data:expenseTrendSeries,color:'#E23A3A'}],
+    {label:'Profit',data:profitTrendSeries,color:'#2E6BF2',sameAxis:true},{overview:true});
 
   const recvAge=ageingBuckets(dataForFY('receivables'),'pendingAmount');
   const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
