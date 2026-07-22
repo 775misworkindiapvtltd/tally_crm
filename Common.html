@@ -14,8 +14,46 @@ const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 
 /* ============================= STATE ============================= */
-function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50};}
-function tableState(key){if(!S.dt[key])S.dt[key]=dtState();return S.dt[key];}
+function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50};}
+// Table state is created lazily per grid the first time it's viewed. Whenever a fresh
+// dtState() is created, immediately re-apply this user's remembered column
+// hide/order/width/sort/page-size (see GRID_PREFS below) so a page always opens
+// exactly the way the user last left it — even right after logging back in.
+function tableState(key){
+  if(!S.dt[key]){S.dt[key]=dtState();applyPersistedGridPrefs_(key);}
+  return S.dt[key];
+}
+
+/* ============================= REMEMBERED GRID SETTINGS =============================
+ * "If I hide some columns, next login those columns should stay hidden" — persisted
+ * per signed-in user (so different logins on the same browser don't clash), covering
+ * hidden columns, column order (drag/shift), column widths (resize), the active
+ * sort column/direction, and rows-per-page. Deliberately does NOT persist active
+ * text/date/number filters or the current page number — those are a one-time search,
+ * not a layout preference, and persisting them could otherwise silently hide rows
+ * the next time the user opens the same report. */
+function gridPrefsStorageKey_(){return 'tally_grid_prefs_v1:'+dataCacheKey_();}
+function loadGridPrefsCache_(){
+  S._gridPrefsCache={};
+  try{const raw=localStorage.getItem(gridPrefsStorageKey_());if(raw)S._gridPrefsCache=JSON.parse(raw)||{};}catch(e){S._gridPrefsCache={};}
+}
+function persistGridPrefs_(tableKey){
+  if(!S.user)return;
+  const st=S.dt[tableKey];if(!st)return;
+  if(!S._gridPrefsCache)S._gridPrefsCache={};
+  S._gridPrefsCache[tableKey]={hidden:Array.from(st.hidden||[]),order:(st.order||[]).slice(),widths:Object.assign({},st.widths||{}),sort:st.sort||null,dir:st.dir===-1?-1:1,pageSize:st.pageSize||50};
+  try{localStorage.setItem(gridPrefsStorageKey_(),JSON.stringify(S._gridPrefsCache));}catch(e){console.warn('Could not save table preferences:',e);}
+}
+function applyPersistedGridPrefs_(tableKey){
+  const p=S._gridPrefsCache&&S._gridPrefsCache[tableKey];if(!p)return;
+  const st=S.dt[tableKey];if(!st)return;
+  if(Array.isArray(p.hidden))st.hidden=new Set(p.hidden);
+  if(Array.isArray(p.order))st.order=p.order.slice();
+  if(p.widths&&typeof p.widths==='object')st.widths=Object.assign({},p.widths);
+  if(p.sort)st.sort=p.sort;
+  if(p.dir===1||p.dir===-1)st.dir=p.dir;
+  if(p.pageSize&&PAGE_SIZE_OPTIONS.indexOf(p.pageSize)!==-1)st.pageSize=p.pageSize;
+}
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
@@ -237,7 +275,7 @@ async function refreshData(){
   S.syncing=false;
   if(applyCompletedLiveSync_(result)){
     await writeCachedSnapshot_();
-    Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
+    Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].numFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
     showToast("Sheet se latest data mil gaya.",false);
   }else{
     showToast("Live sync nahi hua — cached data hi dikh raha hai.",true);
@@ -327,6 +365,12 @@ async function doLogin(id,pw){
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
   S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();
   S.cacheLoaded=false;S.lastSync='';S.lastSyncAt=0;S.lastSyncSource='';
+  // Load this user's remembered column hide/order/width/sort/page-size settings, then
+  // re-apply them onto the small set of grid states that were already created before
+  // login (expense/payables/receivables/receipt/payment — see the S object literal
+  // above). Every other grid picks up its saved prefs lazily via tableState() itself.
+  loadGridPrefsCache_();
+  Object.keys(S.dt).forEach(applyPersistedGridPrefs_);
   await hydrateCachedData_();
   // Render the saved snapshot immediately, then replace it once the complete live
   // sync finishes. The current page stays stable throughout the background sync.
@@ -510,12 +554,30 @@ function navigateTo(pageKey){
 function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
   const compact=!!def.compact; // compact grids: no pagination UI, just a scrollable box, sort still works
-  Object.entries(st.filters).forEach(([k,v])=>{if(!v)return;rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));});
+  Object.entries(st.filters).forEach(([k,v])=>{
+    if(!v)return;
+    const col=def.cols.find(c=>c.key===k);
+    if(col&&col.filterType==='select'){
+      // Exact-match against one token of a (possibly concatenated) value, e.g. Sales
+      // Report's Category column where one invoice can hold "A & B" — filterValues()
+      // lets a column supply its own list of matchable tokens per row.
+      const getValues=col.filterValues||(r=>[r[k]]);
+      rows=rows.filter(r=>getValues(r).some(x=>String(x||'').toLowerCase()===v.toLowerCase()));
+    } else {
+      rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));
+    }
+  });
   Object.entries(st.dateFilters||{}).forEach(([k,range])=>{
     if(!range||(!range.from&&!range.to))return;
     const from=range.from?new Date(range.from+'T00:00:00').getTime():-Infinity;
     const to=range.to?new Date(range.to+'T23:59:59').getTime():Infinity;
     rows=rows.filter(r=>{const t=parseDT(r[k]);return t!==null&&t>=from&&t<=to;});
+  });
+  Object.entries(st.numFilters||{}).forEach(([k,range])=>{
+    if(!range||(range.min===''||range.min==null)&&(range.max===''||range.max==null))return;
+    const min=(range.min===''||range.min==null)?-Infinity:Number(range.min);
+    const max=(range.max===''||range.max==null)?Infinity:Number(range.max);
+    rows=rows.filter(r=>{const n=Number(r[k]);return !isNaN(n)&&n>=min&&n<=max;});
   });
   if(st.sort){
     const col=def.cols.find(c=>c.key===st.sort);
@@ -554,13 +616,22 @@ function renderGrid(tableKey){
       if(c.date){
         const df=(st.dateFilters&&st.dateFilters[c.key])||{from:'',to:''};
         filterHtml=`<div class="th-filter th-date-filter"><input type="date" aria-label="From date" data-action="date-from" data-table="${tableKey}" data-col="${c.key}" value="${esc(df.from||'')}"><span class="date-sep">to</span><input type="date" aria-label="To date" data-action="date-to" data-table="${tableKey}" data-col="${c.key}" value="${esc(df.to||'')}">${df.from||df.to?`<span class="dr-clear" title="Clear date range" data-action="clear-daterange" data-table="${tableKey}" data-col="${c.key}">✕</span>`:''}</div>`;
+      }else if(c.filterType==='select'){
+        const opts=(c.filterOptions?c.filterOptions(def.data()):[]);
+        const cur=st.filters[c.key]||'';
+        filterHtml=`<div class="th-filter"><select data-action="filter-select" data-table="${tableKey}" data-col="${c.key}"><option value="">All</option>${opts.map(o=>`<option value="${esc(o)}" ${cur===o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+      }else if(c.filterType==='number-range'){
+        const nf=(st.numFilters&&st.numFilters[c.key])||{min:'',max:''};
+        filterHtml=`<div class="th-filter th-num-filter"><input type="number" inputmode="decimal" placeholder="Min" data-action="num-min" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.min===''||nf.min==null?'':nf.min)}"><span class="date-sep">to</span><input type="number" inputmode="decimal" placeholder="Max" data-action="num-max" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.max===''||nf.max==null?'':nf.max)}">${(nf.min!==''&&nf.min!=null)||(nf.max!==''&&nf.max!=null)?`<span class="dr-clear" title="Clear price range" data-action="clear-numrange" data-table="${tableKey}" data-col="${c.key}">✕</span>`:''}</div>`;
       }else filterHtml=`<div class="th-filter"><input type="text" placeholder="Filter…" data-action="filter" data-table="${tableKey}" data-col="${c.key}" value="${esc(st.filters[c.key]||'')}"></div>`;
     }
+    const searchIcon=c.date?'📅':(c.filterType==='select'||c.filterType==='number-range')?'▾':'⌕';
+    const searchTitle=c.date?'Filter by date range':c.filterType==='select'?'Filter this column':c.filterType==='number-range'?'Filter by price range':'Search this column';
     return `<th style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
       <div class="th-inner"><div class="th-row">
         <span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${esc(c.label)}</span>
         <span class="sort-ic">${si2}</span>
-        <span class="search-ic" title="${c.date?'Filter by date range':'Search this column'}" data-action="togglesearch" data-table="${tableKey}" data-col="${c.key}">${c.date?'📅':'⌕'}</span>
+        <span class="search-ic" title="${searchTitle}" data-action="togglesearch" data-table="${tableKey}" data-col="${c.key}">${searchIcon}</span>
       </div>
       ${filterHtml}
       <div class="resize-handle" data-action="resize" data-table="${tableKey}" data-col="${c.key}"></div>
@@ -688,11 +759,22 @@ document.addEventListener('input',e=>{
 
 document.addEventListener('change',e=>{
   const el=e.target,a=el.getAttribute('data-action');
-  if(a==='pagesize'){const t=el.getAttribute('data-table');tableState(t).pageSize=parseInt(el.value,10);tableState(t).page=1;render();return;}
+  if(a==='pagesize'){const t=el.getAttribute('data-table');tableState(t).pageSize=parseInt(el.value,10);tableState(t).page=1;persistGridPrefs_(t);render();return;}
   if(a==='date-from'||a==='date-to'){
     const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
     if(!st.dateFilters[c])st.dateFilters[c]={from:'',to:''};
     st.dateFilters[c][a==='date-from'?'from':'to']=el.value;st.page=1;st.filterOpen=c;render();return;
+  }
+  if(a==='filter-select'){
+    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
+    st.filters[c]=el.value;st.page=1;render();return;
+  }
+  if(a==='num-min'||a==='num-max'){
+    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
+    if(!st.numFilters)st.numFilters={};
+    if(!st.numFilters[c])st.numFilters[c]={min:'',max:''};
+    st.numFilters[c][a==='num-min'?'min':'max']=el.value===''?'':Number(el.value);
+    st.page=1;st.filterOpen=c;render();return;
   }
 });
 
@@ -713,7 +795,7 @@ document.addEventListener('click',e=>{
   if(a==='logout'){void writeCachedSnapshot_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
   if(a==='syncnow'){refreshData();return;}
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
-  if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;render();return;}
+  if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;persistGridPrefs_(t);render();return;}
   if(a==='pagefirst'){tableState(el.getAttribute('data-table')).page=1;render();return;}
   if(a==='pageprev'){const st=tableState(el.getAttribute('data-table'));st.page=Math.max(1,st.page-1);render();return;}
   if(a==='pagenext'){tableState(el.getAttribute('data-table')).page++;render();return;}
@@ -721,11 +803,12 @@ document.addEventListener('click',e=>{
   if(a==='togglesearch'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);
     st.filterOpen=st.filterOpen===c?null:c;render();if(st.filterOpen){const inp=document.querySelector(`input[data-table="${t}"][data-col="${c}"]`);if(inp)inp.focus();}return;}
   if(a==='clear-daterange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);delete st.dateFilters[c];st.page=1;st.filterOpen=c;render();return;}
+  if(a==='clear-numrange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);if(st.numFilters)delete st.numFilters[c];st.page=1;st.filterOpen=c;render();return;}
   if(a==='togglecolmenu'){const t=el.getAttribute('data-table');S.colMenuOpen=S.colMenuOpen===t?null:t;render();return;}
-  if(a==='togglecol'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.hidden.has(c))st.hidden.delete(c);else st.hidden.add(c);render();S.colMenuOpen=t;return;}
+  if(a==='togglecol'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.hidden.has(c))st.hidden.delete(c);else st.hidden.add(c);persistGridPrefs_(t);render();S.colMenuOpen=t;return;}
   if(a==='movecol-left'||a==='movecol-right'){
     const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t),i=st.order.indexOf(c),j=a==='movecol-left'?i-1:i+1;
-    if(i>=0&&j>=0&&j<st.order.length){const tmp=st.order[i];st.order[i]=st.order[j];st.order[j]=tmp;}render();S.colMenuOpen=t;return;
+    if(i>=0&&j>=0&&j<st.order.length){const tmp=st.order[i];st.order[i]=st.order[j];st.order[j]=tmp;}persistGridPrefs_(t);render();S.colMenuOpen=t;return;
   }
   if(a==='select-party'){selectLedgerParty(el.getAttribute('data-name'));return;}
   if(a==='ledger-print'){window.print();return;}
@@ -745,6 +828,7 @@ document.addEventListener('mousemove',e=>{
 document.addEventListener('mouseup',e=>{
   if(!resizeCtx)return;
   tableState(resizeCtx.t).widths[resizeCtx.c]=Math.max(60,Math.round(resizeCtx.startW+(e.clientX-resizeCtx.startX)));
+  persistGridPrefs_(resizeCtx.t);
   resizeCtx.el.classList.remove('active');resizeCtx=null;render();
 });
 

@@ -72,13 +72,25 @@ const SUBCATEGORY_COLS=[
 // Sales Report — one row per unique Invoice No, grouped from the SALES sheet. Uses the
 // standard (non-compact) full grid so column hide/unhide, resize, per-column filter,
 // and sort all work exactly like every other data grid in the app.
+//
+// Category is a concatenated string (e.g. "MOBILE APP - PANSARI & PHP - PANSARI") when
+// one invoice has multiple line items, so its column gets a dropdown filter that
+// matches against each atomic category token via filterValues() rather than the raw
+// string. Total Price (amount) gets a min/max numeric range filter instead of a plain
+// text filter. Invoice To (company name) keeps the grid engine's default text
+// filter+sort — no special flags needed there, exactly like every other party-name
+// column in the app (Party Name, Customer, Vendor Name, etc).
+function salesCategoryTokens_(value){return String(value||'').split(' & ').map(s=>s.trim()).filter(Boolean);}
 const SALES_REPORT_COLS=[
   {key:'invoiceNo',label:'Invoice No',width:140},{key:'invoiceTo',label:'Invoice To',width:200},
   {key:'address',label:'Address',width:260},{key:'state',label:'State',width:110},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
   {key:'phone',label:'Phone',width:150},{key:'email',label:'Email',width:210},
-  {key:'description',label:'Description',width:260},{key:'amount',label:'Total Price',width:140,num:true},
-  {key:'category',label:'Category',width:220}
+  {key:'description',label:'Description',width:260},
+  {key:'amount',label:'Total Price',width:140,num:true,filterType:'number-range'},
+  {key:'category',label:'Category',width:220,filterType:'select',
+    filterValues:r=>salesCategoryTokens_(r.category),
+    filterOptions:rows=>{const set=new Set();rows.forEach(r=>salesCategoryTokens_(r.category).forEach(t=>set.add(t)));return Array.from(set).sort((a,b)=>a.localeCompare(b));}}
 ];
 
 function firstUseful(current,next){return current||next||'';}
