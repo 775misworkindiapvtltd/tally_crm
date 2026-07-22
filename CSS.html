@@ -368,18 +368,22 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 /* Dashboard mini reports: dense screenshot-like tables, no S.No column, clipped
    names with native hover titles, and a permanent vertical scroll gutter. */
 .dashboard-report-panel{min-width:0;}
-.dt-table-wrap.compact.dashboard-report{height:270px;border:0;border-radius:0;box-shadow:none;overflow:hidden;}
-.dt-table-wrap.compact.dashboard-report .dt-scroll{max-height:270px;overflow-y:scroll;overflow-x:hidden;}
+/* Height tuned to show ~5 data rows before the scrollbar kicks in (31px header +
+   5 * ~28px rows ≈ 174px); anything beyond row 5 is reachable via the scrollbar. */
+.dt-table-wrap.compact.dashboard-report{height:174px;border:0;border-radius:0;box-shadow:none;overflow:hidden;}
+.dt-table-wrap.compact.dashboard-report .dt-scroll{max-height:174px;overflow-y:scroll;overflow-x:hidden;}
 .dt-table-wrap.compact.dashboard-report table.dt{width:100%;table-layout:fixed;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th{background:#111729;border-right:1px solid #232C42;}
+/* Same light-blue header theme for all three dashboard mini reports (Top Customers,
+   Top Vendors, Expense by Category) — no dark navy background. */
+.dt-table-wrap.compact.dashboard-report table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);}
 .dt-table-wrap.compact.dashboard-report table.dt thead th .th-inner{padding:7px 9px;min-height:31px;}
 .dt-table-wrap.compact.dashboard-report table.dt thead th .th-row{gap:4px;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8.5px;line-height:1.15;letter-spacing:.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .sort-ic{font-size:7px;width:auto;color:#7CA3FF;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8.5px;line-height:1.15;letter-spacing:.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent-dark);font-weight:700;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .sort-ic{font-size:7px;width:auto;color:var(--accent-dark);}
 .dt-table-wrap.compact.dashboard-report table.dt tbody td{padding:7px 9px;font-size:10.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;border-right:0;}
 .dt-table-wrap.compact.dashboard-report table.dt tbody tr:nth-child(even){background:#FAFBFD;}
 .dt-table-wrap.compact.dashboard-report table.dt tbody tr:hover{background:var(--accent-tint2);}
-.dreport-name{display:flex;align-items:center;gap:7px;min-width:0;color:var(--ink);font-weight:650;}
+.dreport-name{display:flex;align-items:center;gap:7px;min-width:0;max-width:100%;overflow:hidden;color:var(--ink);font-weight:650;}
 .dreport-ellipsis{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dreport-color-dot{width:7px;height:7px;border-radius:50%;flex:none;}
 .dreport-money{font-family:'JetBrains Mono',monospace;font-weight:700;}
