@@ -420,6 +420,7 @@ function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
   const compact=!!def.compact; // compact grids: no pagination UI, just a scrollable box, sort still works
   const noSno=!!def.noSno; // report-style mini tables (e.g. dashboard Top Customers/Vendors) hide the S.No column
+  const flatReport=!!def.flatReport; // dashboard mini-report tables: fixed row count, NO scrollbar, light header
   Object.entries(st.filters).forEach(([k,v])=>{if(!v)return;rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));});
   Object.entries(st.dateFilters||{}).forEach(([k,range])=>{
     if(!range||(!range.from&&!range.to))return;
@@ -487,11 +488,14 @@ function renderGrid(tableKey){
   const mcards=pageRows.length?pageRows.map((r,idx)=>renderMobileCard(tableKey,r,si+idx+1)).join(''):`<div class="empty-state"><div class="big">No matching rows</div></div>`;
 
   if(compact){
-    // Compact mode (dashboard mini-tables): no pagination footer/toolbar, just a
-    // fixed-height scrollable table. Sorting by clicking a header still works.
-    // noSno report tables (Top Customers/Vendors, Expense by Category) get the extra
-    // "dt-report" class for tighter row height/font matching the reference screenshot.
-    return `<div class="dt-table-wrap compact${noSno?' report':''}"><div class="dt-scroll"><table class="dt${noSno?' dt-report':''}"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
+    // Compact mode (dashboard mini-tables): no pagination footer/toolbar.
+    // flatReport tables (Top Customers/Vendors, Expense by Category) render with NO
+    // scrollbar at all — exactly the number of rows fits, matching the reference
+    // screenshot — using the light-header "dt-report" style. Sorting by clicking a
+    // header still works either way.
+    const wrapCls=flatReport?'dt-table-wrap flat-report':`dt-table-wrap compact${noSno?' report':''}`;
+    const tableCls=noSno?' dt-report':'';
+    return `<div class="${wrapCls}"><div class="dt-scroll"><table class="dt${tableCls}"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
   }
 
   return `

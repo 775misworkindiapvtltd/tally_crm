@@ -126,9 +126,9 @@ const GRID_DEFS={
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},
-  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,noSno:true},
-  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,noSno:true},
+  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,noSno:true,flatReport:true},
+  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,noSno:true,flatReport:true},
   expenseSubCategory:{cols:SUBCATEGORY_COLS,data:()=>S.expenseSubCategoryRows||[]},
-  expenseCategoryDash:{cols:EXPENSE_CAT_DASH_COLS,data:()=>S.dashExpenseByCategory||[],compact:true,noSno:true}
+  expenseCategoryDash:{cols:EXPENSE_CAT_DASH_COLS,data:()=>S.dashExpenseByCategory||[],compact:true,noSno:true,flatReport:true}
 };
 </script>
