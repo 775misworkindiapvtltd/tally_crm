@@ -111,16 +111,14 @@ function renderDashboard(){
   // content to scroll through — min 10 rows visible at once via the fixed-height
   // compact box, sortable by clicking any of the 3 headers (default: Outstanding desc).
   const recvRowsAll=dataForFY('receivables'), payRowsAll=dataForFY('payables');
-  // Top 5 by outstanding, matching the reference screenshot exactly — "View All"
-  // link takes the user to the full Customer/Vendor List for everyone else.
   // dueDate here doubles as the "Last Receipt"/"Last Payment" column in the mini
   // report below (taken from that party's most-overdue/most-recent bill) — same
   // approximation the app has always used, unchanged calculation logic.
-  const topCustomers=topN(recvRowsAll,'partyName','pendingAmount',5).map(t=>{
+  const topCustomers=topN(recvRowsAll,'partyName','pendingAmount',9999).map(t=>{
     const row=recvRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
     return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0,dueDate:row?row.dueDate:''});
   });
-  const topVendors=topN(payRowsAll,'partyName','closingBalance',5).map(t=>{
+  const topVendors=topN(payRowsAll,'partyName','closingBalance',9999).map(t=>{
     const row=payRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
     return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0,dueDate:row?row.dueDate:''});
   });

@@ -280,6 +280,7 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .rpt-panel-foot span:first-child{color:var(--ink-secondary);font-weight:600;}
 .dt-table-wrap.report{border:0;border-radius:0;box-shadow:none;}
 table.dt-report{width:100%!important;table-layout:fixed;}
+table.dt-report thead th{background:#111729;padding:0;}
 table.dt-report thead th .th-inner{padding:7px 10px;min-height:auto;gap:2px;}
 table.dt-report thead th .th-label{font-size:9px;letter-spacing:.03em;}
 table.dt-report thead th .sort-ic{font-size:8px;}
@@ -293,23 +294,6 @@ table.dt-report tbody td.num{font-weight:600;}
 .rpt-pctbar{flex:1;height:6px;background:var(--line-light);border-radius:3px;overflow:hidden;min-width:40px;}
 .rpt-pctbar-fill{height:100%;border-radius:3px;}
 .rpt-pctbar-txt{font-size:10.5px;font-weight:700;color:var(--ink-secondary);flex:none;width:34px;text-align:right;}
-
-/* Dashboard mini-report tables (Top Customers, Top Vendors, Expense by Category) —
-   NO scrollbar, light header (not the dark navy used by full data grids), and all
-   three panels share the exact same row height/font so they look uniform side by
-   side, matching the reference screenshot precisely. */
-.flat-report{border:0;border-radius:0;box-shadow:none;height:auto;flex:none;}
-.flat-report .dt-scroll{overflow:visible;}
-.flat-report table.dt{width:100%!important;table-layout:fixed;}
-.flat-report table.dt thead th{position:static;background:#F5F7FB;color:var(--ink-secondary);border-right:0;border-bottom:1px solid var(--line);}
-.flat-report table.dt thead th .th-inner{padding:8px 12px;min-height:auto;gap:2px;}
-.flat-report table.dt thead th .th-label{font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--ink-secondary);}
-.flat-report table.dt thead th .sort-ic{color:var(--accent-dark);}
-.flat-report table.dt thead th .search-ic{color:#9AA3B8;}
-.flat-report table.dt thead th .resize-handle{display:none;}
-.flat-report table.dt tbody td{padding:9px 12px;font-size:12px;border-right:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.flat-report table.dt tbody tr:nth-child(even){background:transparent;}
-.flat-report table.dt tbody tr:last-child td{border-bottom:0;}
 
 /* ---------- RECENT RECEIPTS / UPCOMING DUE THIS WEEK (single-line compact rows) ---------- */
 .pt-info{font-size:10px;color:var(--muted);font-weight:400;cursor:help;margin-left:-4px;}
