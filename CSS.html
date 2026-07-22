@@ -441,6 +441,37 @@ table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
 .dt-pagination .nav button:not(:disabled):hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
 .dt-pagination .pageinfo{font-weight:600;color:var(--ink-secondary);white-space:nowrap;}
 
+/* ---------- FIXED DASHBOARD MINI REPORTS ----------
+   These report-only rules intentionally override the generic, scrollable data grid.
+   All labels remain in the same table; narrower cells wrap only the header text and
+   never hide it. The calculated dataset remains untouched in the grid state. */
+.rpt-panel--fixed{min-height:292px;}
+.rpt-panel--fixed .rpt-panel-body{min-height:214px;}
+.dt-table-wrap.flat-report{border:0;border-radius:0;box-shadow:none;flex:none;height:auto;min-height:0;overflow:visible;}
+.dt-table-wrap.flat-report .dt-scroll{flex:none;min-height:0;max-height:none;overflow:visible;}
+.dt-table-wrap.flat-report table.dt{width:100%!important;table-layout:fixed;}
+.dt-table-wrap.flat-report table.dt-report thead th{position:static;background:#F5F7FB;color:var(--ink-secondary);border-right:0;border-bottom:1px solid var(--line);min-width:0!important;max-width:none!important;}
+.dt-table-wrap.flat-report table.dt-report thead th[data-col="label"]{width:29%!important;}
+.dt-table-wrap.flat-report table.dt-report thead th[data-col="value"]{width:17%!important;}
+.dt-table-wrap.flat-report table.dt-report thead th[data-col="overdueDays"]{width:16%!important;}
+.dt-table-wrap.flat-report table.dt-report thead th[data-col="dueDate"]{width:18%!important;}
+.dt-table-wrap.flat-report table.dt-report thead th[data-col="status"]{width:13%!important;}
+.dt-table-wrap.flat-report table.dt-report thead th[data-col="action"]{width:7%!important;}
+.dt-table-wrap.flat-report table.dt-report thead th[data-col="pctBar"]{width:33%!important;}
+.dt-table-wrap.flat-report table.dt-report thead th .th-inner{padding:6px 7px;min-height:34px;gap:2px;}
+.dt-table-wrap.flat-report table.dt-report thead th .th-row{gap:3px;align-items:flex-start;}
+.dt-table-wrap.flat-report table.dt-report thead th .th-label{font-size:8.5px;font-weight:700;letter-spacing:.025em;line-height:1.2;color:var(--ink-secondary);overflow-wrap:anywhere;}
+.dt-table-wrap.flat-report table.dt-report thead th .sort-ic{font-size:7px;width:auto;color:var(--accent-dark);margin-top:1px;}
+.dt-table-wrap.flat-report table.dt-report thead th .search-ic,.dt-table-wrap.flat-report table.dt-report thead th .resize-handle{display:none;}
+.dt-table-wrap.flat-report table.dt-report tbody td{padding:7px;font-size:10.5px;line-height:1.2;border-right:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;}
+.dt-table-wrap.flat-report table.dt-report tbody tr:nth-child(even){background:transparent;}
+.dt-table-wrap.flat-report table.dt-report tbody tr:last-child td{border-bottom:0;}
+.dt-table-wrap.flat-report .status-badge{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:9px;padding:2px 4px;}
+.dt-table-wrap.flat-report .rpt-eye{display:block;text-align:center;font-size:12px;}
+.dt-table-wrap.flat-report .rpt-pctbar-wrap{gap:4px;min-width:0;}
+.dt-table-wrap.flat-report .rpt-pctbar{min-width:0;height:5px;}
+.dt-table-wrap.flat-report .rpt-pctbar-txt{font-size:9px;width:29px;}
+
 /* ---------- MOBILE CARD LIST (alt view of a grid on small screens) ---------- */
 .mcard-list{display:none;flex-direction:column;gap:10px;}
 .mcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}

@@ -126,9 +126,12 @@ const GRID_DEFS={
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},
-  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,noSno:true},
-  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,noSno:true},
+  // Dashboard reports keep their complete calculated datasets in S.dash*. `displayLimit`
+  // is presentation-only: the compact no-scroll cards show the leading rows and View All
+  // still opens the complete corresponding report.
+  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,noSno:true,flatReport:true,displayLimit:5},
+  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,noSno:true,flatReport:true,displayLimit:5},
   expenseSubCategory:{cols:SUBCATEGORY_COLS,data:()=>S.expenseSubCategoryRows||[]},
-  expenseCategoryDash:{cols:EXPENSE_CAT_DASH_COLS,data:()=>S.dashExpenseByCategory||[],compact:true,noSno:true}
+  expenseCategoryDash:{cols:EXPENSE_CAT_DASH_COLS,data:()=>S.dashExpenseByCategory||[],compact:true,noSno:true,flatReport:true,displayLimit:6}
 };
 </script>

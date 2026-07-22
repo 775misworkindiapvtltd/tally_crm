@@ -107,9 +107,9 @@ function renderDashboard(){
   const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
   const ageColors=['#2E6BF2','#16A34A','#F08A1D','#E23A3A'];
 
-  // All parties (not just a top-N slice) so the scroll box on the dashboard has real
-  // content to scroll through — min 10 rows visible at once via the fixed-height
-  // compact box, sortable by clicking any of the 3 headers (default: Outstanding desc).
+  // Keep all party aggregates in the dashboard state so sorting and the full reports
+  // remain data-complete. The mini-report grid applies its own presentation-only row
+  // limit to match the fixed no-scroll dashboard layout.
   const recvRowsAll=dataForFY('receivables'), payRowsAll=dataForFY('payables');
   // dueDate here doubles as the "Last Receipt"/"Last Payment" column in the mini
   // report below (taken from that party's most-overdue/most-recent bill) — same
@@ -177,7 +177,7 @@ function renderDashboard(){
     </div>
 
     <div class="dash-row3">
-      <div class="rpt-panel">
+      <div class="rpt-panel rpt-panel--fixed">
         <div class="rpt-panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
         <div class="rpt-panel-body">${(()=>{
           if(S.syncing&&!recvRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading receivables…</div></div>`;
@@ -185,7 +185,7 @@ function renderDashboard(){
         })()}</div>
         <div class="rpt-panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
-      <div class="rpt-panel">
+      <div class="rpt-panel rpt-panel--fixed">
         <div class="rpt-panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
         <div class="rpt-panel-body">${(()=>{
           if(S.syncing&&!payRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading payables…</div></div>`;
@@ -193,7 +193,7 @@ function renderDashboard(){
         })()}</div>
         <div class="rpt-panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
       </div>
-      <div class="rpt-panel">
+      <div class="rpt-panel rpt-panel--fixed">
         <div class="rpt-panel-title">Expense by Category — ${esc(fyLabel)} <a data-action="goto" data-page="expensesDashboard">View All</a></div>
         <div class="rpt-panel-body">${(()=>{
           S.dashExpenseByCategory=expenseByCategory.map((c,i)=>({label:c.label,value:c.value,pctNum:c.value/expenseTotalBase*100,pct:(c.value/expenseTotalBase*100).toFixed(1)+'%',color:CHART_PALETTE[i%CHART_PALETTE.length]}));

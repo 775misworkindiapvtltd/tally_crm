@@ -477,6 +477,8 @@ function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
   const compact=!!def.compact; // compact grids: no pagination UI, just a scrollable box, sort still works
   const noSno=!!def.noSno; // report-style mini tables (e.g. dashboard Top Customers/Vendors) hide the S.No column
+  const flatReport=!!def.flatReport; // fixed dashboard report: visible headers, no horizontal/vertical scrolling
+  const displayLimit=Math.max(0,Number(def.displayLimit)||0); // presentation-only; never changes the underlying calculated dataset
   Object.entries(st.filters).forEach(([k,v])=>{if(!v)return;rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));});
   Object.entries(st.dateFilters||{}).forEach(([k,range])=>{
     if(!range||(!range.from&&!range.to))return;
@@ -505,7 +507,11 @@ function renderGrid(tableKey){
   }
   const total=rows.length;const ps=compact?total||1:st.pageSize;const tp=Math.max(1,Math.ceil(total/ps));
   if(st.page>tp)st.page=tp;if(st.page<1)st.page=1;
-  const si=compact?0:(st.page-1)*ps;const pageRows=compact?rows:rows.slice(si,si+ps);
+  const si=compact?0:(st.page-1)*ps;
+  // A flat report shows only its configured lead rows inside the compact dashboard
+  // card. `rows` (and therefore calculations, sorting and the View All destination)
+  // stay complete; only the visible presentation is capped.
+  const pageRows=compact?(displayLimit?rows.slice(0,displayLimit):rows):rows.slice(si,si+ps);
   const baseKeys=def.cols.map(c=>c.key);
   if(!st.order.length)st.order=baseKeys.slice();
   st.order=st.order.filter(k=>baseKeys.indexOf(k)!==-1).concat(baseKeys.filter(k=>st.order.indexOf(k)===-1));
@@ -544,11 +550,10 @@ function renderGrid(tableKey){
   const mcards=pageRows.length?pageRows.map((r,idx)=>renderMobileCard(tableKey,r,si+idx+1)).join(''):`<div class="empty-state"><div class="big">No matching rows</div></div>`;
 
   if(compact){
-    // Compact mode (dashboard mini-tables): no pagination footer/toolbar, just a
-    // fixed-height scrollable table. Sorting by clicking a header still works.
-    // noSno report tables (Top Customers/Vendors, Expense by Category) get the extra
-    // "dt-report" class for tighter row height/font matching the reference screenshot.
-    return `<div class="dt-table-wrap compact${noSno?' report':''}"><div class="dt-scroll"><table class="dt${noSno?' dt-report':''}"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
+    // Dashboard mini reports render as fixed, no-scroll cards. Their full calculated
+    // rows remain in state; the display limit above only controls what fits in-card.
+    const wrapCls=flatReport?'dt-table-wrap flat-report':`dt-table-wrap compact${noSno?' report':''}`;
+    return `<div class="${wrapCls}"><div class="dt-scroll"><table class="dt${noSno?' dt-report':''}"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
   }
 
   return `
