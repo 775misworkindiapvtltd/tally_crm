@@ -207,12 +207,13 @@ function renderDashboard(){
           }).join(''):`<div class="empty-state"><div class="big">Nothing due 🎉</div></div>`}
         </div>
       </div>
-      <div class="panel">
+      <div class="panel sales-topline-panel">
         <div class="panel-title">Sales Topline${useRealCategories?' by Category':''} — ${esc(fyLabel)}</div>
-        <div class="panel-body donut-panel-body">
-          <div class="chart-wrap donut"><canvas id="chSalesTopline" data-chart-fallback></canvas></div>
-          <div class="donut-legend">
-            ${salesToplineRows.map((c,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${salesToplineColors[i%salesToplineColors.length]};"></span><span class="dl-label" title="${esc(c.label)}">${esc(c.label)}</span><span class="dl-val">${fmtINR(c.value)}</span></div>`).join('')}
+        <div class="panel-body sales-topline-body">
+          <div class="chart-wrap donut sales-topline-chart"><canvas id="chSalesTopline" data-chart-fallback></canvas></div>
+          <div class="sales-topline-table" role="table" aria-label="Sales by category">
+            <div class="sales-topline-head" role="row"><span>Category</span><span>Amount</span></div>
+            ${salesToplineRows.map((c,i)=>`<div class="sales-topline-row" role="row"><span class="sales-topline-category" title="${esc(c.label)}"><span class="sales-topline-dot" style="background:${salesToplineColors[i%salesToplineColors.length]};"></span><span class="sales-topline-label">${esc(c.label)}</span></span><span class="sales-topline-amount">${fmtINR(c.value)}</span></div>`).join('')}
           </div>
         </div>
         <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
