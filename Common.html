@@ -30,6 +30,7 @@ let S = {
   followUpDone:{}, // client-side "marked as followed up" set (not persisted to sheet)
   ageingOpen:false, ageingMode:'all',
   map:{selectedState:'',zoom:1},
+  dataFromCache:false, // true while the dashboard is showing last-synced (cached) data and a live sync is still running in the background
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
@@ -120,6 +121,48 @@ function markSynced(){
   S.lastSync=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' · '+pad(d.getHours())+':'+pad(d.getMinutes());
 }
 
+/* ============================= LOCAL DATA CACHE (fast login) =============================
+ * Caches the last successfully-synced dataset in the browser's localStorage, keyed by
+ * user ID, so the NEXT login on this device/browser can render the dashboard with real
+ * numbers INSTANTLY (from the last sync) instead of a blank "Loading data…" screen while
+ * Apps Script re-reads every sheet from scratch. The live sync still runs in the
+ * background exactly as before (loadHeavyData/loadChunks, unchanged) and progressively
+ * replaces the cached numbers with fresh ones — the sidebar's "Last Updated" timestamp
+ * updates once that live sync finishes. Cache is refreshed after every successful sync
+ * AND on logout/auto-logout, so it's never far behind reality.
+ */
+const CACHE_VERSION='v1';
+function cacheKeyFor_(userId){ return 'tally_cache_'+CACHE_VERSION+'_'+String(userId||'').toLowerCase(); }
+const CACHED_DATA_FIELDS=['expense','expenseTrendRows','payables','receivables','receipt','payment',
+  'salesRows','balanceParties','balanceVouchers','balanceLedgers','diagnostics'];
+
+function saveCacheForUser(userId){
+  if(!userId)return;
+  try{
+    const payload={lastSync:S.lastSync||'',savedAt:Date.now()};
+    CACHED_DATA_FIELDS.forEach(k=>{ payload[k]=S[k]; });
+    localStorage.setItem(cacheKeyFor_(userId),JSON.stringify(payload));
+  }catch(e){
+    // localStorage can be unavailable (private browsing) or over quota for very large
+    // datasets — never let caching failure break login/logout/sync itself.
+    console.error('Could not save local dashboard cache:',e.message);
+  }
+}
+function loadCacheForUser(userId){
+  if(!userId)return null;
+  try{
+    const raw=localStorage.getItem(cacheKeyFor_(userId));
+    if(!raw)return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+function applyCachedData(cache){
+  if(!cache)return;
+  CACHED_DATA_FIELDS.forEach(k=>{ if(cache[k]!==undefined) S[k]=cache[k]; });
+  S.lastSync=cache.lastSync||'';
+  S.dataFromCache=true;
+}
+
 // Load data ONE TAB AT A TIME to avoid google.script.run response-size limits.
 // Dashboard renders progressively as each chunk arrives (cards update live).
 // Order matters: receivables/payables feed the two slowest-feeling dashboard panels
@@ -155,15 +198,17 @@ async function loadChunks(){
 async function loadHeavyData(){
   S.syncing=true;S.diagBannerDismissed=false;render();
   await loadChunks();
-  S.syncing=false;markSynced();render();
+  S.syncing=false;S.dataFromCache=false;markSynced();render();
+  saveCacheForUser(S.user&&S.user.id);
 }
 
 async function refreshData(){
   S.syncing=true;S.diagBannerDismissed=false;render();
   await loadChunks();
-  S.syncing=false;markSynced();
+  S.syncing=false;S.dataFromCache=false;markSynced();
   Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
   showToast("Sheet se latest data mil gaya.",false);
+  saveCacheForUser(S.user&&S.user.id);
 }
 
 /* ============================= HELPERS ============================= */
@@ -213,6 +258,7 @@ function nextLogoutTs(){
   return t.getTime();
 }
 function forceNightLogout(){
+  if(S.user) saveCacheForUser(S.user.id); // keep last-synced data cached for a fast next login
   S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;
   S.loginError="Raat ke auto-logout ke kaaran aap sign out ho gaye. Kripya dobara login karein.";
   render();
@@ -245,7 +291,18 @@ function firstAllowedPage(){ return NAV_ITEMS[0]?NAV_ITEMS[0].key:null; }
 async function doLogin(id,pw){
   const u=S.users.find(x=>x.id.toLowerCase()===id.trim().toLowerCase()&&String(x.password)===pw);
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
-  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();render();
+  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();
+
+  // Show last-synced data INSTANTLY from the local cache (if any) while the live sync
+  // runs in the background — this is what makes login feel fast instead of staring at
+  // a blank "Loading data…" screen every single time. S.syncing=true here too, so the
+  // sidebar already shows "Syncing…" and the Data Diagnostics banner stays suppressed
+  // until the live sync actually finishes (it may be based on stale cached info).
+  const cached=loadCacheForUser(u.id);
+  if(cached) applyCachedData(cached);
+  S.syncing=true;
+  render();
+
   await loadHeavyData();
 }
 
@@ -378,8 +435,8 @@ function renderShell(inner){
       </div>
       <div class="nav">${navHtml}</div>
       <div class="sidebar-foot">
-        <div class="su">Data Last Updated<br><b style="color:#D7DCEA;">${esc(S.lastSync||'just now')}</b></div>
         <button class="btn sync-btn btn-ghost" data-action="syncnow" style="color:#AAB2C8;border-color:var(--sidebar-line);">${S.syncing?'⟳ Syncing…':'⟳ Sync with Tally'}</button>
+        <div class="su" style="margin-top:8px;">${S.dataFromCache&&S.syncing?'Last Updated (cached)':'Last Updated'}<br><b style="color:#D7DCEA;">${esc(S.lastSync||'just now')}</b></div>
         <div class="su" style="margin-top:8px;opacity:.6;">Build: ${esc(APP_BUILD)}</div>
         <div class="logout-btn" data-action="logout" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
       </div>
@@ -588,7 +645,10 @@ document.addEventListener('click',e=>{
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='ageing-nav-toggle'){S.ageingOpen=!S.ageingOpen;render();return;}
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
-  if(a==='logout'){S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
+  if(a==='logout'){
+    if(S.user) saveCacheForUser(S.user.id); // keep last-synced data cached for a fast next login
+    S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;
+  }
   if(a==='syncnow'){refreshData();return;}
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;render();return;}
