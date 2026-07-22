@@ -303,24 +303,29 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .donut-legend .dl-val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);}
 .donut-legend .dl-pct{color:var(--muted);font-size:10px;width:34px;text-align:right;}
 
-/* Sales Topline sits in a narrower dashboard column, so it deliberately uses a
-   compact vertical donut with a real Category / Amount table below it. This avoids
-   the old fixed-width donut + side legend being clipped by the panel boundary. */
+/* Sales Topline follows the compact donut-and-legend layout from the dashboard
+   reference: an obvious total in the donut, then one clean colour-coded row per
+   category. The vertical layout keeps every value visible in its narrow column. */
 .sales-topline-panel{min-width:0;}
-.sales-topline-body{padding:10px 12px 12px;display:flex;flex-direction:column;align-items:stretch;gap:9px;}
-.sales-topline-chart{align-self:center;flex:none;width:108px;height:108px;}
-.sales-topline-table{width:100%;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);}
-.sales-topline-head,.sales-topline-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:7px;}
-.sales-topline-head{padding:6px 7px;background:var(--accent-tint);border-bottom:1px solid var(--line);font-size:8px;line-height:1;text-transform:uppercase;letter-spacing:.035em;color:var(--accent-dark);font-weight:700;}
-.sales-topline-head span:last-child{text-align:right;}
-.sales-topline-row{padding:5px 7px;border-bottom:1px solid var(--line-light);min-height:23px;font-size:10px;line-height:1.2;}
+.sales-topline-title{align-items:flex-start;line-height:1.45;}
+.sales-topline-title>span:first-child{min-width:0;}
+.sales-topline-period{flex:none;margin-top:-2px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:9px;line-height:1.1;font-weight:700;color:var(--muted);white-space:nowrap;}
+.sales-topline-period::after{content:'⌄';margin-left:4px;color:var(--accent-dark);}
+.sales-topline-body{padding:12px 16px 10px;display:flex;flex-direction:column;align-items:stretch;gap:12px;}
+.sales-topline-chart{align-self:center;flex:none;width:116px;height:116px;}
+.sales-topline-total{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none;text-align:center;}
+.sales-topline-total span{font-size:8px;font-weight:700;letter-spacing:.035em;text-transform:uppercase;color:var(--muted);}
+.sales-topline-total strong{font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.15;color:var(--ink);white-space:nowrap;}
+.sales-topline-legend{display:flex;flex-direction:column;gap:0;}
+.sales-topline-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:10px;padding:6px 0;border-bottom:1px solid var(--line-light);min-height:25px;font-size:10px;line-height:1.2;}
 .sales-topline-row:last-child{border-bottom:0;}
-.sales-topline-row:nth-child(odd){background:#FAFBFD;}
-.sales-topline-category{display:flex;align-items:center;gap:6px;min-width:0;color:var(--ink-secondary);font-weight:600;}
+.sales-topline-category{display:flex;align-items:center;gap:7px;min-width:0;color:var(--ink-secondary);font-weight:700;}
 .sales-topline-dot{width:7px;height:7px;border-radius:50%;flex:none;}
 .sales-topline-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.sales-topline-amount{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:var(--ink);white-space:nowrap;text-align:right;}
-.sales-topline-panel .panel-foot{padding:8px 12px;font-size:10.5px;}
+.sales-topline-amount{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--ink);white-space:nowrap;text-align:right;}
+.sales-topline-foot{justify-content:center;padding:9px 16px!important;}
+.sales-topline-foot a{color:var(--accent-dark);font-size:10px;font-weight:700;text-decoration:none;white-space:nowrap;cursor:pointer;}
+.sales-topline-foot a span{margin-left:4px;font-size:13px;line-height:0;vertical-align:-1px;}
 .donut-center-total{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;pointer-events:none;}
 .donut-center-total .dt-val{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:var(--ink);}
 .donut-center-total .dt-lbl{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
