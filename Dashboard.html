@@ -47,6 +47,20 @@ function ageingBuckets(rows,amtKey){
   return buckets;
 }
 
+// Calendar-day difference between a date value and TODAY (both taken at midnight,
+// so time-of-day never matters). A due date of today correctly returns 0, not a
+// small negative number — this is what makes "Upcoming Due This Week" include today.
+function daysUntil(dateVal){
+  const t=parseDT(dateVal); if(t===null) return null;
+  const now=new Date();
+  const todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  return Math.round((t-todayStart)/86400000);
+}
+function mrDateFull_(v){ const t=parseDT(v); return t===null?(v||'—'):fmtDDMMMYYYY(new Date(t)); } // "31 May 2025"
+function mrDateShort_(v){ const t=parseDT(v); return t===null?(v||'—'):fmtDDMMM(new Date(t)); } // "01 Jun"
+const MINI_IC_ARROW_DOWN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>';
+const MINI_IC_CALENDAR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+
 function statusForDueDate(dueDateVal,overdueDays){
   const d=Number(overdueDays)||0;
   if(d>0) return {cls:'overdue',label:'Overdue'};
@@ -112,9 +126,11 @@ function renderDashboard(){
 
   const recentReceipts=dataForFY('receipt').slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
 
+  // Due today through the next 7 days — daysUntil() compares calendar days (not
+  // exact milliseconds), so a bill due TODAY always returns 0 and is correctly
+  // included here (previously it could be excluded depending on the time of day).
   const dueThisWeek=dataForFY('receivables').filter(r=>{
-    const t=parseDT(r.dueDate); if(t===null) return false;
-    const days=Math.round((t-Date.now())/86400000);
+    const days=daysUntil(r.dueDate); if(days===null) return false;
     return days>=0 && days<=7;
   }).sort((a,b)=>(parseDT(a.dueDate)||0)-(parseDT(b.dueDate)||0)).slice(0,5);
 
@@ -193,20 +209,30 @@ function renderDashboard(){
     <div class="dash-row4">
       <div class="panel">
         <div class="panel-title">Recent Receipts <a data-action="goto" data-page="receipt">View All</a></div>
-        <div class="panel-body" style="padding:6px 16px;">
+        <div class="panel-body mr-list-body">
           ${recentReceipts.length?recentReceipts.map(r=>`
-            <div class="mini-row">
-              <div class="lft"><div><div class="nm">${esc(r.bankPartyName||r.creditLedgerName)}</div><div class="sub">${esc(r.date)}</div></div></div>
-              <div style="display:flex;align-items:center;gap:8px;"><span class="mode-badge">${esc(r.transactionType||'—')}</span><span class="amt recv">${fmtINR(r.debitLedgerAmount||r.creditLedgerAmount)}</span></div>
+            <div class="mr-row">
+              <span class="mr-ic mr-ic-recv">${MINI_IC_ARROW_DOWN}</span>
+              <span class="mr-date">${esc(mrDateShort_(r.date))}</span>
+              <span class="mr-name" title="${esc(r.bankPartyName||r.creditLedgerName)}">${esc(r.bankPartyName||r.creditLedgerName)}</span>
+              <span class="mr-amt">${fmtINR(r.debitLedgerAmount||r.creditLedgerAmount)}</span>
+              <span class="mr-badge">${esc(r.transactionType||'—')}</span>
             </div>`).join(''):`<div class="empty-state"><div class="big">No receipts yet</div></div>`}
         </div>
       </div>
       <div class="panel">
-        <div class="panel-title">Upcoming Due This Week <a data-action="goto" data-page="followUpList">View All</a></div>
-        <div class="panel-body" style="padding:6px 16px;">
+        <div class="panel-title">Upcoming Due This Week <span class="pt-info" title="Includes bills due today through the next 7 days">ⓘ</span><a data-action="goto" data-page="followUpList">View All</a></div>
+        <div class="panel-body mr-list-body">
           ${dueThisWeek.length?dueThisWeek.map(r=>{
-            const t=parseDT(r.dueDate);const days=t===null?'':Math.round((t-Date.now())/86400000)+' Days';
-            return `<div class="mini-row"><div class="lft"><div><div class="nm">${esc(r.partyName)}</div><div class="sub">${esc(r.dueDate)}</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span class="amt">${fmtINR(r.pendingAmount)}</span><span class="mode-badge">${days}</span></div></div>`;
+            const days=daysUntil(r.dueDate);
+            const daysLabel=days===0?'Today':days+' Days';
+            return `<div class="mr-row">
+              <span class="mr-ic mr-ic-due">${MINI_IC_CALENDAR}</span>
+              <span class="mr-date">${esc(mrDateShort_(r.dueDate))}</span>
+              <span class="mr-name" title="${esc(r.partyName)}">${esc(r.partyName)}</span>
+              <span class="mr-amt">${fmtINR(r.pendingAmount)}</span>
+              <span class="mr-days">${esc(daysLabel)}</span>
+            </div>`;
           }).join(''):`<div class="empty-state"><div class="big">Nothing due 🎉</div></div>`}
         </div>
       </div>

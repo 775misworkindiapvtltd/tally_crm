@@ -271,6 +271,21 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .mini-row .lft{display:flex;align-items:center;gap:9px;min-width:0;}
 .mini-row .mode-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:var(--accent-tint2);color:var(--accent-dark);flex:none;}
 
+/* ---------- RECENT RECEIPTS / UPCOMING DUE THIS WEEK (single-line compact rows) ---------- */
+.pt-info{font-size:10px;color:var(--muted);font-weight:400;cursor:help;margin-left:-4px;}
+.mr-list-body{padding:2px 16px 8px !important;overflow-y:auto;}
+.mr-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--line-light);font-size:12px;}
+.mr-row:last-child{border-bottom:0;}
+.mr-ic{width:18px;height:18px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;}
+.mr-ic svg{width:11px;height:11px;}
+.mr-ic-recv{background:var(--green-tint);color:var(--green);}
+.mr-ic-due{background:var(--red-tint);color:var(--red);}
+.mr-date{flex:none;width:44px;font-size:10.5px;color:var(--muted);font-weight:600;white-space:nowrap;}
+.mr-name{flex:1;min-width:0;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mr-amt{flex:none;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);white-space:nowrap;}
+.mr-badge{flex:none;font-size:9px;font-weight:700;padding:2px 8px;border-radius:5px;background:var(--success-tint);color:var(--success);white-space:nowrap;min-width:50px;text-align:center;}
+.mr-days{flex:none;font-size:11px;font-weight:700;color:var(--red);white-space:nowrap;min-width:50px;text-align:right;}
+
 .bar-chart{display:flex;flex-direction:column;gap:10px;}
 .bar-item{display:flex;align-items:center;gap:10px;}
 .bar-item .b-label{width:90px;font-size:10.5px;color:var(--muted);font-weight:600;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
