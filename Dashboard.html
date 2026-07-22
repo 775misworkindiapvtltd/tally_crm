@@ -32,6 +32,64 @@ function cashInHandBank(){
   return sumBy(dataForFY('receipt'),'debitLedgerAmount')-sumBy(dataForFY('payment'),'creditLedgerAmount');
 }
 
+// Cash in Hand / Bank AS OF a given date (cumulative receipts minus payments up to and
+// including that date) — used only for the "vs previous period" % comparison on that one
+// card, since Cash in Hand/Bank is a running balance, not a period flow like Sales/Expenses.
+function cashInHandBankAsOf_(toISOStr){
+  const receipts=(S.receipt||[]).filter(r=>{const t=parseDT(r.date);return t!==null&&t<=fromISO(toISOStr).getTime()+86399999;});
+  const payments=(S.payment||[]).filter(r=>{const t=parseDT(r.date);return t!==null&&t<=fromISO(toISOStr).getTime()+86399999;});
+  return sumBy(applyOptionalFieldFilters_(receipts),'debitLedgerAmount')-sumBy(applyOptionalFieldFilters_(payments),'creditLedgerAmount');
+}
+
+// Every KPI card's "vs previous period" % — driven by the header filter bar's quick-range
+// (Today/7D/15D/30D/MTD) or a custom Date Range. Deliberately independent of the Financial
+// Year selector (see rowsInDateRange_ in Filters.html) so the comparison is always a
+// like-for-like calendar period regardless of which FY is currently selected. This is a
+// presentation-only addition — none of the existing card VALUES (totalSales, cur.expense,
+// totalRecv, totalPay, cur.collections, cur.payments, cur.netProfit, cashPos) are touched.
+function dashboardKpiComparisons_(){
+  const f=S.filters||{};
+  const range=f.dateRange||presetRange('MTD');
+  const prev=comparisonRange(range.from,range.to);
+  const salesCur=sumBy(rowsInDateRange_('sales',range.from,range.to),'amount');
+  const salesPrev=sumBy(rowsInDateRange_('sales',prev.from,prev.to),'amount');
+  const expCur=sumBy(rowsInDateRange_('expense',range.from,range.to),'amount');
+  const expPrev=sumBy(rowsInDateRange_('expense',prev.from,prev.to),'amount');
+  const collCur=sumBy(rowsInDateRange_('receipt',range.from,range.to),'debitLedgerAmount');
+  const collPrev=sumBy(rowsInDateRange_('receipt',prev.from,prev.to),'debitLedgerAmount');
+  const payCur=sumBy(rowsInDateRange_('payment',range.from,range.to),'creditLedgerAmount');
+  const payPrev=sumBy(rowsInDateRange_('payment',prev.from,prev.to),'creditLedgerAmount');
+  const salesVoucherCur=sumBy((S.balanceVouchers||[]).filter(v=>/sale/i.test(v.voucherType||'')&&inRange(v.date,range.from,range.to)),'debit');
+  const salesVoucherPrev=sumBy((S.balanceVouchers||[]).filter(v=>/sale/i.test(v.voucherType||'')&&inRange(v.date,prev.from,prev.to)),'debit');
+  const purchaseCur=sumBy((S.balanceVouchers||[]).filter(v=>/purchase/i.test(v.voucherType||'')&&inRange(v.date,range.from,range.to)),'debit');
+  const purchasePrev=sumBy((S.balanceVouchers||[]).filter(v=>/purchase/i.test(v.voucherType||'')&&inRange(v.date,prev.from,prev.to)),'debit');
+  const netProfitCur=salesVoucherCur-expCur-purchaseCur;
+  const netProfitPrev=salesVoucherPrev-expPrev-purchasePrev;
+  const cashCur=cashInHandBankAsOf_(range.to);
+  const cashPrev=cashInHandBankAsOf_(prev.to);
+  // Receivables/Payables outstanding totals are point-in-time balances (not period flows),
+  // so their comparison is "balance as of range end" vs "balance as of the prior period's
+  // end" — same pattern as Cash in Hand/Bank above, using the party ledgers' due date as
+  // the point-in-time cutoff.
+  const recvAsOf=to=>sumBy(applyOptionalFieldFilters_((S.receivables||[]).filter(r=>{const t=parseDT(r.billDate);return t===null||t<=fromISO(to).getTime()+86399999;})),'pendingAmount');
+  const payAsOf=to=>sumBy(applyOptionalFieldFilters_((S.payables||[]).filter(r=>{const t=parseDT(r.billDate);return t===null||t<=fromISO(to).getTime()+86399999;})),'closingBalance');
+  // "vs Apr 2025" style label for MTD (matches the reference screenshot exactly, comparing
+  // month name to month name); other quick-ranges/custom date range show "vs <prior span>"
+  // since a bare month name would be ambiguous for a 7/15/30-day or custom window.
+  const MONTH_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const prevEnd=fromISO(prev.to);
+  const label=(f.quickRange==='MTD')?('vs '+MONTH_NAMES[prevEnd.getMonth()]+' '+prevEnd.getFullYear())
+    :('vs '+fmtDDMMM(fromISO(prev.from))+' - '+fmtDDMMM(prevEnd));
+  return {
+    quickRange:f.quickRange||'MTD',
+    label:label,
+    sales:pctChange(salesCur,salesPrev), expense:pctChange(expCur,expPrev),
+    collections:pctChange(collCur,collPrev), payments:pctChange(payCur,payPrev),
+    netProfit:pctChange(netProfitCur,netProfitPrev), cash:pctChange(cashCur,cashPrev),
+    recv:pctChange(recvAsOf(range.to),recvAsOf(prev.to)), pay:pctChange(payAsOf(range.to),payAsOf(prev.to))
+  };
+}
+
 function topN(arr,groupKey,amtKey,n){
   const map={};
   arr.forEach(r=>{ const k=r[groupKey]||'Unknown'; map[k]=(map[k]||0)+(Number(r[amtKey])||0); });
@@ -83,23 +141,32 @@ function renderDashboard(){
   if(!custSt.sort){custSt.sort='value';custSt.dir=-1;}
   if(!vendSt.sort){vendSt.sort='value';vendSt.dir=-1;}
 
-  // "vs previous period" comparison chips removed along with the Date Range/Compare UI
-  // (there is no period to compare against anymore) — cards now show plain totals.
+  // "vs previous period" % comparison, driven by the Date Range / quick-range (Today,
+  // 7D, 15D, 30D, MTD) filter selected in the header filter bar. Card VALUES below are
+  // completely unchanged — only this comparison figure is new.
+  const cmp=dashboardKpiComparisons_();
   const kpis=[
-    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard'},
-    {label:'Total Expenses',value:cur.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard'},
-    {label:'Total Receivables',value:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard'},
-    {label:'Outstanding Payables',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard'},
-    {label:'Collections',value:cur.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
-    {label:'Payments',value:cur.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard'},
-    {label:'Net Profit',value:cur.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss'},
-    {label:'Cash in Hand / Bank',value:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow'},
+    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard',pct:cmp.sales,flow:true},
+    {label:'Total Expenses',value:cur.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard',pct:cmp.expense,flow:true},
+    {label:'Outstanding Receivables',value:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard',pct:cmp.recv,flow:false},
+    {label:'Outstanding Payables',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard',pct:cmp.pay,flow:false},
+    {label:'Collections',value:cur.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis',pct:cmp.collections,flow:true},
+    {label:'Payments',value:cur.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard',pct:cmp.payments,flow:true},
+    {label:'Net Profit',value:cur.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss',pct:cmp.netProfit,flow:true},
+    {label:'Cash in Hand / Bank',value:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow',pct:cmp.cash,flow:false},
   ];
 
   const kpiCards=kpis.map(k=>{
-    return `<div class="card" data-action="goto" data-page="${k.page}">
-      <div class="card-top"><span class="card-label">${esc(k.label)}</span><div class="card-icon ${k.cls}">${NAV_ICONS[k.icon]}</div></div>
+    const pctVal=Number.isFinite(k.pct)?k.pct:0;
+    const up=pctVal>=0;
+    // Flow metrics (Sales/Expenses/Collections/Payments/Net Profit) show the active
+    // quick-range in the label, e.g. "Total Sales (MTD)" — balance metrics (Outstanding
+    // Receivables/Payables, Cash in Hand/Bank) do not, matching the reference screenshot.
+    const suffix=(k.flow&&cmp.quickRange)?` (${esc(cmp.quickRange)})`:'';
+    return `<div class="card kpi-card" data-action="goto" data-page="${k.page}">
+      <div class="card-top"><div class="card-icon ${k.cls}">${NAV_ICONS[k.icon]}</div><span class="card-label">${esc(k.label)}${suffix}</span></div>
       <div class="card-value">${fmtINR(k.value)}</div>
+      <div class="card-sub"><span class="chip ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(pctVal).toFixed(2)}%</span><span class="cmp-label">${esc(cmp.label)}</span></div>
     </div>`;
   }).join('');
 

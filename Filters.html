@@ -1,7 +1,16 @@
 <script>
 /* ============================= FINANCIAL YEAR FILTER ============================= */
 function defaultFilterState(){
-  return {fy:[],fyOpen:false}; // [] means every available financial year
+  return {
+    fy:[],fyOpen:false, // [] means every available financial year
+    // '' means "All" for each of these — Company/Branch stay UI-only placeholders until a
+    // matching column exists in the source sheets (see applyOptionalFieldFilters_ below and
+    // Code.gs "NOTE ON ASSUMPTIONS"); Sales Person already has real data on Receivables/Payables.
+    company:'',branch:'',salesPerson:'',
+    // Drives every KPI card's "vs previous period" %. MTD (Month-to-Date) matches the
+    // reference screenshot's default selected quick-range chip.
+    dateRange:presetRange('MTD'),quickRange:'MTD'
+  };
 }
 
 function pad2(n){return n<10?'0'+n:''+n;}
@@ -59,10 +68,49 @@ function rowsForFinancialYears(rows,dateKey){
   const wanted=new Set(selected);
   return (rows||[]).filter(r=>wanted.has(financialYearKey(r[dateKey])));
 }
+// Gathers distinct non-blank values for `field` across every currently-loaded dataset that
+// happens to contain that field. Company/Branch will return [] (and the header dropdown will
+// just show "All Companies"/"All Branches") until a matching column is added to a source
+// sheet — see Code.gs "NOTE ON ASSUMPTIONS". Sales Person is already populated today on the
+// Payables/Receivables rows.
+function distinctFieldValues_(field){
+  const values=new Set();
+  Object.keys(FY_DATASETS).forEach(name=>{
+    const meta=FY_DATASETS[name];
+    (S[meta.prop]||[]).forEach(r=>{ if(field in r){ const v=String(r[field]||'').trim(); if(v) values.add(v); } });
+  });
+  return Array.from(values).sort();
+}
+function availableCompanies(){ return distinctFieldValues_('company'); }
+function availableBranches(){ return distinctFieldValues_('branch'); }
+function availableSalesPersons(){ return distinctFieldValues_('salesPerson'); }
+
+// Applied AFTER the financial-year filter inside dataForFY()/rowsInDateRange_() below. A row
+// is only ever excluded by the Company/Branch/Sales Person filter if that row's OWN dataset
+// actually carries the matching key — datasets that don't track it (e.g. SALES/EXPENSE/
+// Receipt/PAYMENT have no salesPerson) pass straight through untouched, exactly like the
+// existing pick_() fallback documented in Code.gs for Company/Branch.
+function applyOptionalFieldFilters_(rows){
+  const f=S.filters||{};
+  let out=rows;
+  if(f.company) out=out.filter(r=>!('company' in r)||String(r.company||'').trim()===f.company);
+  if(f.branch) out=out.filter(r=>!('branch' in r)||String(r.branch||'').trim()===f.branch);
+  if(f.salesPerson) out=out.filter(r=>!('salesPerson' in r)||String(r.salesPerson||'').trim()===f.salesPerson);
+  return out;
+}
 function dataForFY(name){
   const meta=FY_DATASETS[name];
   if(!meta)return [];
-  return rowsForFinancialYears(S[meta.prop]||[],meta.dateKey);
+  return applyOptionalFieldFilters_(rowsForFinancialYears(S[meta.prop]||[],meta.dateKey));
+}
+// Used only for the KPI cards' "vs previous period" % comparison — deliberately bypasses the
+// Financial Year selector so a quick-range/date-range choice can compare like-for-like
+// calendar periods regardless of which FY is currently selected. Still honours Company/
+// Branch/Sales Person so the comparison reflects whatever slice of data is on screen.
+function rowsInDateRange_(name,from,to){
+  const meta=FY_DATASETS[name];
+  if(!meta)return [];
+  return applyOptionalFieldFilters_((S[meta.prop]||[]).filter(r=>inRange(r[meta.dateKey],from,to)));
 }
 function selectedFYLabel(){
   const selected=selectedFinancialYears();
@@ -111,26 +159,76 @@ function inRange(dateVal,fromISOStr,toISOStr){
 }
 function pctChange(cur,prev){if(!prev)return cur?100:0;return((cur-prev)/Math.abs(prev))*100;}
 
+// Matches the reference screenshot exactly: Company | Branch | Financial Year | Sales
+// Person | Date Range, then Today/7D/15D/30D/MTD quick-range chips on the right. Company/
+// Branch/Sales Person dropdowns always render — they just show only "All ..." until a
+// matching column/value exists in the underlying data (see distinctFieldValues_ above).
 function renderFilterBar(){
   const fys=availableFinancialYears();const selected=selectedFinancialYears();const all=!selected.length;
   const buttonText=all?'All Financial Years':(selected.length===1?financialYearFromKey(selected[0]).label:selected.length+' Financial Years Selected');
-  return `<div class="fbar fy-only-bar">
+  const companies=availableCompanies(),branches=availableBranches(),salesPersons=availableSalesPersons();
+  const f=S.filters||defaultFilterState();
+  const range=f.dateRange||presetRange('MTD');
+  const quick=f.quickRange||'';
+  const QUICK_BUTTONS=[{key:'today',label:'Today'},{key:'7D',label:'7D'},{key:'15D',label:'15D'},{key:'30D',label:'30D'},{key:'MTD',label:'MTD'}];
+  return `<div class="fbar">
+    <div class="fbar-group">
+      <label>Company</label>
+      <select data-action="filter-company">
+        <option value="">All Companies</option>
+        ${companies.map(c=>`<option value="${esc(c)}" ${f.company===c?'selected':''}>${esc(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fbar-group">
+      <label>Branch</label>
+      <select data-action="filter-branch">
+        <option value="">All Branches</option>
+        ${branches.map(b=>`<option value="${esc(b)}" ${f.branch===b?'selected':''}>${esc(b)}</option>`).join('')}
+      </select>
+    </div>
     <div class="fbar-group fy-filter-group">
       <label>Financial Year</label>
       <div class="fy-multi">
         <button type="button" class="fy-multi-btn" data-action="fy-open">${esc(buttonText)} <span>▾</span></button>
         ${S.filters.fyOpen?`<div class="fy-menu">
           <label class="fy-option fy-all"><input type="checkbox" data-action="fy-all" ${all?'checked':''}> <span>All Financial Years</span></label>
-          ${fys.length?fys.map(f=>`<label class="fy-option"><input type="checkbox" data-action="fy-toggle" data-fy="${esc(f.key)}" ${selected.indexOf(f.key)!==-1?'checked':''}> <span>${esc(f.label)}</span></label>`).join(''):`<div class="fy-empty">Date wala data load hone ke baad financial years yahan dikhenge.</div>`}
+          ${fys.length?fys.map(fyItem=>`<label class="fy-option"><input type="checkbox" data-action="fy-toggle" data-fy="${esc(fyItem.key)}" ${selected.indexOf(fyItem.key)!==-1?'checked':''}> <span>${esc(fyItem.label)}</span></label>`).join(''):`<div class="fy-empty">Date wala data load hone ke baad financial years yahan dikhenge.</div>`}
         </div>`:''}
       </div>
     </div>
-    <div class="fy-selection-note">Showing: <b>${esc(selectedFYLabel())}</b></div>
+    <div class="fbar-group">
+      <label>Sales Person</label>
+      <select data-action="filter-salesperson">
+        <option value="">All</option>
+        ${salesPersons.map(p=>`<option value="${esc(p)}" ${f.salesPerson===p?'selected':''}>${esc(p)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fbar-group">
+      <label>Date Range</label>
+      <div class="fbar-daterange">
+        <input type="date" data-action="filter-date-from" value="${esc(range.from)}">
+        <span>–</span>
+        <input type="date" data-action="filter-date-to" value="${esc(range.to)}">
+      </div>
+    </div>
     <div class="spacer"></div>
-  </div>`;
+    <div class="fbar-presets">
+      ${QUICK_BUTTONS.map(b=>`<button type="button" data-action="filter-quick" data-quick="${b.key}" class="${quick===b.key?'active':''}">${esc(b.label)}</button>`).join('')}
+    </div>
+  </div>
+  <div class="fy-selection-note">Showing: <b>${esc(selectedFYLabel())}</b></div>`;
 }
 
 function resetAllTablePages(){Object.keys(S.dt).forEach(k=>{S.dt[k].page=1;});}
+
+// Recomputes S.filters.dateRange from the given preset key and marks it as the active
+// quick-range chip. presetRange() has no dedicated 'today' key, so it's handled directly.
+function applyQuickRange_(key){
+  S.filters.quickRange=key;
+  if(key==='today'){const iso=toISO(new Date());S.filters.dateRange={from:iso,to:iso};}
+  else S.filters.dateRange=presetRange(key);
+}
+
 document.addEventListener('click',e=>{
   const el=e.target.closest('[data-action]');
   if(el&&el.getAttribute('data-action')==='fy-open'){S.filters.fyOpen=!S.filters.fyOpen;render();return;}
@@ -140,6 +238,22 @@ document.addEventListener('click',e=>{
     if(pos===-1)selected.push(key);else selected.splice(pos,1);
     S.filters.fy=selected;S.filters.fyOpen=true;resetAllTablePages();render();return;
   }
+  if(el&&el.getAttribute('data-action')==='filter-quick'){
+    applyQuickRange_(el.getAttribute('data-quick'));render();return;
+  }
   if(S.filters&&S.filters.fyOpen&&!e.target.closest('.fy-multi')){S.filters.fyOpen=false;render();}
+});
+
+document.addEventListener('change',e=>{
+  const el=e.target,a=el.getAttribute('data-action');
+  if(a==='filter-company'){S.filters.company=el.value;render();return;}
+  if(a==='filter-branch'){S.filters.branch=el.value;render();return;}
+  if(a==='filter-salesperson'){S.filters.salesPerson=el.value;render();return;}
+  if(a==='filter-date-from'){
+    S.filters.dateRange=Object.assign({},S.filters.dateRange,{from:el.value});S.filters.quickRange='';render();return;
+  }
+  if(a==='filter-date-to'){
+    S.filters.dateRange=Object.assign({},S.filters.dateRange,{to:el.value});S.filters.quickRange='';render();return;
+  }
 });
 </script>
