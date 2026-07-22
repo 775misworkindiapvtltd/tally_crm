@@ -372,23 +372,27 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    5 * ~28px rows ≈ 174px); anything beyond row 5 is reachable via the scrollbar.
    Expense by Category rarely has more than 6 rows, so it gets a shorter box —
    Top Customers/Top Vendors get a taller one so they read as the primary tables. */
-.dt-table-wrap.compact.dashboard-report{height:174px;border:0;border-radius:0;box-shadow:none;overflow:hidden;}
-.dt-table-wrap.compact.dashboard-report .dt-scroll{max-height:174px;overflow-y:scroll;overflow-x:hidden;}
-.dt-table-wrap.compact.dashboard-report.dashboard-report-customers,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors{height:230px;}
-.dt-table-wrap.compact.dashboard-report.dashboard-report-customers .dt-scroll,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors .dt-scroll{max-height:230px;}
-.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses{height:150px;}
-.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses .dt-scroll{max-height:150px;}
+.dt-table-wrap.compact.dashboard-report{height:180px;border:0;border-radius:0;box-shadow:none;overflow:hidden;}
+.dt-table-wrap.compact.dashboard-report .dt-scroll{max-height:180px;overflow-y:scroll;overflow-x:hidden;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-customers,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors{height:236px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-customers .dt-scroll,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors .dt-scroll{max-height:236px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses{height:156px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses .dt-scroll{max-height:156px;}
 .dt-table-wrap.compact.dashboard-report table.dt{width:100%;table-layout:fixed;}
 /* Same light-blue header theme for all three dashboard mini reports (Top Customers,
    Top Vendors, Expense by Category) — no dark navy background. Header text/sort icon
    are centered (both horizontally within the column and vertically within the cell)
    to match the reference screenshot instead of the generic grid's left-aligned label. */
 .dt-table-wrap.compact.dashboard-report table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);vertical-align:middle;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .th-inner{padding:7px 9px;min-height:31px;justify-content:center;align-items:center;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .th-row{gap:4px;justify-content:center;width:100%;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8.5px;line-height:1.15;letter-spacing:.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent-dark);font-weight:700;text-align:center;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .sort-ic{font-size:7px;width:auto;color:var(--accent-dark);}
-.dt-table-wrap.compact.dashboard-report table.dt tbody td{padding:7px 9px;font-size:10.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;border-right:0;}
+/* Headers were getting visually clipped ("Outstanding (₹)"/"Overdue Days" cut off)
+   because the label was forced to one line with ellipsis at a very tight width.
+   Fix: let the label wrap onto two lines and grow the header row height to fit —
+   nothing is ever hidden now, at the cost of a couple extra px of header height. */
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-inner{padding:6px 6px;min-height:34px;justify-content:center;align-items:center;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-row{gap:3px;justify-content:center;width:100%;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8px;line-height:1.15;letter-spacing:.02em;white-space:normal;overflow:visible;text-overflow:unset;overflow-wrap:break-word;word-break:normal;color:var(--accent-dark);font-weight:700;text-align:center;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .sort-ic{font-size:7px;width:auto;color:var(--accent-dark);flex:none;}
+.dt-table-wrap.compact.dashboard-report table.dt tbody td{padding:6px 7px;font-size:10px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;border-right:0;}
 .dt-table-wrap.compact.dashboard-report table.dt tbody tr:nth-child(even){background:#FAFBFD;}
 .dt-table-wrap.compact.dashboard-report table.dt tbody tr:hover{background:var(--accent-tint2);}
 .dreport-name{display:flex;align-items:center;gap:7px;min-width:0;max-width:100%;overflow:hidden;color:var(--ink);font-weight:650;}
