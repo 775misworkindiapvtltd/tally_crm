@@ -27,54 +27,31 @@ function destroyChart(id){
 
 const CHART_PALETTE=['#2E6BF2','#16A34A','#F08A1D','#E23A3A','#7C5CFC','#0DA1A0','#4C5FE0','#B4862B'];
 
-function chartAxisINR(v){
-  const n=Number(v)||0,abs=Math.abs(n),sign=n<0?'-':'';
-  if(abs>=10000000)return sign+(abs/10000000).toFixed(abs%10000000?'1':'0')+'Cr';
-  if(abs>=100000)return sign+(abs/100000).toFixed(abs%100000?'1':'0')+'L';
-  return sign+fmtNum(abs);
-}
-
-function chartTooltipStyle(isDark,tickColor){
-  return {
-    backgroundColor:isDark?'#1B2338':'#FFFFFF',titleColor:isDark?'#E7EAF4':'#151A2C',bodyColor:isDark?'#D7DCEA':'#4B5570',
-    borderColor:isDark?'#2A3655':'#E7EAF2',borderWidth:1,cornerRadius:6,padding:9,boxWidth:7,boxHeight:7,boxPadding:5,
-    callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(Math.round(ctx.parsed.y)).replace(/\.00$/,'')}
-  };
-}
-
-function drawComboChart(canvasId,labels,barSets,lineSet,opts){
+function drawComboChart(canvasId,labels,barSets,lineSet){
   const el=document.getElementById(canvasId); if(!el) return;
   destroyChart(canvasId);
   const isDark=document.documentElement.classList.contains('dark');
   const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';
   const tickColor=isDark?'#A6AEC4':'#8992AA';
-  const overview=!!(opts&&opts.overview);
-  const lineAxis=lineSet&&lineSet.sameAxis?'y':'y1';
   const datasets=barSets.map((s,i)=>({
-    type:'bar', label:s.label, data:s.data, backgroundColor:s.color||CHART_PALETTE[i], borderRadius:4, maxBarThickness:overview?18:26, order:2
+    type:'bar', label:s.label, data:s.data, backgroundColor:s.color||CHART_PALETTE[i], borderRadius:4, maxBarThickness:26, order:2
   }));
   if(lineSet){
     datasets.push({type:'line',label:lineSet.label,data:lineSet.data,borderColor:lineSet.color||'#7C5CFC',backgroundColor:'transparent',
-      borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:lineSet.color||'#7C5CFC',yAxisID:lineAxis,order:1});
-  }
-  // Chart.js rejects an explicitly undefined scale. Build y1 only when a real
-  // secondary axis is required; the dashboard's Sales/Expense/Profit view uses one
-  // shared rupee axis, so it must not receive a `y1: undefined` configuration.
-  const scales={
-    x:{grid:{display:false},ticks:{color:tickColor,font:{size:overview?10:10.5}}},
-    y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:overview?9.5:10},callback:overview?chartAxisINR:v=>(v/100000).toFixed(1)+'L'}}
-  };
-  if(lineSet&&!lineSet.sameAxis){
-    scales.y1={position:'right',grid:{display:false},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}};
+      borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:lineSet.color||'#7C5CFC',yAxisID:'y1',order:1});
   }
   CHART_REGISTRY[canvasId]=new Chart(el.getContext('2d'),{
     data:{labels:labels,datasets:datasets},
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{legend:overview?{position:'top',align:'start',labels:{boxWidth:8,boxHeight:8,padding:14,font:{size:10},color:tickColor}}:{position:'bottom',labels:{boxWidth:9,boxHeight:9,font:{size:10.5},color:tickColor}},
-        tooltip:overview?chartTooltipStyle(isDark,tickColor):{callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(ctx.parsed.y)}}},
-      scales:scales
+      plugins:{legend:{position:'bottom',labels:{boxWidth:9,boxHeight:9,font:{size:10.5},color:tickColor}},
+        tooltip:{callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(ctx.parsed.y)}}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:tickColor,font:{size:10.5}}},
+        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}},
+        y1:lineSet?{position:'right',grid:{display:false},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}}:undefined
+      }
     }
   });
 }
@@ -97,11 +74,11 @@ function drawLineChart(canvasId,labels,lineSets){
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{legend:{position:'top',align:'start',labels:{boxWidth:8,boxHeight:8,padding:14,font:{size:10},color:tickColor}},
-        tooltip:chartTooltipStyle(isDark,tickColor)},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:9,boxHeight:9,font:{size:10.5},color:tickColor}},
+        tooltip:{callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(ctx.parsed.y)}}},
       scales:{
-        x:{grid:{display:false},ticks:{color:tickColor,font:{size:10}}},
-        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:9.5},callback:chartAxisINR}}
+        x:{grid:{display:false},ticks:{color:tickColor,font:{size:10.5}}},
+        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}}
       }
     }
   });
