@@ -369,16 +369,24 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    names with native hover titles, and a permanent vertical scroll gutter. */
 .dashboard-report-panel{min-width:0;}
 /* Height tuned to show ~5 data rows before the scrollbar kicks in (31px header +
-   5 * ~28px rows ≈ 174px); anything beyond row 5 is reachable via the scrollbar. */
+   5 * ~28px rows ≈ 174px); anything beyond row 5 is reachable via the scrollbar.
+   Expense by Category rarely has more than 6 rows, so it gets a shorter box —
+   Top Customers/Top Vendors get a taller one so they read as the primary tables. */
 .dt-table-wrap.compact.dashboard-report{height:174px;border:0;border-radius:0;box-shadow:none;overflow:hidden;}
 .dt-table-wrap.compact.dashboard-report .dt-scroll{max-height:174px;overflow-y:scroll;overflow-x:hidden;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-customers,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors{height:230px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-customers .dt-scroll,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors .dt-scroll{max-height:230px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses{height:150px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses .dt-scroll{max-height:150px;}
 .dt-table-wrap.compact.dashboard-report table.dt{width:100%;table-layout:fixed;}
 /* Same light-blue header theme for all three dashboard mini reports (Top Customers,
-   Top Vendors, Expense by Category) — no dark navy background. */
-.dt-table-wrap.compact.dashboard-report table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .th-inner{padding:7px 9px;min-height:31px;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .th-row{gap:4px;}
-.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8.5px;line-height:1.15;letter-spacing:.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent-dark);font-weight:700;}
+   Top Vendors, Expense by Category) — no dark navy background. Header text/sort icon
+   are centered (both horizontally within the column and vertically within the cell)
+   to match the reference screenshot instead of the generic grid's left-aligned label. */
+.dt-table-wrap.compact.dashboard-report table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);vertical-align:middle;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-inner{padding:7px 9px;min-height:31px;justify-content:center;align-items:center;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-row{gap:4px;justify-content:center;width:100%;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8.5px;line-height:1.15;letter-spacing:.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent-dark);font-weight:700;text-align:center;}
 .dt-table-wrap.compact.dashboard-report table.dt thead th .sort-ic{font-size:7px;width:auto;color:var(--accent-dark);}
 .dt-table-wrap.compact.dashboard-report table.dt tbody td{padding:7px 9px;font-size:10.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;border-right:0;}
 .dt-table-wrap.compact.dashboard-report table.dt tbody tr:nth-child(even){background:#FAFBFD;}

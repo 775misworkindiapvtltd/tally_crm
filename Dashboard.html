@@ -118,9 +118,14 @@ function renderDashboard(){
 
   // Sales Topline donut: break Total Sales down by the SALES sheet's column-N category
   // if categories are present; otherwise fall back to the documented 70/24/6 estimate.
+  // Same category list/order/colors are used by CHART_DEFS['dashboard'] below for the
+  // chSalesTopline donut itself, so the on-screen legend rows always line up 1:1 with
+  // each donut slice.
   const salesByCategory=topN(dataForFY('sales'),'category','amount',6);
   const useRealCategories=salesByCategory.length>0;
   const domesticSales=totalSales*0.7, exportSales=totalSales*0.24, otherIncome=totalSales*0.06; // fallback estimate, see README
+  const salesToplineRows=useRealCategories?salesByCategory:[{label:'Domestic Sales',value:domesticSales},{label:'Export Sales',value:exportSales},{label:'Other Income',value:otherIncome}];
+  const salesToplineColors=useRealCategories?CHART_PALETTE:['#2E6BF2','#16A34A','#F08A1D'];
 
   return `
     ${renderFilterBar()}
@@ -155,7 +160,7 @@ function renderDashboard(){
       </div>
     </div>
 
-    <div class="dash-row3">
+    <div class="dash-row3" style="grid-template-columns:1.25fr 1.25fr 1fr;">
       <div class="panel dashboard-report-panel">
         <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
         <div class="panel-body" style="padding:0;">${(()=>{
@@ -204,8 +209,11 @@ function renderDashboard(){
       </div>
       <div class="panel">
         <div class="panel-title">Sales Topline${useRealCategories?' by Category':''} — ${esc(fyLabel)}</div>
-        <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;">
+        <div class="panel-body donut-panel-body">
           <div class="chart-wrap donut"><canvas id="chSalesTopline" data-chart-fallback></canvas></div>
+          <div class="donut-legend">
+            ${salesToplineRows.map((c,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${salesToplineColors[i%salesToplineColors.length]};"></span><span class="dl-label" title="${esc(c.label)}">${esc(c.label)}</span><span class="dl-val">${fmtINR(c.value)}</span></div>`).join('')}
+          </div>
         </div>
         <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
       </div>
