@@ -419,6 +419,7 @@ function navigateTo(pageKey){
 function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
   const compact=!!def.compact; // compact grids: no pagination UI, just a scrollable box, sort still works
+  const noSno=!!def.noSno; // report-style mini tables (e.g. dashboard Top Customers/Vendors) hide the S.No column
   Object.entries(st.filters).forEach(([k,v])=>{if(!v)return;rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));});
   Object.entries(st.dateFilters||{}).forEach(([k,range])=>{
     if(!range||(!range.from&&!range.to))return;
@@ -454,7 +455,7 @@ function renderGrid(tableKey){
   const orderedCols=st.order.map(k=>def.cols.find(c=>c.key===k)).filter(Boolean);
   const visCols=orderedCols.filter(c=>!st.hidden.has(c.key));
 
-  const snoTh=`<th style="width:56px;min-width:56px;max-width:56px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
+  const snoTh=noSno?'':`<th style="width:56px;min-width:56px;max-width:56px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
   const hdr=snoTh+visCols.map(c=>{
     const w=st.widths[c.key]||c.width||150;const si2=st.sort===c.key?(st.dir===1?'▲':'▼'):'';const fo=st.filterOpen===c.key;
     let filterHtml='';
@@ -480,7 +481,7 @@ function renderGrid(tableKey){
     if(c.num) return fmtNum(v);
     return v;
   }
-  const bod=pageRows.length?pageRows.map((r,idx)=>`<tr>${(idx===0&&false)?'':''}<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;">${si+idx+1}</td>${visCols.map(c=>{const v=cellVal(r,c);const cls=c.num?'num':'';const content=c.render?c.render(r,v,si+idx):c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v);return`<td class="${cls}">${content}</td>`;}).join("")}</tr>`).join(""):`<tr><td colspan="${visCols.length+1}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
+  const bod=pageRows.length?pageRows.map((r,idx)=>`<tr>${noSno?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;">${si+idx+1}</td>`}${visCols.map(c=>{const v=cellVal(r,c);const cls=c.num?'num':'';const content=c.render?c.render(r,v,si+idx):c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v);return`<td class="${cls}">${content}</td>`;}).join("")}</tr>`).join(""):`<tr><td colspan="${visCols.length+(noSno?0:1)}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
   const rf=total===0?0:si+1;const rt=Math.min(si+ps,total);
 
   const mcards=pageRows.length?pageRows.map((r,idx)=>renderMobileCard(tableKey,r,si+idx+1)).join(''):`<div class="empty-state"><div class="big">No matching rows</div></div>`;
@@ -488,7 +489,9 @@ function renderGrid(tableKey){
   if(compact){
     // Compact mode (dashboard mini-tables): no pagination footer/toolbar, just a
     // fixed-height scrollable table. Sorting by clicking a header still works.
-    return `<div class="dt-table-wrap compact"><div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
+    // noSno report tables (Top Customers/Vendors, Expense by Category) get the extra
+    // "dt-report" class for tighter row height/font matching the reference screenshot.
+    return `<div class="dt-table-wrap compact${noSno?' report':''}"><div class="dt-scroll"><table class="dt${noSno?' dt-report':''}"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
   }
 
   return `

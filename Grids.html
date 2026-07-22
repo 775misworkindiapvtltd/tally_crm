@@ -52,16 +52,42 @@ const CREDIT_NOTE_COLS=[
   {key:'partyName',label:'Customer',width:220},{key:'date',label:'Date',width:120,date:true},{key:'voucherNo',label:'Voucher No',width:140},
   {key:'particular',label:'Particulars',width:280},{key:'amount',label:'Amount',width:150,num:true}
 ];
+// Reused by both Top Customers by Outstanding and Top Vendors by Payable so their
+// column set/order/rendering stays identical, matching the reference screenshot:
+// Name | Outstanding | Overdue Days | Last Receipt/Payment | Status | Action (eye icon).
+function topPartyStatusCol(dateLabel){
+  return {key:'status',label:'Status',width:95,render:r=>{
+    const st=statusForDueDate(r.dueDate,r.overdueDays);
+    return `<span class="status-badge ${st.cls}">${esc(st.label)}</span>`;
+  }};
+}
 const TOP_CUSTOMERS_COLS=[
-  {key:'label',label:'Party Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
-  {key:'overdueDays',label:'Overdue Days',width:130,num:true}
+  {key:'label',label:'Customer Name',width:200},
+  {key:'value',label:'Outstanding',width:120,num:true},
+  {key:'overdueDays',label:'Overdue Days',width:110,num:true,render:r=>{const d=Number(r.overdueDays)||0;return `<span style="color:${d>0?'var(--danger)':'var(--success)'};font-weight:700;">${fmtNum(d)}</span>`;}},
+  {key:'dueDate',label:'Last Receipt',width:120,date:true},
+  topPartyStatusCol(),
+  {key:'action',label:'Action',width:60,render:r=>`<span class="rpt-eye" title="View ${esc(r.label)}" data-action="goto" data-page="customerList">👁</span>`}
 ];
 const TOP_VENDORS_COLS=[
-  {key:'label',label:'Party Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
-  {key:'overdueDays',label:'Overdue Days',width:130,num:true}
+  {key:'label',label:'Vendor Name',width:200},
+  {key:'value',label:'Outstanding',width:120,num:true},
+  {key:'overdueDays',label:'Overdue Days',width:110,num:true,render:r=>{const d=Number(r.overdueDays)||0;return `<span style="color:${d>0?'var(--danger)':'var(--success)'};font-weight:700;">${fmtNum(d)}</span>`;}},
+  {key:'dueDate',label:'Last Payment',width:120,date:true},
+  topPartyStatusCol(),
+  {key:'action',label:'Action',width:60,render:r=>`<span class="rpt-eye" title="View ${esc(r.label)}" data-action="goto" data-page="vendorList">👁</span>`}
 ];
+// Used by the Expenses Dashboard page's "Expense by Sub-Category" side panel —
+// unchanged, unrelated to the main Dashboard's "Expense by Category" mini report below.
 const SUBCATEGORY_COLS=[
   {key:'label',label:'Sub Category',width:220},{key:'value',label:'Amount',width:160,num:true},{key:'pct',label:'% of Total',width:130}
+];
+// Main-Dashboard "Expense by Category" mini report columns — matches the reference
+// screenshot: Category | Amount (₹) | % of Total (with an inline colored bar).
+const EXPENSE_CAT_DASH_COLS=[
+  {key:'label',label:'Category',width:190},
+  {key:'value',label:'Amount (₹)',width:130,num:true},
+  {key:'pctBar',label:'% of Total',width:170,render:r=>`<div class="rpt-pctbar-wrap"><div class="rpt-pctbar"><div class="rpt-pctbar-fill" style="width:${Math.min(100,r.pctNum||0)}%;background:${r.color||'var(--accent)'};"></div></div><span class="rpt-pctbar-txt">${esc(r.pct)}</span></div>`}
 ];
 
 function firstUseful(current,next){return current||next||'';}
@@ -100,8 +126,9 @@ const GRID_DEFS={
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},
-  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true},
-  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true},
-  expenseSubCategory:{cols:SUBCATEGORY_COLS,data:()=>S.expenseSubCategoryRows||[]}
+  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,noSno:true},
+  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,noSno:true},
+  expenseSubCategory:{cols:SUBCATEGORY_COLS,data:()=>S.expenseSubCategoryRows||[]},
+  expenseCategoryDash:{cols:EXPENSE_CAT_DASH_COLS,data:()=>S.dashExpenseByCategory||[],compact:true,noSno:true}
 };
 </script>

@@ -111,13 +111,16 @@ function renderDashboard(){
   // content to scroll through — min 10 rows visible at once via the fixed-height
   // compact box, sortable by clicking any of the 3 headers (default: Outstanding desc).
   const recvRowsAll=dataForFY('receivables'), payRowsAll=dataForFY('payables');
+  // dueDate here doubles as the "Last Receipt"/"Last Payment" column in the mini
+  // report below (taken from that party's most-overdue/most-recent bill) — same
+  // approximation the app has always used, unchanged calculation logic.
   const topCustomers=topN(recvRowsAll,'partyName','pendingAmount',9999).map(t=>{
     const row=recvRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
-    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0,dueDate:row?row.dueDate:''});
   });
   const topVendors=topN(payRowsAll,'partyName','closingBalance',9999).map(t=>{
     const row=payRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
-    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0,dueDate:row?row.dueDate:''});
   });
   const expenseByCategory=topN(dataForFY('expense'),'subGroup','amount',6);
   const expenseTotal=sumBy(dataForFY('expense'),'amount');
@@ -174,35 +177,29 @@ function renderDashboard(){
     </div>
 
     <div class="dash-row3">
-      <div class="panel">
-        <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
-        <div class="panel-body" style="padding:0;">${(()=>{
+      <div class="rpt-panel">
+        <div class="rpt-panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
+        <div class="rpt-panel-body">${(()=>{
           if(S.syncing&&!recvRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading receivables…</div></div>`;
           S.dashTopCustomers=topCustomers;return renderGrid('topCustomersDash');
         })()}</div>
-        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
+        <div class="rpt-panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
-      <div class="panel">
-        <div class="panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
-        <div class="panel-body" style="padding:0;">${(()=>{
+      <div class="rpt-panel">
+        <div class="rpt-panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
+        <div class="rpt-panel-body">${(()=>{
           if(S.syncing&&!payRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading payables…</div></div>`;
           S.dashTopVendors=topVendors;return renderGrid('topVendorsDash');
         })()}</div>
-        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
+        <div class="rpt-panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
       </div>
-      <div class="panel">
-        <div class="panel-title">Expense by Category — ${esc(fyLabel)} <a data-action="goto" data-page="expensesDashboard">View All</a></div>
-        <div class="panel-body">
-          ${expenseByCategory.length?expenseByCategory.map((c,i)=>`
-            <div class="mini-cat-row">
-              <span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span>
-              <span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span>
-              <div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxExpCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div>
-              <span class="mc-amt">${fmtINR(c.value)}</span>
-              <span class="mc-pct">${(c.value/expenseTotalBase*100).toFixed(1)}%</span>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No expenses</div></div>`}
-          <div class="mini-total-row"><span>Total</span><span>${fmtINR(expenseTotal)}</span></div>
-        </div>
+      <div class="rpt-panel">
+        <div class="rpt-panel-title">Expense by Category — ${esc(fyLabel)} <a data-action="goto" data-page="expensesDashboard">View All</a></div>
+        <div class="rpt-panel-body">${(()=>{
+          S.dashExpenseByCategory=expenseByCategory.map((c,i)=>({label:c.label,value:c.value,pctNum:c.value/expenseTotalBase*100,pct:(c.value/expenseTotalBase*100).toFixed(1)+'%',color:CHART_PALETTE[i%CHART_PALETTE.length]}));
+          return renderGrid('expenseCategoryDash');
+        })()}</div>
+        <div class="rpt-panel-foot"><span>Total</span><span>${fmtINR(expenseTotal)}</span></div>
       </div>
     </div>
 
