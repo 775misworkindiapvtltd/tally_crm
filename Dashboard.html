@@ -32,64 +32,6 @@ function cashInHandBank(){
   return sumBy(dataForFY('receipt'),'debitLedgerAmount')-sumBy(dataForFY('payment'),'creditLedgerAmount');
 }
 
-// Cash in Hand / Bank AS OF a given date (cumulative receipts minus payments up to and
-// including that date) — used only for the "vs previous period" % comparison on that one
-// card, since Cash in Hand/Bank is a running balance, not a period flow like Sales/Expenses.
-function cashInHandBankAsOf_(toISOStr){
-  const receipts=(S.receipt||[]).filter(r=>{const t=parseDT(r.date);return t!==null&&t<=fromISO(toISOStr).getTime()+86399999;});
-  const payments=(S.payment||[]).filter(r=>{const t=parseDT(r.date);return t!==null&&t<=fromISO(toISOStr).getTime()+86399999;});
-  return sumBy(applyOptionalFieldFilters_(receipts),'debitLedgerAmount')-sumBy(applyOptionalFieldFilters_(payments),'creditLedgerAmount');
-}
-
-// Every KPI card's "vs previous period" % — driven by the header filter bar's quick-range
-// (Today/7D/15D/30D/MTD) or a custom Date Range. Deliberately independent of the Financial
-// Year selector (see rowsInDateRange_ in Filters.html) so the comparison is always a
-// like-for-like calendar period regardless of which FY is currently selected. This is a
-// presentation-only addition — none of the existing card VALUES (totalSales, cur.expense,
-// totalRecv, totalPay, cur.collections, cur.payments, cur.netProfit, cashPos) are touched.
-function dashboardKpiComparisons_(){
-  const f=S.filters||{};
-  const range=f.dateRange||presetRange('MTD');
-  const prev=comparisonRange(range.from,range.to);
-  const salesCur=sumBy(rowsInDateRange_('sales',range.from,range.to),'amount');
-  const salesPrev=sumBy(rowsInDateRange_('sales',prev.from,prev.to),'amount');
-  const expCur=sumBy(rowsInDateRange_('expense',range.from,range.to),'amount');
-  const expPrev=sumBy(rowsInDateRange_('expense',prev.from,prev.to),'amount');
-  const collCur=sumBy(rowsInDateRange_('receipt',range.from,range.to),'debitLedgerAmount');
-  const collPrev=sumBy(rowsInDateRange_('receipt',prev.from,prev.to),'debitLedgerAmount');
-  const payCur=sumBy(rowsInDateRange_('payment',range.from,range.to),'creditLedgerAmount');
-  const payPrev=sumBy(rowsInDateRange_('payment',prev.from,prev.to),'creditLedgerAmount');
-  const salesVoucherCur=sumBy((S.balanceVouchers||[]).filter(v=>/sale/i.test(v.voucherType||'')&&inRange(v.date,range.from,range.to)),'debit');
-  const salesVoucherPrev=sumBy((S.balanceVouchers||[]).filter(v=>/sale/i.test(v.voucherType||'')&&inRange(v.date,prev.from,prev.to)),'debit');
-  const purchaseCur=sumBy((S.balanceVouchers||[]).filter(v=>/purchase/i.test(v.voucherType||'')&&inRange(v.date,range.from,range.to)),'debit');
-  const purchasePrev=sumBy((S.balanceVouchers||[]).filter(v=>/purchase/i.test(v.voucherType||'')&&inRange(v.date,prev.from,prev.to)),'debit');
-  const netProfitCur=salesVoucherCur-expCur-purchaseCur;
-  const netProfitPrev=salesVoucherPrev-expPrev-purchasePrev;
-  const cashCur=cashInHandBankAsOf_(range.to);
-  const cashPrev=cashInHandBankAsOf_(prev.to);
-  // Receivables/Payables outstanding totals are point-in-time balances (not period flows),
-  // so their comparison is "balance as of range end" vs "balance as of the prior period's
-  // end" — same pattern as Cash in Hand/Bank above, using the party ledgers' due date as
-  // the point-in-time cutoff.
-  const recvAsOf=to=>sumBy(applyOptionalFieldFilters_((S.receivables||[]).filter(r=>{const t=parseDT(r.billDate);return t===null||t<=fromISO(to).getTime()+86399999;})),'pendingAmount');
-  const payAsOf=to=>sumBy(applyOptionalFieldFilters_((S.payables||[]).filter(r=>{const t=parseDT(r.billDate);return t===null||t<=fromISO(to).getTime()+86399999;})),'closingBalance');
-  // "vs Apr 2025" style label for MTD (matches the reference screenshot exactly, comparing
-  // month name to month name); other quick-ranges/custom date range show "vs <prior span>"
-  // since a bare month name would be ambiguous for a 7/15/30-day or custom window.
-  const MONTH_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const prevEnd=fromISO(prev.to);
-  const label=(f.quickRange==='MTD')?('vs '+MONTH_NAMES[prevEnd.getMonth()]+' '+prevEnd.getFullYear())
-    :('vs '+fmtDDMMM(fromISO(prev.from))+' - '+fmtDDMMM(prevEnd));
-  return {
-    quickRange:f.quickRange||'MTD',
-    label:label,
-    sales:pctChange(salesCur,salesPrev), expense:pctChange(expCur,expPrev),
-    collections:pctChange(collCur,collPrev), payments:pctChange(payCur,payPrev),
-    netProfit:pctChange(netProfitCur,netProfitPrev), cash:pctChange(cashCur,cashPrev),
-    recv:pctChange(recvAsOf(range.to),recvAsOf(prev.to)), pay:pctChange(payAsOf(range.to),payAsOf(prev.to))
-  };
-}
-
 function topN(arr,groupKey,amtKey,n){
   const map={};
   arr.forEach(r=>{ const k=r[groupKey]||'Unknown'; map[k]=(map[k]||0)+(Number(r[amtKey])||0); });
@@ -104,20 +46,6 @@ function ageingBuckets(rows,amtKey){
   });
   return buckets;
 }
-
-// Calendar-day difference between a date value and TODAY (both taken at midnight,
-// so time-of-day never matters). A due date of today correctly returns 0, not a
-// small negative number — this is what makes "Upcoming Due This Week" include today.
-function daysUntil(dateVal){
-  const t=parseDT(dateVal); if(t===null) return null;
-  const now=new Date();
-  const todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
-  return Math.round((t-todayStart)/86400000);
-}
-function mrDateFull_(v){ const t=parseDT(v); return t===null?(v||'—'):fmtDDMMMYYYY(new Date(t)); } // "31 May 2025"
-function mrDateShort_(v){ const t=parseDT(v); return t===null?(v||'—'):fmtDDMMM(new Date(t)); } // "01 Jun"
-const MINI_IC_ARROW_DOWN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>';
-const MINI_IC_CALENDAR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
 function statusForDueDate(dueDateVal,overdueDays){
   const d=Number(overdueDays)||0;
@@ -141,32 +69,23 @@ function renderDashboard(){
   if(!custSt.sort){custSt.sort='value';custSt.dir=-1;}
   if(!vendSt.sort){vendSt.sort='value';vendSt.dir=-1;}
 
-  // "vs previous period" % comparison, driven by the Date Range / quick-range (Today,
-  // 7D, 15D, 30D, MTD) filter selected in the header filter bar. Card VALUES below are
-  // completely unchanged — only this comparison figure is new.
-  const cmp=dashboardKpiComparisons_();
+  // "vs previous period" comparison chips removed along with the Date Range/Compare UI
+  // (there is no period to compare against anymore) — cards now show plain totals.
   const kpis=[
-    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard',pct:cmp.sales,flow:true},
-    {label:'Total Expenses',value:cur.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard',pct:cmp.expense,flow:true},
-    {label:'Outstanding Receivables',value:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard',pct:cmp.recv,flow:false},
-    {label:'Outstanding Payables',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard',pct:cmp.pay,flow:false},
-    {label:'Collections',value:cur.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis',pct:cmp.collections,flow:true},
-    {label:'Payments',value:cur.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard',pct:cmp.payments,flow:true},
-    {label:'Net Profit',value:cur.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss',pct:cmp.netProfit,flow:true},
-    {label:'Cash in Hand / Bank',value:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow',pct:cmp.cash,flow:false},
+    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard'},
+    {label:'Total Expenses',value:cur.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard'},
+    {label:'Total Receivables',value:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard'},
+    {label:'Outstanding Payables',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard'},
+    {label:'Collections',value:cur.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
+    {label:'Payments',value:cur.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard'},
+    {label:'Net Profit',value:cur.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss'},
+    {label:'Cash in Hand / Bank',value:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow'},
   ];
 
   const kpiCards=kpis.map(k=>{
-    const pctVal=Number.isFinite(k.pct)?k.pct:0;
-    const up=pctVal>=0;
-    // Flow metrics (Sales/Expenses/Collections/Payments/Net Profit) show the active
-    // quick-range in the label, e.g. "Total Sales (MTD)" — balance metrics (Outstanding
-    // Receivables/Payables, Cash in Hand/Bank) do not, matching the reference screenshot.
-    const suffix=(k.flow&&cmp.quickRange)?` (${esc(cmp.quickRange)})`:'';
-    return `<div class="card kpi-card" data-action="goto" data-page="${k.page}">
-      <div class="card-top"><div class="card-icon ${k.cls}">${NAV_ICONS[k.icon]}</div><span class="card-label">${esc(k.label)}${suffix}</span></div>
+    return `<div class="card" data-action="goto" data-page="${k.page}">
+      <div class="card-top"><span class="card-label">${esc(k.label)}</span><div class="card-icon ${k.cls}">${NAV_ICONS[k.icon]}</div></div>
       <div class="card-value">${fmtINR(k.value)}</div>
-      <div class="card-sub"><span class="chip ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(pctVal).toFixed(2)}%</span><span class="cmp-label">${esc(cmp.label)}</span></div>
     </div>`;
   }).join('');
 
@@ -174,20 +93,17 @@ function renderDashboard(){
   const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
   const ageColors=['#2E6BF2','#16A34A','#F08A1D','#E23A3A'];
 
-  // Keep all party aggregates in the dashboard state so sorting and the full reports
-  // remain data-complete. The mini-report grid applies its own presentation-only row
-  // limit to match the fixed no-scroll dashboard layout.
+  // All parties (not just a top-N slice) so the scroll box on the dashboard has real
+  // content to scroll through — min 10 rows visible at once via the fixed-height
+  // compact box, sortable by clicking any of the 3 headers (default: Outstanding desc).
   const recvRowsAll=dataForFY('receivables'), payRowsAll=dataForFY('payables');
-  // dueDate here doubles as the "Last Receipt"/"Last Payment" column in the mini
-  // report below (taken from that party's most-overdue/most-recent bill) — same
-  // approximation the app has always used, unchanged calculation logic.
   const topCustomers=topN(recvRowsAll,'partyName','pendingAmount',9999).map(t=>{
     const row=recvRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
-    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0,dueDate:row?row.dueDate:''});
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
   });
   const topVendors=topN(payRowsAll,'partyName','closingBalance',9999).map(t=>{
     const row=payRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
-    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0,dueDate:row?row.dueDate:''});
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
   });
   const expenseByCategory=topN(dataForFY('expense'),'subGroup','amount',6);
   const expenseTotal=sumBy(dataForFY('expense'),'amount');
@@ -196,11 +112,9 @@ function renderDashboard(){
 
   const recentReceipts=dataForFY('receipt').slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
 
-  // Due today through the next 7 days — daysUntil() compares calendar days (not
-  // exact milliseconds), so a bill due TODAY always returns 0 and is correctly
-  // included here (previously it could be excluded depending on the time of day).
   const dueThisWeek=dataForFY('receivables').filter(r=>{
-    const days=daysUntil(r.dueDate); if(days===null) return false;
+    const t=parseDT(r.dueDate); if(t===null) return false;
+    const days=Math.round((t-Date.now())/86400000);
     return days>=0 && days<=7;
   }).sort((a,b)=>(parseDT(a.dueDate)||0)-(parseDT(b.dueDate)||0)).slice(0,5);
 
@@ -215,7 +129,7 @@ function renderDashboard(){
 
     <div class="kpi-strip">${kpiCards}</div>
 
-    <div class="dash-row3 dashboard-ageing-row">
+    <div class="dash-row3" style="grid-template-columns:1.4fr 1fr 1fr;">
       <div class="panel">
         <div class="panel-title">Sales vs Expenses Trend <span style="font-size:10px;color:var(--muted);font-weight:600;">${esc(fyLabel)}</span></div>
         <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesTrend" data-chart-fallback></canvas></div></div>
@@ -244,59 +158,55 @@ function renderDashboard(){
     </div>
 
     <div class="dash-row3">
-      <div class="rpt-panel rpt-panel--fixed">
-        <div class="rpt-panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
-        <div class="rpt-panel-body">${(()=>{
+      <div class="panel">
+        <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
+        <div class="panel-body" style="padding:0;">${(()=>{
           if(S.syncing&&!recvRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading receivables…</div></div>`;
           S.dashTopCustomers=topCustomers;return renderGrid('topCustomersDash');
         })()}</div>
-        <div class="rpt-panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
-      <div class="rpt-panel rpt-panel--fixed">
-        <div class="rpt-panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
-        <div class="rpt-panel-body">${(()=>{
+      <div class="panel">
+        <div class="panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
+        <div class="panel-body" style="padding:0;">${(()=>{
           if(S.syncing&&!payRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading payables…</div></div>`;
           S.dashTopVendors=topVendors;return renderGrid('topVendorsDash');
         })()}</div>
-        <div class="rpt-panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
       </div>
-      <div class="rpt-panel rpt-panel--fixed">
-        <div class="rpt-panel-title">Expense by Category — ${esc(fyLabel)} <a data-action="goto" data-page="expensesDashboard">View All</a></div>
-        <div class="rpt-panel-body">${(()=>{
-          S.dashExpenseByCategory=expenseByCategory.map((c,i)=>({label:c.label,value:c.value,pctNum:c.value/expenseTotalBase*100,pct:(c.value/expenseTotalBase*100).toFixed(1)+'%',color:CHART_PALETTE[i%CHART_PALETTE.length]}));
-          return renderGrid('expenseCategoryDash');
-        })()}</div>
-        <div class="rpt-panel-foot"><span>Total</span><span>${fmtINR(expenseTotal)}</span></div>
+      <div class="panel">
+        <div class="panel-title">Expense by Category — ${esc(fyLabel)} <a data-action="goto" data-page="expensesDashboard">View All</a></div>
+        <div class="panel-body">
+          ${expenseByCategory.length?expenseByCategory.map((c,i)=>`
+            <div class="mini-cat-row">
+              <span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span>
+              <span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span>
+              <div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxExpCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div>
+              <span class="mc-amt">${fmtINR(c.value)}</span>
+              <span class="mc-pct">${(c.value/expenseTotalBase*100).toFixed(1)}%</span>
+            </div>`).join(''):`<div class="empty-state"><div class="big">No expenses</div></div>`}
+          <div class="mini-total-row"><span>Total</span><span>${fmtINR(expenseTotal)}</span></div>
+        </div>
       </div>
     </div>
 
     <div class="dash-row4">
       <div class="panel">
         <div class="panel-title">Recent Receipts <a data-action="goto" data-page="receipt">View All</a></div>
-        <div class="panel-body mr-list-body">
+        <div class="panel-body" style="padding:6px 16px;">
           ${recentReceipts.length?recentReceipts.map(r=>`
-            <div class="mr-row">
-              <span class="mr-ic mr-ic-recv">${MINI_IC_ARROW_DOWN}</span>
-              <span class="mr-date">${esc(mrDateShort_(r.date))}</span>
-              <span class="mr-name" title="${esc(r.bankPartyName||r.creditLedgerName)}">${esc(r.bankPartyName||r.creditLedgerName)}</span>
-              <span class="mr-amt">${fmtINR(r.debitLedgerAmount||r.creditLedgerAmount)}</span>
-              <span class="mr-badge">${esc(r.transactionType||'—')}</span>
+            <div class="mini-row">
+              <div class="lft"><div><div class="nm">${esc(r.bankPartyName||r.creditLedgerName)}</div><div class="sub">${esc(r.date)}</div></div></div>
+              <div style="display:flex;align-items:center;gap:8px;"><span class="mode-badge">${esc(r.transactionType||'—')}</span><span class="amt recv">${fmtINR(r.debitLedgerAmount||r.creditLedgerAmount)}</span></div>
             </div>`).join(''):`<div class="empty-state"><div class="big">No receipts yet</div></div>`}
         </div>
       </div>
       <div class="panel">
-        <div class="panel-title">Upcoming Due This Week <span class="pt-info" title="Includes bills due today through the next 7 days">ⓘ</span><a data-action="goto" data-page="followUpList">View All</a></div>
-        <div class="panel-body mr-list-body">
+        <div class="panel-title">Upcoming Due This Week <a data-action="goto" data-page="followUpList">View All</a></div>
+        <div class="panel-body" style="padding:6px 16px;">
           ${dueThisWeek.length?dueThisWeek.map(r=>{
-            const days=daysUntil(r.dueDate);
-            const daysLabel=days===0?'Today':days+' Days';
-            return `<div class="mr-row">
-              <span class="mr-ic mr-ic-due">${MINI_IC_CALENDAR}</span>
-              <span class="mr-date">${esc(mrDateShort_(r.dueDate))}</span>
-              <span class="mr-name" title="${esc(r.partyName)}">${esc(r.partyName)}</span>
-              <span class="mr-amt">${fmtINR(r.pendingAmount)}</span>
-              <span class="mr-days">${esc(daysLabel)}</span>
-            </div>`;
+            const t=parseDT(r.dueDate);const days=t===null?'':Math.round((t-Date.now())/86400000)+' Days';
+            return `<div class="mini-row"><div class="lft"><div><div class="nm">${esc(r.partyName)}</div><div class="sub">${esc(r.dueDate)}</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span class="amt">${fmtINR(r.pendingAmount)}</span><span class="mode-badge">${days}</span></div></div>`;
           }).join(''):`<div class="empty-state"><div class="big">Nothing due 🎉</div></div>`}
         </div>
       </div>
@@ -329,9 +239,7 @@ function renderDashboard(){
 registerPage('dashboard',renderDashboard);
 
 CHART_DEFS['dashboard']=function(){
-  // The trend is intentionally limited to the most recent financial year's 12 months.
-  // This keeps the line readable even when the user selects multiple financial years.
-  const months=selectedFYMonths().slice(-12);
+  const months=selectedFYMonths();
   const salesRows=dataForFY('sales');
   const expenseTrendRows=dataForFY('expenseTrend');
   const salesTrendSeries=months.map(m=>sumBy(rowsInCustomRange(salesRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
