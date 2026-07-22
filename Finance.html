@@ -27,6 +27,13 @@ function renderSalesDashboard(){
     </div>`;
 }
 registerPage('salesDashboard',renderSalesDashboard);
+
+// One row per unique Invoice No from the SALES sheet (see buildSalesReport() in
+// Grids.html for the grouping/aggregation logic). Plain renderGrid() call — same as
+// customerList/vendorList — so hide/unhide columns, resize, per-column filter, and
+// sort all come for free from the generic (non-compact) grid engine.
+function renderSalesReport(){return renderGrid('salesReport');}
+registerPage('salesReport',renderSalesReport);
 CHART_DEFS['salesDashboard']=function(){
   const months=selectedFYMonths();
   const salesRows=voucherSales_();

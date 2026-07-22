@@ -278,6 +278,10 @@ function mapSalesRows_(rows, headerRow) {
   var contactIdx = findColIndexByHeaderContains_(headerRow, ['CONTACT PERSON NAME', 'CONTACT PERSON']);
   var phoneIdx = findColIndexByHeaderContains_(headerRow, ['PHONE', 'MOBILE', 'CONTACT NO']);
   var emailIdx = findColIndexByHeaderContains_(headerRow, ['EMAIL', 'E-MAIL']);
+  // Used by the Sales Report page (grouped by unique Invoice No, per-line descriptions
+  // combined for a shared invoice). Same tolerant header-text search as the other
+  // customer-list fields above, so hidden/reordered columns don't break it.
+  var descriptionIdx = findColIndexByHeaderContains_(headerRow, ['DESCRIPTION', 'PARTICULAR', 'ITEM DESCRIPTION', 'ITEM NAME', 'PRODUCT']);
 
   return rows.map(function (row) {
     return {
@@ -291,6 +295,7 @@ function mapSalesRows_(rows, headerRow) {
       contactPerson: contactIdx === -1 ? '' : fmtValue_(row[contactIdx]),
       phone: phoneIdx === -1 ? '' : fmtValue_(row[phoneIdx]),
       email: emailIdx === -1 ? '' : fmtValue_(row[emailIdx]),
+      description: descriptionIdx === -1 ? '' : fmtValue_(row[descriptionIdx]),
       amount: numOrZero_(row[amountIdx]),
       category: fmtValue_(row[categoryIdx])
     };

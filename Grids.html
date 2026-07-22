@@ -69,6 +69,17 @@ const EXPENSE_CATEGORY_DASH_COLS=[
 const SUBCATEGORY_COLS=[
   {key:'label',label:'Sub Category',width:220},{key:'value',label:'Amount',width:160,num:true},{key:'pct',label:'% of Total',width:130}
 ];
+// Sales Report — one row per unique Invoice No, grouped from the SALES sheet. Uses the
+// standard (non-compact) full grid so column hide/unhide, resize, per-column filter,
+// and sort all work exactly like every other data grid in the app.
+const SALES_REPORT_COLS=[
+  {key:'invoiceNo',label:'Invoice No',width:140},{key:'invoiceTo',label:'Invoice To',width:200},
+  {key:'address',label:'Address',width:260},{key:'state',label:'State',width:110},
+  {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
+  {key:'phone',label:'Phone',width:150},{key:'email',label:'Email',width:210},
+  {key:'description',label:'Description',width:260},{key:'amount',label:'Total Price',width:140,num:true},
+  {key:'category',label:'Category',width:220}
+];
 
 function firstUseful(current,next){return current||next||'';}
 function buildCustomerList(){
@@ -84,6 +95,38 @@ function buildCustomerList(){
     c.totalAmount+=Number(r.amount)||0;
   });
   return Object.values(byCustomer).map(c=>({invoiceTo:c.invoiceTo,address:c.address,state:c.state,gstNo:c.gstNo,contactPerson:c.contactPerson,phone:c.phone,email:c.email,totalInvoices:c.invoiceNos.size||c.rowCount,totalAmount:c.totalAmount})).sort((a,b)=>a.invoiceTo.localeCompare(b.invoiceTo));
+}
+// Groups SALES rows by unique Invoice No. Party/contact fields (Invoice To, Address,
+// State, GST No., Contact Person, Phone, Email) are taken once per invoice via
+// firstUseful() — they're the same across every line of one invoice. Description and
+// Category are concatenated (each distinct value joined with " & ") so two line items
+// on the same invoice show up as "Pansari Mobile App & PHP Development" etc. Total
+// Price is the SUM of every line's amount for that invoice, per user instruction.
+function joinUnique_(list,sep){
+  const seen=new Set(),out=[];
+  list.forEach(v=>{const t=String(v||'').trim();if(!t)return;const k=t.toLowerCase();if(seen.has(k))return;seen.add(k);out.push(t);});
+  return out.join(sep);
+}
+function buildSalesReport(){
+  const byInvoice={};
+  dataForFY('sales').forEach(r=>{
+    const invoiceNo=String(r.invoiceNo||'').trim();if(!invoiceNo)return;
+    const key=invoiceNo.toLowerCase();
+    if(!byInvoice[key])byInvoice[key]={invoiceNo,invoiceTo:'',address:'',state:'',gstNo:'',contactPerson:'',phone:'',email:'',descriptions:[],categories:[],amount:0};
+    const g=byInvoice[key];
+    g.invoiceTo=firstUseful(g.invoiceTo,r.invoiceTo);g.address=firstUseful(g.address,r.address);g.state=firstUseful(g.state,r.state);
+    g.gstNo=firstUseful(g.gstNo,r.gstNo);g.contactPerson=firstUseful(g.contactPerson,r.contactPerson);
+    g.phone=firstUseful(g.phone,r.phone);g.email=firstUseful(g.email,r.email);
+    if(r.description)g.descriptions.push(r.description);
+    if(r.category)g.categories.push(r.category);
+    g.amount+=Number(r.amount)||0;
+  });
+  return Object.values(byInvoice).map(g=>({
+    invoiceNo:g.invoiceNo,invoiceTo:g.invoiceTo,address:g.address,state:g.state,gstNo:g.gstNo,
+    contactPerson:g.contactPerson,phone:g.phone,email:g.email,
+    description:joinUnique_(g.descriptions,' & '),category:joinUnique_(g.categories,' & '),
+    amount:g.amount
+  })).sort((a,b)=>a.invoiceNo.localeCompare(b.invoiceNo));
 }
 function buildVendorList(){
   const byParty={};
@@ -103,6 +146,7 @@ const GRID_DEFS={
   expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
   receipt:{cols:RECEIPT_COLS,data:()=>dataForFY('receipt')},payment:{cols:RECEIPT_COLS,data:()=>dataForFY('payment')},
   customerList:{cols:CUSTOMER_COLS,data:buildCustomerList},vendorList:{cols:VENDOR_COLS,data:buildVendorList},
+  salesReport:{cols:SALES_REPORT_COLS,data:buildSalesReport},
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},
