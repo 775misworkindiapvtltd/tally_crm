@@ -57,6 +57,16 @@ function drawComboChart(canvasId,labels,barSets,lineSet,opts){
     datasets.push({type:'line',label:lineSet.label,data:lineSet.data,borderColor:lineSet.color||'#7C5CFC',backgroundColor:'transparent',
       borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:lineSet.color||'#7C5CFC',yAxisID:lineAxis,order:1});
   }
+  // Chart.js rejects an explicitly undefined scale. Build y1 only when a real
+  // secondary axis is required; the dashboard's Sales/Expense/Profit view uses one
+  // shared rupee axis, so it must not receive a `y1: undefined` configuration.
+  const scales={
+    x:{grid:{display:false},ticks:{color:tickColor,font:{size:overview?10:10.5}}},
+    y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:overview?9.5:10},callback:overview?chartAxisINR:v=>(v/100000).toFixed(1)+'L'}}
+  };
+  if(lineSet&&!lineSet.sameAxis){
+    scales.y1={position:'right',grid:{display:false},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}};
+  }
   CHART_REGISTRY[canvasId]=new Chart(el.getContext('2d'),{
     data:{labels:labels,datasets:datasets},
     options:{
@@ -64,11 +74,7 @@ function drawComboChart(canvasId,labels,barSets,lineSet,opts){
       interaction:{mode:'index',intersect:false},
       plugins:{legend:overview?{position:'top',align:'start',labels:{boxWidth:8,boxHeight:8,padding:14,font:{size:10},color:tickColor}}:{position:'bottom',labels:{boxWidth:9,boxHeight:9,font:{size:10.5},color:tickColor}},
         tooltip:overview?chartTooltipStyle(isDark,tickColor):{callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(ctx.parsed.y)}}},
-      scales:{
-        x:{grid:{display:false},ticks:{color:tickColor,font:{size:overview?10:10.5}}},
-        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:overview?9.5:10},callback:overview?chartAxisINR:v=>(v/100000).toFixed(1)+'L'}},
-        y1:lineSet&&!lineSet.sameAxis?{position:'right',grid:{display:false},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}}:undefined
-      }
+      scales:scales
     }
   });
 }
