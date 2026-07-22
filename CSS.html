@@ -365,6 +365,28 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .dt-table-wrap{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.04);}
 .dt-table-wrap.compact{flex:none;height:390px;}
 .dt-table-wrap.compact .dt-scroll{max-height:390px;}
+/* Dashboard mini reports: dense screenshot-like tables, no S.No column, clipped
+   names with native hover titles, and a permanent vertical scroll gutter. */
+.dashboard-report-panel{min-width:0;}
+.dt-table-wrap.compact.dashboard-report{height:270px;border:0;border-radius:0;box-shadow:none;overflow:hidden;}
+.dt-table-wrap.compact.dashboard-report .dt-scroll{max-height:270px;overflow-y:scroll;overflow-x:hidden;}
+.dt-table-wrap.compact.dashboard-report table.dt{width:100%;table-layout:fixed;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th{background:#111729;border-right:1px solid #232C42;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-inner{padding:7px 9px;min-height:31px;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-row{gap:4px;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8.5px;line-height:1.15;letter-spacing:.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .sort-ic{font-size:7px;width:auto;color:#7CA3FF;}
+.dt-table-wrap.compact.dashboard-report table.dt tbody td{padding:7px 9px;font-size:10.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;border-right:0;}
+.dt-table-wrap.compact.dashboard-report table.dt tbody tr:nth-child(even){background:#FAFBFD;}
+.dt-table-wrap.compact.dashboard-report table.dt tbody tr:hover{background:var(--accent-tint2);}
+.dreport-name{display:flex;align-items:center;gap:7px;min-width:0;color:var(--ink);font-weight:650;}
+.dreport-ellipsis{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dreport-color-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+.dreport-money{font-family:'JetBrains Mono',monospace;font-weight:700;}
+.dashboard-report-customers .dreport-money.recv{color:var(--recv);}.dashboard-report-vendors .dreport-money.pay{color:var(--pay);}.dashboard-report-expenses .dreport-money.expense{color:var(--purple);}
+.dreport-overdue{font-family:'JetBrains Mono',monospace;font-weight:800;}.dreport-overdue.success{color:var(--success);}.dreport-overdue.warning{color:var(--orange);}.dreport-overdue.danger{color:var(--danger);}
+.dashboard-report-panel .panel-foot{font-size:10.5px;padding:8px 12px;}
+.dashboard-report-panel .panel-title{font-size:12px;padding:10px 12px;}
 .dt-scroll{flex:1;overflow:auto;min-height:0;}
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
 table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}

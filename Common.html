@@ -257,6 +257,7 @@ function fmtINR(n){
   const formatted=other.replace(/\B(?=(\d{2})+(?!\d))/g,',')+lastThree;
   return (neg?'-':'')+'₹'+formatted;
 }
+function fmtINRCompact(n){ return fmtINR(n).replace(/\.00$/,''); }
 function fmtNum(n){ n=Number(n)||0; return n.toLocaleString('en-IN',{maximumFractionDigits:2}); }
 function fmtPct(n){ n=Number(n)||0; return (n>=0?'+':'')+n.toFixed(1)+'%'; }
 
@@ -542,8 +543,9 @@ function renderGrid(tableKey){
   const orderedCols=st.order.map(k=>def.cols.find(c=>c.key===k)).filter(Boolean);
   const visCols=orderedCols.filter(c=>!st.hidden.has(c.key));
 
+  const dashboardReport=!!def.dashboardReport;
   const snoTh=`<th style="width:56px;min-width:56px;max-width:56px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
-  const hdr=snoTh+visCols.map(c=>{
+  let hdr=snoTh+visCols.map(c=>{
     const w=st.widths[c.key]||c.width||150;const si2=st.sort===c.key?(st.dir===1?'▲':'▼'):'';const fo=st.filterOpen===c.key;
     let filterHtml='';
     if(fo){
@@ -562,13 +564,42 @@ function renderGrid(tableKey){
       <div class="resize-handle" data-action="resize" data-table="${tableKey}" data-col="${c.key}"></div>
       </div></th>`;
   }).join("");
+  if(dashboardReport){
+    hdr=visCols.map(c=>{
+      const w=st.widths[c.key]||c.width||150;
+      const reportWidth=c.reportWidth?`width:${c.reportWidth};min-width:0;max-width:none;`:`width:${w}px;min-width:${w}px;max-width:${w}px;`;
+      const sortIcon=st.sort===c.key?(st.dir===1?'▲':'▼'):'';
+      return `<th style="${reportWidth}" data-col="${c.key}"><div class="th-inner"><div class="th-row"><span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${esc(c.label)}</span><span class="sort-ic">${sortIcon}</span></div></div></th>`;
+    }).join('');
+  }
 
   function cellVal(r,c){
-    let v=r[c.key]==null?"":r[c.key];
-    if(c.num) return fmtNum(v);
+    const v=r[c.key]==null?"":r[c.key];
+    if(c.currency)return fmtINRCompact(v);
+    if(c.num)return fmtNum(v);
     return v;
   }
-  const bod=pageRows.length?pageRows.map((r,idx)=>`<tr>${(idx===0&&false)?'':''}<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;">${si+idx+1}</td>${visCols.map(c=>{const v=cellVal(r,c);const cls=c.num?'num':'';const content=c.render?c.render(r,v,si+idx):c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v);return`<td class="${cls}">${content}</td>`;}).join("")}</tr>`).join(""):`<tr><td colspan="${visCols.length+1}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
+  function dashboardReportCell_(r,c,rawValue,formattedValue){
+    if(c.compactName){
+      const marker=c.reportTone==='category'?`<span class="dreport-color-dot" style="background:${esc(r.color||'var(--accent)')};"></span>`:'';
+      return `<span class="dreport-name" title="${esc(rawValue)}">${marker}<span class="dreport-ellipsis">${esc(formattedValue)}</span></span>`;
+    }
+    if(c.reportTone==='overdue'){
+      const days=Number(rawValue)||0;
+      const tone=days>60?'danger':days>20?'warning':'success';
+      return `<span class="dreport-overdue ${tone}">${esc(formattedValue)}</span>`;
+    }
+    return `<span class="dreport-money ${esc(c.reportTone||'')}">${esc(formattedValue)}</span>`;
+  }
+  const bod=pageRows.length?pageRows.map((r,idx)=>{
+    const reportCells=visCols.map(c=>{
+      const raw=r[c.key]==null?"":r[c.key],v=cellVal(r,c),cls=[c.num?'num':'',dashboardReport?'dreport-cell':''].filter(Boolean).join(' ');
+      const content=dashboardReport?dashboardReportCell_(r,c,raw,v):c.render?c.render(r,v,si+idx):c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v);
+      return `<td class="${cls}">${content}</td>`;
+    }).join("");
+    const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;">${si+idx+1}</td>`;
+    return `<tr>${sno}${reportCells}</tr>`;
+  }).join(""):`<tr><td colspan="${visCols.length+(dashboardReport?0:1)}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
   const rf=total===0?0:si+1;const rt=Math.min(si+ps,total);
 
   const mcards=pageRows.length?pageRows.map((r,idx)=>renderMobileCard(tableKey,r,si+idx+1)).join(''):`<div class="empty-state"><div class="big">No matching rows</div></div>`;
@@ -576,7 +607,7 @@ function renderGrid(tableKey){
   if(compact){
     // Compact mode (dashboard mini-tables): no pagination footer/toolbar, just a
     // fixed-height scrollable table. Sorting by clicking a header still works.
-    return `<div class="dt-table-wrap compact"><div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
+    return `<div class="dt-table-wrap compact${dashboardReport?` dashboard-report dashboard-report-${esc(def.reportType||'')}`:''}"><div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
   }
 
   return `

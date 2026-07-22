@@ -107,8 +107,6 @@ function renderDashboard(){
   });
   const expenseByCategory=topN(dataForFY('expense'),'subGroup','amount',6);
   const expenseTotal=sumBy(dataForFY('expense'),'amount');
-  const expenseTotalBase=expenseTotal||1;
-  const maxExpCat=Math.max(1,...expenseByCategory.map(x=>x.value));
 
   const recentReceipts=dataForFY('receipt').slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
 
@@ -158,7 +156,7 @@ function renderDashboard(){
     </div>
 
     <div class="dash-row3">
-      <div class="panel">
+      <div class="panel dashboard-report-panel">
         <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
         <div class="panel-body" style="padding:0;">${(()=>{
           if(S.syncing&&!recvRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading receivables…</div></div>`;
@@ -166,7 +164,7 @@ function renderDashboard(){
         })()}</div>
         <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
-      <div class="panel">
+      <div class="panel dashboard-report-panel">
         <div class="panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
         <div class="panel-body" style="padding:0;">${(()=>{
           if(S.syncing&&!payRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading payables…</div></div>`;
@@ -174,19 +172,13 @@ function renderDashboard(){
         })()}</div>
         <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
       </div>
-      <div class="panel">
-        <div class="panel-title">Expense by Category — ${esc(fyLabel)} <a data-action="goto" data-page="expensesDashboard">View All</a></div>
-        <div class="panel-body">
-          ${expenseByCategory.length?expenseByCategory.map((c,i)=>`
-            <div class="mini-cat-row">
-              <span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span>
-              <span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span>
-              <div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxExpCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div>
-              <span class="mc-amt">${fmtINR(c.value)}</span>
-              <span class="mc-pct">${(c.value/expenseTotalBase*100).toFixed(1)}%</span>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No expenses</div></div>`}
-          <div class="mini-total-row"><span>Total</span><span>${fmtINR(expenseTotal)}</span></div>
-        </div>
+      <div class="panel dashboard-report-panel">
+        <div class="panel-title">Expense by Category <a data-action="goto" data-page="expensesDashboard">View All</a></div>
+        <div class="panel-body" style="padding:0;">${(()=>{
+          S.dashExpenseCategories=expenseByCategory.map((c,i)=>({label:c.label,value:c.value,color:CHART_PALETTE[i%CHART_PALETTE.length]}));
+          return renderGrid('expenseCategoryDash');
+        })()}</div>
+        <div class="panel-foot"><span>Total Expenses</span><span>${fmtINR(expenseTotal)}</span></div>
       </div>
     </div>
 

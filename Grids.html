@@ -52,13 +52,19 @@ const CREDIT_NOTE_COLS=[
   {key:'partyName',label:'Customer',width:220},{key:'date',label:'Date',width:120,date:true},{key:'voucherNo',label:'Voucher No',width:140},
   {key:'particular',label:'Particulars',width:280},{key:'amount',label:'Amount',width:150,num:true}
 ];
+// Dashboard mini reports intentionally use only the requested business columns.
+// `compactName` renders a one-line ellipsis with the full text available on hover.
 const TOP_CUSTOMERS_COLS=[
-  {key:'label',label:'Party Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
-  {key:'overdueDays',label:'Overdue Days',width:130,num:true}
+  {key:'label',label:'Party Name',width:220,reportWidth:'45%',compactName:true},{key:'value',label:'Outstanding (₹)',width:130,reportWidth:'32%',num:true,currency:true,reportTone:'recv'},
+  {key:'overdueDays',label:'Overdue Days',width:110,reportWidth:'23%',num:true,reportTone:'overdue'}
 ];
 const TOP_VENDORS_COLS=[
-  {key:'label',label:'Party Name',width:220},{key:'value',label:'Outstanding',width:150,num:true},
-  {key:'overdueDays',label:'Overdue Days',width:130,num:true}
+  {key:'label',label:'Party Name',width:220,reportWidth:'45%',compactName:true},{key:'value',label:'Outstanding (₹)',width:130,reportWidth:'32%',num:true,currency:true,reportTone:'pay'},
+  {key:'overdueDays',label:'Overdue Days',width:110,reportWidth:'23%',num:true,reportTone:'overdue'}
+];
+const EXPENSE_CATEGORY_DASH_COLS=[
+  {key:'label',label:'Category',width:230,reportWidth:'58%',compactName:true,reportTone:'category'},
+  {key:'value',label:'Amount (₹)',width:150,reportWidth:'42%',num:true,currency:true,reportTone:'expense'}
 ];
 const SUBCATEGORY_COLS=[
   {key:'label',label:'Sub Category',width:220},{key:'value',label:'Amount',width:160,num:true},{key:'pct',label:'% of Total',width:130}
@@ -100,8 +106,9 @@ const GRID_DEFS={
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},
-  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true},
-  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true},
+  topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,dashboardReport:true,reportType:'customers'},
+  topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,dashboardReport:true,reportType:'vendors'},
+  expenseCategoryDash:{cols:EXPENSE_CATEGORY_DASH_COLS,data:()=>S.dashExpenseCategories||[],compact:true,dashboardReport:true,reportType:'expenses'},
   expenseSubCategory:{cols:SUBCATEGORY_COLS,data:()=>S.expenseSubCategoryRows||[]}
 };
 </script>
