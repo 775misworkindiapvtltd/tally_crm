@@ -210,10 +210,8 @@ function renderDashboard(){
       <div class="panel sales-topline-panel">
         <div class="panel-title sales-topline-title"><span>Sales Topline${useRealCategories?' by Category':''} — ${esc(fyLabel)}</span><span class="sales-topline-period">${esc(fyLabel==='All Financial Years'?'All Years':fyLabel)}</span></div>
         <div class="panel-body sales-topline-body">
-          <div class="chart-wrap donut sales-topline-chart">
-            <canvas id="chSalesTopline" data-chart-fallback></canvas>
-            <div class="sales-topline-total"><span>Total Sales</span><strong>${fmtINRCompact(totalSales)}</strong></div>
-          </div>
+          <div class="chart-wrap donut sales-topline-chart"><canvas id="chSalesTopline" data-chart-fallback></canvas></div>
+          <div class="sales-topline-summary"><span>Total Sales</span><strong>${fmtINRCompact(totalSales)}</strong></div>
           <div class="sales-topline-legend" role="list" aria-label="Sales by category">
             ${salesToplineRows.map((c,i)=>`<div class="sales-topline-row" role="listitem"><span class="sales-topline-category" title="${esc(c.label)}"><span class="sales-topline-dot" style="background:${salesToplineColors[i%salesToplineColors.length]};"></span><span class="sales-topline-label">${esc(c.label)}</span></span><span class="sales-topline-amount">${fmtINRCompact(c.value)}</span></div>`).join('')}
           </div>
