@@ -24,6 +24,7 @@ let S = {
   toast:null, loginError:"",
   dt:{ expense:dtState(), payables:dtState(), receivables:dtState(), receipt:dtState(), payment:dtState() },
   colMenuOpen:null, logoutAt:0,
+  lastSync:'', lastSyncAt:0, lastSyncSource:'', cacheLoaded:false,
   ledger:{ search:'', selected:null, detail:null, loading:false },
   darkMode:false, fontSize:100,
   filters:null,
@@ -56,15 +57,88 @@ function runServer(fnName,arg){
   });
 }
 
+function applyDataPayload_(data){
+  if(!data)return false;
+  S.expense=Array.isArray(data.expense)?data.expense:[];
+  S.payables=Array.isArray(data.payables)?data.payables:[];
+  S.receivables=Array.isArray(data.receivables)?data.receivables:[];
+  S.receipt=Array.isArray(data.receipt)?data.receipt:[];
+  S.payment=Array.isArray(data.payment)?data.payment:[];
+  S.balanceParties=Array.isArray(data.balanceParties)?data.balanceParties:[];
+  S.balanceVouchers=Array.isArray(data.balanceVouchers)?data.balanceVouchers:[];
+  S.balanceLedgers=(data.balanceLedgers&&typeof data.balanceLedgers==='object')?data.balanceLedgers:{};
+  S.salesRows=Array.isArray(data.salesRows)?data.salesRows:[];
+  S.expenseTrendRows=Array.isArray(data.expenseTrendRows)?data.expenseTrendRows:[];
+  S.missingSheets=Array.isArray(data.missingSheets)?data.missingSheets:[];
+  S.diagnostics=(data.diagnostics&&typeof data.diagnostics==='object')?data.diagnostics:{};
+  return true;
+}
+
 function applyBootstrap(data){
-  if(!data) { showToast("Server se khaali response aaya — Sync with Tally dabao.",true); return; }
-  S.expense=data.expense||[]; S.payables=data.payables||[]; S.receivables=data.receivables||[];
-  S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
-  S.balanceVouchers=data.balanceVouchers||[];
-  S.salesRows=data.salesRows||[]; // from the SALES sheet: {date (col A), amount (col M), category (col N)}
-  S.expenseTrendRows=data.expenseTrendRows||[]; // from EXPENSE sheet: {date (col B), amount (col K)} — used only by the Sales vs Expenses Trend chart
-  S.missingSheets=data.missingSheets||[];
-  S.diagnostics=data.diagnostics||{};
+  if(!applyDataPayload_(data))showToast("Server se khaali response aaya — Sync with Tally dabao.",true);
+}
+
+/* ============================= LOCAL DATA CACHE =============================
+ * Sheet snapshots are stored locally per signed-in user. IndexedDB supports the larger
+ * Tally datasets; localStorage is only a fallback when IndexedDB is unavailable. */
+const DATA_CACHE_DB='finance360_data_cache';
+const DATA_CACHE_STORE='snapshots';
+const DATA_CACHE_VERSION=1;
+const DATA_CACHE_LOCAL_PREFIX='finance360_data_cache_v1:';
+
+function dataCacheKey_(){return String(S.user&&S.user.id||'anonymous').trim().toLowerCase();}
+function formatSyncTime_(value){
+  const d=new Date(Number(value)||Date.now()),pad=n=>n<10?'0'+n:''+n;
+  return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' · '+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+function markSynced(source,time){
+  const ts=Number(time)||Date.now();
+  S.lastSyncAt=ts;S.lastSync=formatSyncTime_(ts);S.lastSyncSource=source||'live';
+}
+function dataCachePayload_(){
+  return {expense:S.expense,payables:S.payables,receivables:S.receivables,receipt:S.receipt,payment:S.payment,
+    balanceParties:S.balanceParties,balanceVouchers:S.balanceVouchers,balanceLedgers:S.balanceLedgers,
+    salesRows:S.salesRows,expenseTrendRows:S.expenseTrendRows,missingSheets:S.missingSheets,diagnostics:S.diagnostics};
+}
+function dataCacheSnapshot_(){return {version:DATA_CACHE_VERSION,savedAt:S.lastSyncAt||Date.now(),data:dataCachePayload_()};}
+function openDataCache_(){
+  return new Promise((resolve,reject)=>{
+    if(typeof indexedDB==='undefined'){reject(new Error('IndexedDB unavailable'));return;}
+    const req=indexedDB.open(DATA_CACHE_DB,DATA_CACHE_VERSION);
+    req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(DATA_CACHE_STORE))req.result.createObjectStore(DATA_CACHE_STORE);};
+    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Could not open local cache'));
+  });
+}
+async function readCachedSnapshot_(){
+  const key=dataCacheKey_();
+  try{
+    const db=await openDataCache_();
+    return await new Promise((resolve,reject)=>{
+      const req=db.transaction(DATA_CACHE_STORE,'readonly').objectStore(DATA_CACHE_STORE).get(key);
+      req.onsuccess=()=>{db.close();resolve(req.result||null);};req.onerror=()=>{db.close();reject(req.error);};
+    });
+  }catch(err){
+    try{const raw=localStorage.getItem(DATA_CACHE_LOCAL_PREFIX+key);return raw?JSON.parse(raw):null;}catch(ignore){return null;}
+  }
+}
+async function writeCachedSnapshot_(){
+  if(!S.user||!hasAnyData())return false;
+  const key=dataCacheKey_(),snapshot=dataCacheSnapshot_();
+  try{
+    const db=await openDataCache_();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(DATA_CACHE_STORE,'readwrite');tx.objectStore(DATA_CACHE_STORE).put(snapshot,key);
+      tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(tx.error);};
+    });
+    return true;
+  }catch(err){
+    try{localStorage.setItem(DATA_CACHE_LOCAL_PREFIX+key,JSON.stringify(snapshot));return true;}catch(ignore){console.warn('Local cache could not be saved:',err);return false;}
+  }
+}
+async function hydrateCachedData_(){
+  const snapshot=await readCachedSnapshot_();
+  if(!snapshot||snapshot.version!==DATA_CACHE_VERSION||!snapshot.savedAt||!applyDataPayload_(snapshot.data))return false;
+  S.cacheLoaded=true;markSynced('cache',snapshot.savedAt);return true;
 }
 
 // Builds a plain-language list of problems found in the sheet (missing tabs, missing
@@ -114,56 +188,60 @@ async function loadAll(){
   S.ready=true;render();startClock();
 }
 
-function markSynced(){
-  const d=new Date();
-  const pad=n=>n<10?'0'+n:''+n;
-  S.lastSync=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' · '+pad(d.getHours())+':'+pad(d.getMinutes());
-}
-
-// Load data ONE TAB AT A TIME to avoid google.script.run response-size limits.
-// Dashboard renders progressively as each chunk arrives (cards update live).
-// Order matters: receivables/payables feed the two slowest-feeling dashboard panels
-// (Top Customers by Outstanding, Top Vendors by Payable) plus their KPI cards, so
-// they're loaded FIRST — this makes those panels populate almost immediately instead
-// of sitting on "No matching rows" while expense/sales/balance load ahead of them.
+// Load data one tab at a time to stay within the Apps Script response-size limit.
+// The currently rendered cached snapshot stays visible until all live chunks finish;
+// this avoids partial numbers, repeated page movement, and a table changing mid-scroll.
 const CHUNK_KEYS=['receivables','payables','expense','expenseTrend','receipt','payment','sales','balance','diagnostics'];
 
 async function loadChunks(){
+  let completed=0;const livePayload={};
   for(const key of CHUNK_KEYS){
     try{
       const data=await runServer('getChunk',key);
-      if(data===null||data===undefined) continue;
+      if(data===null||data===undefined)continue;
       switch(key){
-        case 'expense': S.expense=data||[]; break;
-        case 'expenseTrend': S.expenseTrendRows=data||[]; break;
-        case 'payables': S.payables=data||[]; break;
-        case 'receivables': S.receivables=data||[]; break;
-        case 'receipt': S.receipt=data||[]; break;
-        case 'payment': S.payment=data||[]; break;
-        case 'sales': S.salesRows=data||[]; break;
-        case 'balance': S.balanceParties=data.balanceParties||[]; S.balanceVouchers=data.balanceVouchers||[]; S.balanceLedgers=data.balanceLedgers||{}; break;
-        case 'diagnostics': S.diagnostics=data||{}; break;
+        case 'expense':livePayload.expense=data||[];break;
+        case 'expenseTrend':livePayload.expenseTrendRows=data||[];break;
+        case 'payables':livePayload.payables=data||[];break;
+        case 'receivables':livePayload.receivables=data||[];break;
+        case 'receipt':livePayload.receipt=data||[];break;
+        case 'payment':livePayload.payment=data||[];break;
+        case 'sales':livePayload.salesRows=data||[];break;
+        case 'balance':livePayload.balanceParties=data.balanceParties||[];livePayload.balanceVouchers=data.balanceVouchers||[];livePayload.balanceLedgers=data.balanceLedgers||{};break;
+        case 'diagnostics':livePayload.diagnostics=data||{};break;
       }
-      render(); // progressive update — dashboard numbers appear as each chunk lands
-    }catch(err){
-      console.error('Chunk load error ['+key+']:', err.message);
-      // Continue loading other tabs even if one fails
-    }
+      completed++;
+    }catch(err){console.error('Chunk load error ['+key+']:',err.message);}
   }
+  return {completed,livePayload};
 }
 
-async function loadHeavyData(){
-  S.syncing=true;S.diagBannerDismissed=false;render();
-  await loadChunks();
-  S.syncing=false;markSynced();render();
+function applyCompletedLiveSync_(result){
+  if(!result.completed)return false;
+  applyDataPayload_(Object.assign(dataCachePayload_(),result.livePayload));
+  S.cacheLoaded=false;markSynced('live');return true;
+}
+
+async function loadHeavyData(skipInitialRender){
+  S.syncing=true;S.diagBannerDismissed=false;
+  if(!skipInitialRender)render();
+  const result=await loadChunks();
+  S.syncing=false;
+  if(applyCompletedLiveSync_(result))await writeCachedSnapshot_();
+  render();
 }
 
 async function refreshData(){
   S.syncing=true;S.diagBannerDismissed=false;render();
-  await loadChunks();
-  S.syncing=false;markSynced();
-  Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
-  showToast("Sheet se latest data mil gaya.",false);
+  const result=await loadChunks();
+  S.syncing=false;
+  if(applyCompletedLiveSync_(result)){
+    await writeCachedSnapshot_();
+    Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
+    showToast("Sheet se latest data mil gaya.",false);
+  }else{
+    showToast("Live sync nahi hua — cached data hi dikh raha hai.",true);
+  }
 }
 
 /* ============================= HELPERS ============================= */
@@ -213,6 +291,7 @@ function nextLogoutTs(){
   return t.getTime();
 }
 function forceNightLogout(){
+  void writeCachedSnapshot_();
   S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;
   S.loginError="Raat ke auto-logout ke kaaran aap sign out ho gaye. Kripya dobara login karein.";
   render();
@@ -245,8 +324,13 @@ function firstAllowedPage(){ return NAV_ITEMS[0]?NAV_ITEMS[0].key:null; }
 async function doLogin(id,pw){
   const u=S.users.find(x=>x.id.toLowerCase()===id.trim().toLowerCase()&&String(x.password)===pw);
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
-  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();render();
-  await loadHeavyData();
+  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();
+  S.cacheLoaded=false;S.lastSync='';S.lastSyncAt=0;S.lastSyncSource='';
+  await hydrateCachedData_();
+  // Render the saved snapshot immediately, then replace it once the complete live
+  // sync finishes. The current page stays stable throughout the background sync.
+  S.syncing=true;render();
+  void loadHeavyData(true);
 }
 
 /* ============================= NAV =============================
@@ -378,8 +462,12 @@ function renderShell(inner){
       </div>
       <div class="nav">${navHtml}</div>
       <div class="sidebar-foot">
-        <div class="su">Data Last Updated<br><b style="color:#D7DCEA;">${esc(S.lastSync||'just now')}</b></div>
         <button class="btn sync-btn btn-ghost" data-action="syncnow" style="color:#AAB2C8;border-color:var(--sidebar-line);">${S.syncing?'⟳ Syncing…':'⟳ Sync with Tally'}</button>
+        <div class="sync-status" aria-live="polite">
+          <span class="sync-state">${S.syncing?'Syncing live data…':'Last updated'}</span>
+          <b>${esc(S.lastSync||'No cached data yet')}</b>
+          <span class="sync-source">${S.syncing&&S.cacheLoaded?'Showing cached data':S.lastSyncSource==='cache'?'Cached data':S.lastSyncSource==='live'?'Live Tally data':'Waiting for first sync'}</span>
+        </div>
         <div class="su" style="margin-top:8px;opacity:.6;">Build: ${esc(APP_BUILD)}</div>
         <div class="logout-btn" data-action="logout" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
       </div>
@@ -585,7 +673,7 @@ document.addEventListener('click',e=>{
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='ageing-nav-toggle'){S.ageingOpen=!S.ageingOpen;render();return;}
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
-  if(a==='logout'){S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
+  if(a==='logout'){void writeCachedSnapshot_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
   if(a==='syncnow'){refreshData();return;}
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;render();return;}
@@ -633,9 +721,12 @@ function render(){
   if(S.loadError){app.innerHTML=`<div class="login-wrap"><div class="login-card"><div class="login-top"><div class="login-eyebrow">Setup</div><h1>Sheet load failed</h1></div><div class="login-body"><div class="login-error">${esc(S.loadError)}</div><div class="login-hint">1) Open via the Apps Script <b>/exec</b> URL. 2) Required tabs: LOGIN PAGE, EXPENSE, PAYABLES, RECEIVABLES, Receipt, PAYMENT, Balance. 3) Deploy access = "Anyone".</div><button class="btn btn-primary btn-block" style="margin-top:14px;" data-action="syncnow">Retry</button></div></div></div>`;return;}
   if(!S.user){app.innerHTML=renderLogin();return;}
   if(!S.filters)S.filters=defaultFilterState();
+  // Root rendering replaces `.content`, so retain both the page and table positions.
+  // This keeps the screen still while cached data is replaced by the completed live sync.
+  const content=document.querySelector('.content');
+  const savedContentScroll={left:content?content.scrollLeft:0,top:content?content.scrollTop:0};
   const dtScroll=document.querySelector('.dt-scroll');
-  const savedDtScrollLeft=dtScroll?dtScroll.scrollLeft:0;
-  const savedDtScrollTop=dtScroll?dtScroll.scrollTop:0;
+  const savedDtScroll={left:dtScroll?dtScroll.scrollLeft:0,top:dtScroll?dtScroll.scrollTop:0};
   let inner="";
   if(S.syncing && !hasAnyData()){
     inner=`<div class="empty-state" style="padding-top:80px;"><div class="spinner" style="margin:0 auto 16px;"></div><div class="big">Loading data…</div><div style="margin-top:6px;">Aapka data background mein load ho raha hai, kuch seconds lagenge.</div></div>`;
@@ -658,9 +749,14 @@ function render(){
     </div>${inner}`;
   }
   app.innerHTML=renderShell(inner);
-  const dtScroll2=document.querySelector('.dt-scroll');
-  if(dtScroll2){dtScroll2.scrollLeft=savedDtScrollLeft;dtScroll2.scrollTop=savedDtScrollTop;}
-  setTimeout(()=>{paintCharts();if(S.page==='mapView'&&typeof paintIndiaMap==='function')paintIndiaMap();},0);
+  const restoreScroll=()=>{
+    const content2=document.querySelector('.content');
+    if(content2){content2.scrollLeft=savedContentScroll.left;content2.scrollTop=savedContentScroll.top;}
+    const dtScroll2=document.querySelector('.dt-scroll');
+    if(dtScroll2){dtScroll2.scrollLeft=savedDtScroll.left;dtScroll2.scrollTop=savedDtScroll.top;}
+  };
+  restoreScroll();
+  setTimeout(()=>{paintCharts();if(S.page==='mapView'&&typeof paintIndiaMap==='function')paintIndiaMap();restoreScroll();},0);
 }
 
 loadAll();

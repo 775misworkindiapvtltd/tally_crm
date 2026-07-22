@@ -114,17 +114,15 @@ function renderFilterBar(){
   const fys=availableFinancialYears();const selected=selectedFinancialYears();const all=!selected.length;
   const buttonText=all?'All Financial Years':(selected.length===1?financialYearFromKey(selected[0]).label:selected.length+' Financial Years Selected');
   return `<div class="fbar fy-only-bar">
-    <div class="fbar-group fy-filter-group">
-      <label>Financial Year</label>
-      <div class="fy-multi">
-        <button type="button" class="fy-multi-btn" data-action="fy-open">${esc(buttonText)} <span>▾</span></button>
-        ${S.filters.fyOpen?`<div class="fy-menu">
-          <label class="fy-option fy-all"><input type="checkbox" data-action="fy-all" ${all?'checked':''}> <span>All Financial Years</span></label>
-          ${fys.length?fys.map(f=>`<label class="fy-option"><input type="checkbox" data-action="fy-toggle" data-fy="${esc(f.key)}" ${selected.indexOf(f.key)!==-1?'checked':''}> <span>${esc(f.label)}</span></label>`).join(''):`<div class="fy-empty">Date wala data load hone ke baad financial years yahan dikhenge.</div>`}
-        </div>`:''}
-      </div>
+    <span class="fy-inline-label">Financial Year</span>
+    <div class="fy-multi">
+      <button type="button" class="fy-multi-btn" data-action="fy-open">${esc(buttonText)} <span>▾</span></button>
+      ${S.filters.fyOpen?`<div class="fy-menu">
+        <label class="fy-option fy-all"><input type="checkbox" data-action="fy-all" ${all?'checked':''}> <span>All Financial Years</span></label>
+        ${fys.length?fys.map(f=>`<label class="fy-option"><input type="checkbox" data-action="fy-toggle" data-fy="${esc(f.key)}" ${selected.indexOf(f.key)!==-1?'checked':''}> <span>${esc(f.label)}</span></label>`).join(''):`<div class="fy-empty">Date wala data load hone ke baad financial years yahan dikhenge.</div>`}
+      </div>`:''}
     </div>
-    <div class="fy-selection-note">Showing: <b>${esc(selectedFYLabel())}</b></div>
+    <span class="fy-selection-note">Showing: <b>${esc(selectedFYLabel())}</b></span>
     <div class="spacer"></div>
   </div>`;
 }
