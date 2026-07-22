@@ -601,6 +601,66 @@ table.ledger-table tbody tr:nth-child(even):not(.opening-row):not(.closing-row){
 .bottom-nav .bn-item.active{color:var(--accent);}
 .bottom-nav .bn-item svg{width:18px;height:18px;}
 
+/* ---------- DASHBOARD ADAPTIVE LAYOUT SAFEGUARDS ---------- */
+/* Controls never retain an intrinsic minimum width that can push the filter bar past
+   the viewport. Desktop keeps a compact single row whenever room permits; narrower
+   screens use deliberate rows rather than clipped controls. */
+.fbar{gap:10px;}
+.fbar-group{flex:1 1 132px;min-width:0;}
+.fbar select,.fbar input[type="date"],.fbar input[type="text"]{width:100%;min-width:0;}
+.fbar-daterange{width:100%;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);}
+.fbar-daterange input{width:100%;min-width:0;}
+.fbar .fy-filter-group{flex:1.3 1 220px;min-width:180px;}
+.fy-menu{max-width:min(360px,calc(100vw - 32px));}
+.fbar-presets{min-width:0;}
+
+/* Each KPI card can shrink inside its grid cell without letting a long amount, title,
+   or comparison label overflow out of the right side of the dashboard. */
+.kpi-strip{grid-template-columns:repeat(8,minmax(0,1fr));}
+.kpi-strip .card,.kpi-strip .card-top,.kpi-strip .card-sub{min-width:0;}
+.kpi-strip .kpi-card .card-label{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.2;}
+.kpi-strip .kpi-card .card-value{font-size:clamp(13px,1.05vw,15.5px);max-width:100%;overflow-wrap:anywhere;word-break:break-word;line-height:1.2;}
+.kpi-strip .kpi-card .card-sub{flex-wrap:wrap;line-height:1.25;}
+.kpi-strip .kpi-card .card-sub .cmp-label{white-space:normal;overflow-wrap:anywhere;}
+
+/* The dashboard trend and the two ageing panels deliberately share the same grid
+   footprint. Stretching the row makes their panel heights match as well. */
+.dash-row3{grid-template-columns:repeat(3,minmax(0,1fr));}
+.dashboard-ageing-row{align-items:stretch;}
+.dashboard-ageing-row>.panel{min-width:0;}
+
+@media (max-width:1440px){
+  .kpi-strip{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+
+/* With the desktop sidebar visible, the usable content area becomes narrow sooner
+   than the browser viewport. The controls and panel grid therefore reflow here. */
+@media (max-width:1200px){
+  .fbar-group{flex-basis:calc(33.333% - 8px);}
+  .fbar-presets{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%;flex:1 1 100%;overflow:visible;}
+  .fbar-presets button{min-width:0;padding-left:4px;padding-right:4px;white-space:nowrap;}
+  .dash-row3{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+@media (max-width:980px){
+  .fbar .fbar-group,.fbar .fy-filter-group{flex:1 1 calc(50% - 4px);min-width:0;}
+  .fbar-presets{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%;flex:1 1 100%;overflow:visible;}
+  .fbar-presets button{min-width:0;padding-left:4px;padding-right:4px;white-space:nowrap;}
+  .fy-menu{left:0;right:0;max-width:none;min-width:0;}
+  .kpi-strip{grid-template-columns:repeat(4,minmax(0,1fr));}
+  .dash-row3{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+@media (max-width:720px){
+  .fbar .fbar-group,.fbar .fy-filter-group{flex:1 1 100%;}
+  .kpi-strip{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dash-row3{grid-template-columns:minmax(0,1fr);}
+}
+
+@media (max-width:420px){
+  .kpi-strip{grid-template-columns:minmax(0,1fr);}
+}
+
 @media (min-width:981px){
   .bottom-nav{display:none !important;}
 }

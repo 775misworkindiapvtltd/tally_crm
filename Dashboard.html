@@ -215,7 +215,7 @@ function renderDashboard(){
 
     <div class="kpi-strip">${kpiCards}</div>
 
-    <div class="dash-row3" style="grid-template-columns:1.4fr 1fr 1fr;">
+    <div class="dash-row3 dashboard-ageing-row">
       <div class="panel">
         <div class="panel-title">Sales vs Expenses Trend <span style="font-size:10px;color:var(--muted);font-weight:600;">${esc(fyLabel)}</span></div>
         <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesTrend" data-chart-fallback></canvas></div></div>
@@ -329,7 +329,9 @@ function renderDashboard(){
 registerPage('dashboard',renderDashboard);
 
 CHART_DEFS['dashboard']=function(){
-  const months=selectedFYMonths();
+  // The trend is intentionally limited to the most recent financial year's 12 months.
+  // This keeps the line readable even when the user selects multiple financial years.
+  const months=selectedFYMonths().slice(-12);
   const salesRows=dataForFY('sales');
   const expenseTrendRows=dataForFY('expenseTrend');
   const salesTrendSeries=months.map(m=>sumBy(rowsInCustomRange(salesRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
