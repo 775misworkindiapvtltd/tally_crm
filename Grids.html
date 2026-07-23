@@ -212,6 +212,7 @@ function creditNoteRows(){return dataForFY('balanceVouchers').filter(v=>/credit\
 
 const GRID_DEFS={
   expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
+  receivablesDashboard:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables'),showSortArrows:true},
   receipt:{cols:RECEIPT_COLS,data:()=>dataForFY('receipt')},payment:{cols:RECEIPT_COLS,data:()=>dataForFY('payment')},
   customerList:{cols:CUSTOMER_COLS,data:buildCustomerList},vendorList:{cols:VENDOR_COLS,data:buildVendorList},
   salesReport:{cols:SALES_REPORT_COLS,data:buildSalesReport,showSortArrows:true,expandable:true,

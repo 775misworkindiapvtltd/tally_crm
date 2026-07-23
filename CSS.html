@@ -432,6 +432,26 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .dreport-overdue{font-family:'JetBrains Mono',monospace;font-weight:800;}.dreport-overdue.success{color:var(--success);}.dreport-overdue.warning{color:var(--orange);}.dreport-overdue.danger{color:var(--danger);}
 .dashboard-report-panel .panel-foot{font-size:10.5px;padding:8px 12px;}
 .dashboard-report-panel .panel-title{font-size:12px;padding:10px 12px;}
+/* Receivables Dashboard's full invoice grid lives beneath the visual summary.
+   It deliberately keeps its own vertical scroll area while retaining the shared
+   flexible-grid controls: every header sorts/searches/filters, and Columns opens
+   the persisted hide/show, reorder, and resize options. */
+.recv-dashboard-table{height:540px;min-height:0;display:flex;flex-direction:column;margin:0 0 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
+.recv-dashboard-table-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px 9px;border-bottom:1px solid var(--line-light);margin-bottom:8px;flex:none;}
+.recv-dashboard-table-head h3{font-size:13px;font-weight:700;color:var(--ink);}
+.recv-dashboard-table-head span{display:block;margin-top:2px;font-size:10.5px;color:var(--muted);}
+.recv-dashboard-table .dt-toolbar{margin:0 0 8px;gap:8px;}
+.recv-dashboard-table .dt-toolbar .count{font-size:11px;}
+.recv-dashboard-table .dt-toolbar .btn{padding:6px 11px!important;font-size:11px;}
+.recv-dashboard-table .dt-table-wrap{flex:1;min-height:0;}
+.recv-dashboard-table .dt-scroll{overflow:auto;}
+.recv-dashboard-table table.dt thead th .th-inner{padding:6px 10px;gap:3px;min-height:31px;}
+.recv-dashboard-table table.dt thead th .th-label{font-size:9px;line-height:1.15;letter-spacing:.05em;}
+.recv-dashboard-table table.dt thead th .sort-ic{font-size:8px;}
+.recv-dashboard-table table.dt thead th .search-ic{font-size:10px;}
+.recv-dashboard-table table.dt tbody td{padding:6px 10px;font-size:11.5px;line-height:1.25;}
+.recv-dashboard-table .dt-pagination{padding:7px 10px;font-size:11px;}
+.recv-dashboard-table .dt-pagination select,.recv-dashboard-table .dt-pagination .nav button{font-size:11px;padding:4px 8px;}
 .dt-scroll{flex:1;overflow:auto;min-height:0;}
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
 table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}
@@ -608,6 +628,9 @@ table.ledger-table tbody tr:nth-child(even):not(.opening-row):not(.closing-row){
   .age-buckets{grid-template-columns:repeat(2,1fr);}
   .qa-grid{grid-template-columns:repeat(3,1fr);}
   .donut-panel-body{flex-direction:column;}
+  .recv-dashboard-table{height:auto;margin-bottom:10px;padding:10px;}
+  .recv-dashboard-table-head{padding-bottom:8px;}
+  .recv-dashboard-table-head span{font-size:10px;}
 
   .dt-table-wrap{display:none;}
   .mcard-list{display:flex;}

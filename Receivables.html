@@ -8,7 +8,11 @@ function renderRecvDashboard(){
     <div class="card"><div class="card-label">Overdue Bills</div><div class="card-value">${overdue.length}</div><div class="card-sub">${fmtINR(sumBy(overdue,'pendingAmount'))} was due but not received</div></div>
     <div class="card"><div class="card-label">Not Yet Due</div><div class="card-value">${current.length}</div><div class="card-sub">${fmtINR(sumBy(current,'pendingAmount'))} still to come</div></div>
     <div class="card"><div class="card-label">Avg Overdue Days</div><div class="card-value">${overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0}</div></div></div>
-    <div class="dash-row"><div class="panel"><div class="panel-title">Top Customers</div><div class="panel-body"><div class="bar-chart">${top.map(c=>`<div class="bar-item"><div class="b-label">${esc(c.label)}</div><div class="bar-track"><div class="bar-fill recv" style="width:${Math.max(4,c.value/max*100)}%"></div></div><div class="b-val">${fmtINR(c.value)}</div></div>`).join('')}</div></div></div><div class="panel"><div class="panel-title">Ageing Snapshot</div><div class="panel-body"><div class="age-buckets">${Object.keys(age).map(k=>`<div class="age-bucket"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(age[k])}</div></div>`).join('')}</div></div></div></div>`;
+    <div class="dash-row"><div class="panel"><div class="panel-title">Top Customers</div><div class="panel-body"><div class="bar-chart">${top.map(c=>`<div class="bar-item"><div class="b-label">${esc(c.label)}</div><div class="bar-track"><div class="bar-fill recv" style="width:${Math.max(4,c.value/max*100)}%"></div></div><div class="b-val">${fmtINR(c.value)}</div></div>`).join('')}</div></div></div><div class="panel"><div class="panel-title">Ageing Snapshot</div><div class="panel-body"><div class="age-buckets">${Object.keys(age).map(k=>`<div class="age-bucket"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(age[k])}</div></div>`).join('')}</div></div></div></div>
+    <section class="recv-dashboard-table">
+      <div class="recv-dashboard-table-head"><div><h3>Receivables Details</h3><span>Search, filter, sort, resize, and manage visible columns</span></div></div>
+      ${renderGrid('receivablesDashboard')}
+    </section>`;
 }
 registerPage('recvDashboard',renderRecvDashboard);
 
