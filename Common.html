@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.3 (Category pivot Refresh button)";
+const APP_BUILD = "2026-07-23.4 (Duration pivot: dimension dropdown + % Amt)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 
@@ -78,11 +78,16 @@ let S = {
   // sort/resize/mode state here instead of reusing tableState().
   salesReportView:'sales', salesCategoryMode:'month', salesCategoryCustomFrom:'', salesCategoryCustomTo:'',
   salesCategorySort:'total', salesCategorySortDir:-1,
-  salesCategoryColWidth:110, salesCategoryTotalWidth:130, salesCategoryCatWidth:210,
+  salesCategoryColWidth:110, salesCategoryTotalWidth:130, salesCategoryCatWidth:210, salesCategoryPctWidth:90,
+  // Which field the Duration pivot groups by — 'category' (default), 'partyName'
+  // (Invoice To), or 'state'. Persisted below so "by default vo aayega jo maine
+  // last select kiya tha" holds even across a fresh page load, not just this session.
+  salesDimension:'category',
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
 try{ const fs=parseInt(localStorage.getItem('tally_font_size'),10); if(fs>=80&&fs<=130){S.fontSize=fs;} }catch(e){}
+try{ const dim=localStorage.getItem('tally_sales_dimension'); if(dim==='category'||dim==='partyName'||dim==='state'){S.salesDimension=dim;} }catch(e){}
 
 /* ============================= APPS SCRIPT BRIDGE ============================= */
 function runServer(fnName,arg){
@@ -752,6 +757,7 @@ function renderGrid(tableKey){
     <div class="dt-toolbar${subGrid?' sub-grid':''}">
       <div class="count">${total} of ${def.data().length} rows</div>
       ${subGrid?'':`<button class="btn btn-ghost" data-action="refreshpage" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`}
+      ${def.toolbarExtra?def.toolbarExtra():''}
       <div class="dt-colmenu-wrap">
         <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:7px 14px;">Columns ▾</button>
         ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}

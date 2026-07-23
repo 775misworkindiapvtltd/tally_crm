@@ -202,7 +202,12 @@ table.apv-table tbody td.apv-cell.apv-zero{color:#C7CCDA;background:transparent;
 table.apv-table tbody tr:hover td{filter:brightness(0.97);}
 table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 
-/* ---------- SALES REPORT — CATEGORY-WISE PIVOT ---------- */
+/* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
+/* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line, per
+   explicit user instruction — the toggle sits flush right via margin-left:auto so
+   it visually matches the position of the "Columns" button on every other grid. */
+.sales-cat-toolbar{flex-wrap:nowrap;}
+.sales-report-view-toggle{margin:0 0 0 auto;flex:none;}
 .sales-cat-mode-toggle{margin-bottom:10px;}
 .sales-cat-daterange{margin-bottom:14px;}
 .sales-cat-wrap table.dt.scp-table{table-layout:fixed;}
@@ -213,16 +218,28 @@ table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:37px;z-inde
 table.scp-table thead th.scp-cat,table.scp-table thead th.scp-sno{text-align:left;background:var(--surface);color:var(--ink);cursor:default;}
 .scp-th-inner{display:flex;align-items:center;justify-content:flex-end;gap:5px;padding:9px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;}
 table.scp-table th.scp-cat .scp-th-inner{justify-content:flex-start;}
+/* Dimension header dropdown (Category/Party Name/State) — sits inline with the
+   sort arrow, styled to read as part of the dark header row rather than a plain
+   form control, so switching the grouping dimension doesn't break the header's look. */
+.scp-dim-inner{gap:6px;}
+.scp-dim-select{flex:1;min-width:0;background:transparent;border:1px solid rgba(255,255,255,.35);border-radius:4px;color:var(--ink);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 4px;cursor:pointer;}
+.scp-dim-select:hover,.scp-dim-select:focus{border-color:rgba(255,255,255,.6);outline:none;}
 .scp-sort-ic{font-size:9px;flex:none;}
+.scp-sort-ic[data-action]{cursor:pointer;}
 .scp-resize{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:5;}
 .scp-resize:hover{background:rgba(255,255,255,.25);}
 table.scp-table th.scp-cat .scp-resize:hover{background:rgba(46,107,242,.25);}
 table.scp-table tbody td.scp-cell{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 10px;border-right:1px solid var(--line-light);}
 table.scp-table tbody td.scp-cell.scp-cat{text-align:left;font-weight:700;color:var(--ink);font-family:inherit;background:var(--accent-tint2);}
 table.scp-table tbody td.scp-cell.scp-total{font-weight:700;color:var(--ink);background:var(--accent-tint2);}
+/* % Amt column — each row's share of the grand total, sitting between Total and
+   the dimension column per explicit user instruction. Lighter weight than Total so
+   the absolute amount still reads as the primary figure. */
+table.scp-table tbody td.scp-cell.scp-pct{color:var(--muted);font-weight:600;background:var(--accent-tint2);}
+table.scp-table thead tr.scp-totals-row td.scp-pct{color:var(--ink-secondary);}
 table.scp-table tbody td.scp-cell.scp-sno{font-weight:600;}
 table.scp-table tbody td.scp-cell.scp-zero{color:#C7CCDA;}
-table.scp-table tbody tr:nth-child(even) td.scp-cell:not(.scp-cat):not(.scp-total):not(.scp-sno){background:#FAFBFD;}
+table.scp-table tbody tr:nth-child(even) td.scp-cell:not(.scp-cat):not(.scp-total):not(.scp-pct):not(.scp-sno){background:#FAFBFD;}
 table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 
 /* ---------- INDIA MAP VIEW ---------- */

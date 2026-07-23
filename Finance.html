@@ -38,48 +38,62 @@ registerPage('salesDashboard',renderSalesDashboard);
 // call — same as customerList/vendorList — so hide/unhide columns, resize,
 // per-column filter, and sort all come for free from the generic (non-compact) grid
 // engine, on BOTH the master table and every expanded sub-table.
-// Top toggle button — per explicit user instruction ("is page pe column se pehle
-// button aa jayega SALES / CATEGORY") — placed BEFORE the grid's own column header
-// row, switching the whole page body between the existing invoice-wise master/detail
-// grid ("Sales" — unchanged, exactly what's already live) and the new Category-wise
-// Monthly/Yearly/Custom Range pivot modelled on the user's reference screenshot.
+// Top toggle button ("Sales"/"Duration") — per explicit user instruction, this now
+// lives INSIDE each view's own toolbar row (see toolbarExtra on the salesReport
+// GRID_DEF in Grids.html, and inside the bespoke pivot toolbar below) so it renders
+// on the SAME single line as the row-count/Refresh/Columns controls, instead of a
+// separate row above them. Internal state value stays 'category' for the pivot view
+// (only the visible button label changed to "Duration" per explicit request).
+function renderSalesReportViewToggle_(){
+  const view=S.salesReportView||'sales';
+  return `<div class="view-toggle sales-report-view-toggle">
+      <button class="${view==='sales'?'active':''}" data-action="sales-report-view" data-view="sales">Sales</button>
+      <button class="${view==='category'?'active':''}" data-action="sales-report-view" data-view="category">Duration</button>
+    </div>`;
+}
 function renderSalesReport(){
   const view=S.salesReportView||'sales';
-  return `<div class="view-toggle">
-      <button class="${view==='sales'?'active':''}" data-action="sales-report-view" data-view="sales">Sales</button>
-      <button class="${view==='category'?'active':''}" data-action="sales-report-view" data-view="category">Category</button>
-    </div>
-    ${view==='category'?renderSalesCategoryPivot():renderGrid('salesReport')}`;
+  return view==='category'?renderSalesCategoryPivot():renderGrid('salesReport');
 }
 registerPage('salesReport',renderSalesReport);
 
-// Category-wise pivot: MODE toggle (Yearly/Monthly/Custom Range) at the top, then a
-// table with a Total column pinned LEFT of Category ("total sabse upar aa jaye" /
-// "left mein aa jaye category se pehle" — total is both the leftmost column AND
-// pinned to the header, per the user's screenshot), followed by one column per
-// month/FY/custom-range period. Every row is sortable (click any header, incl. Total
-// and Category) and every column is resizable — but per explicit instruction
-// ("agar mein resize karu month year col ko to karu ek ko sabhi ko applicable ho")
-// resizing ANY single month/year column resizes ALL of them together; Category and
-// Total keep their own independent widths. Header labels have NO parenthetical unit
-// text so the header row stays a single short line ("header ko chhod ke" — a plain,
-// uncluttered header).
+// Duration pivot (label changed from "Category" per explicit user instruction):
+// MODE toggle (Monthly/Yearly/Custom Range, all on ONE row) at the top, then a table
+// with Total pinned LEFT of a % Amt column (each row's share of the grand total,
+// per explicit request "INKE BEENCH MEIN % AMT KA COL ADD KARNA THA" — placed
+// between Total and the dimension column), then the dimension column itself
+// (Category/Party Name/State — selected via the dropdown, per explicit user request
+// "CATEGORY MEIN DROPDOWN AAYE CATEGORY/PARTY NAME/STATE AND AMT USKE ACCORDING
+// CHANGE HO"), followed by one column per month/FY/custom-range period. A Total row
+// is pinned to the header. Every row/column is sortable/resizable — resizing ANY
+// single month/year column resizes ALL of them together (existing behaviour,
+// unchanged); Total/%/Dimension keep independent widths. Month column labels are
+// short 2-digit years ("Apr 23") and Yearly columns show the full Apr-to-Mar span
+// ("2023 (Apr 2023 To Mar 2024)") since a Tally financial year is never Jan-Dec —
+// both per explicit user instruction, handled in salesCategoryPeriods_() (Grids.html).
 function renderSalesCategoryPivot(){
   const mode=S.salesCategoryMode||'month';
-  const {periods,rows}=buildSalesCategoryPivot(mode);
+  const dimension=S.salesDimension||'category';
+  const dimMeta=SALES_DIMENSION_META[dimension]||SALES_DIMENSION_META.category;
+  const {periods,rows}=buildSalesDimensionPivot_(mode,dimension);
   const sortKey=S.salesCategorySort||'total',sortDir=S.salesCategorySortDir===1?1:-1;
   const sorted=rows.slice().sort((a,b)=>{
-    if(sortKey==='category'){
-      const x=a.category.toLowerCase(),y=b.category.toLowerCase();
+    if(sortKey==='dim'){
+      const x=a.dimVal.toLowerCase(),y=b.dimVal.toLowerCase();
       if(x<y)return -1*sortDir;if(x>y)return 1*sortDir;return 0;
     }
+    if(sortKey==='pct'){ return (a.total-b.total)*sortDir; }
     const x=sortKey==='total'?a.total:(a.periods[sortKey]||0);
     const y=sortKey==='total'?b.total:(b.periods[sortKey]||0);
     return (x-y)*sortDir;
   });
   const grandTotal=rows.reduce((s,r)=>s+r.total,0);
   const periodGrandTotals={};periods.forEach(p=>{periodGrandTotals[p.key]=rows.reduce((s,r)=>s+(r.periods[p.key]||0),0);});
+  const pctOf=t=>grandTotal?((t/grandTotal)*100).toFixed(1)+'%':'0.0%';
 
+  // Per explicit user instruction: Monthly/Yearly/Custom Range must all render on
+  // ONE row together with the row-count/Refresh/Sales-Duration toggle beneath it —
+  // NOT split into separate stacked rows above/below each other.
   const modeBar=`<div class="view-toggle sales-cat-mode-toggle">
       <button class="${mode==='month'?'active':''}" data-action="sales-cat-mode" data-mode="month">Monthly</button>
       <button class="${mode==='year'?'active':''}" data-action="sales-cat-mode" data-mode="year">Yearly</button>
@@ -90,18 +104,30 @@ function renderSalesCategoryPivot(){
       <span>To</span><input type="date" data-action="sales-cat-custom-to" value="${esc(S.salesCategoryCustomTo||'')}">
     </div>`:''}`;
 
-  const totW=S.salesCategoryTotalWidth||130,catW=S.salesCategoryCatWidth||210,colW=S.salesCategoryColWidth||110;
+  const totW=S.salesCategoryTotalWidth||130,pctW=S.salesCategoryPctWidth||90,catW=S.salesCategoryCatWidth||210,colW=S.salesCategoryColWidth||110;
   const sortArrow=k=>sortKey===k?(sortDir===1?'▲':'▼'):'↕';
   // S.No — every other table/grid in the app (Sales Report itself, Customer List,
   // Receivables, etc.) has this as its leftmost column, so it's added here too for
-  // the same consistent numbering convention, ahead of Total/Category.
+  // the same consistent numbering convention, ahead of Total/%/Dimension.
   const snoTh=`<th class="scp-th scp-sno" style="width:52px;min-width:52px;max-width:52px;"><div class="scp-th-inner" style="justify-content:center;cursor:default;">S.No</div></th>`;
   const totalTh=`<th class="scp-th scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;" data-action="sales-cat-sort" data-col="total">
       <div class="scp-th-inner"><span>Total</span><span class="scp-sort-ic">${sortArrow('total')}</span></div>
       <div class="scp-resize" data-action="sales-cat-resize" data-target="total"></div>
     </th>`;
-  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;" data-action="sales-cat-sort" data-col="category">
-      <div class="scp-th-inner"><span>Category</span><span class="scp-sort-ic">${sortArrow('category')}</span></div>
+  const pctTh=`<th class="scp-th scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;" data-action="sales-cat-sort" data-col="pct">
+      <div class="scp-th-inner"><span>% Amt</span><span class="scp-sort-ic">${sortArrow('pct')}</span></div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="pct"></div>
+    </th>`;
+  // Dimension header doubles as the dropdown requested — clicking the label still
+  // sorts by that column; the <select> beside it switches Category/Party Name/State
+  // without leaving the header row, per explicit user instruction.
+  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">
+      <div class="scp-th-inner scp-dim-inner">
+        <select class="scp-dim-select" data-action="sales-dimension-select" title="Group rows by">
+          ${Object.keys(SALES_DIMENSION_META).map(k=>`<option value="${k}" ${dimension===k?'selected':''}>${esc(SALES_DIMENSION_META[k].label)}</option>`).join('')}
+        </select>
+        <span class="scp-sort-ic" data-action="sales-cat-sort" data-col="dim" title="Sort">${sortArrow('dim')}</span>
+      </div>
       <div class="scp-resize" data-action="sales-cat-resize" data-target="category"></div>
     </th>`;
   const periodTh=periods.map(p=>`<th class="scp-th scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;" data-action="sales-cat-sort" data-col="${esc(p.key)}">
@@ -112,6 +138,7 @@ function renderSalesCategoryPivot(){
   const totalsRow=`<tr class="scp-totals-row">
       <td class="scp-tot scp-sno" style="width:52px;min-width:52px;max-width:52px;"></td>
       <td class="scp-tot scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;">${fmtNum(grandTotal)}</td>
+      <td class="scp-tot scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;">100.0%</td>
       <td class="scp-tot scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">TOTAL</td>
       ${periods.map(p=>`<td class="scp-tot scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${fmtNum(periodGrandTotals[p.key]||0)}</td>`).join('')}
     </tr>`;
@@ -119,30 +146,33 @@ function renderSalesCategoryPivot(){
   const body=sorted.length?sorted.map((r,idx)=>`<tr>
       <td class="scp-cell scp-sno" style="width:52px;min-width:52px;max-width:52px;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
       <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;">${fmtNum(r.total)}</td>
-      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">${esc(r.category)}</td>
+      <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;">${pctOf(r.total)}</td>
+      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">${esc(r.dimVal)}</td>
       ${periods.map(p=>`<td class="scp-cell scp-period${!r.periods[p.key]?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${r.periods[p.key]?fmtNum(r.periods[p.key]):'—'}</td>`).join('')}
-    </tr>`).join(''):`<tr><td colspan="${periods.length+3}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
+    </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
 
-  // The Category pivot is a bespoke table (not the generic renderGrid engine — see the
-  // comment above), so it never got the shared toolbar's "⟳ Refresh" button that every
-  // other page/grid has. Per explicit user report ("is page mein refresh button gayab
-  // hai add") this toolbar row adds that same Refresh button (reusing the existing
-  // data-action="refreshpage" handler in Common.html, so Category still only re-fetches
-  // Sales Report's own scoped sheets — see PAGE_CHUNK_KEYS) plus a matching row count,
-  // consistent with every other table in the app.
+  // The Duration pivot is a bespoke table (not the generic renderGrid engine — see
+  // the comment above), so it never got the shared toolbar's "⟳ Refresh" button that
+  // every other page/grid has. This toolbar row adds that same Refresh button
+  // (reusing the existing data-action="refreshpage" handler in Common.html, so this
+  // view still only re-fetches Sales Report's own scoped sheets — see PAGE_CHUNK_KEYS)
+  // plus a matching row count — AND the Sales/Duration toggle, on the SAME line, per
+  // explicit user instruction ("15 categories Refresh LEFT MEIN, right mein Sales |
+  // Duration").
   const catToolbar=`<div class="dt-toolbar sales-cat-toolbar">
-      <div class="count">${rows.length} categories</div>
+      <div class="count">${rows.length} ${esc(dimMeta.plural)}</div>
       <button class="btn btn-ghost" data-action="refreshpage" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
+      ${renderSalesReportViewToggle_()}
     </div>`;
 
-  return `${modeBar}
-    ${catToolbar}
+  return `${catToolbar}
+    ${modeBar}
     <div class="dt-table-wrap sales-cat-wrap">
       <div class="dt-scroll">
         <table class="dt scp-table">
           <thead>
             ${totalsRow}
-            <tr>${snoTh}${totalTh}${catTh}${periodTh}</tr>
+            <tr>${snoTh}${totalTh}${pctTh}${catTh}${periodTh}</tr>
           </thead>
           <tbody>${body}</tbody>
         </table>
@@ -156,8 +186,19 @@ document.addEventListener('click',e=>{
   if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');render();return;}
   if(a==='sales-cat-sort'){
     const col=el.getAttribute('data-col');
-    if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='category'?1:-1;}
+    if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='dim'?1:-1;}
     render();return;
+  }
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.getAttribute('data-action')==='sales-dimension-select'){
+    const v=el.value;
+    if(SALES_DIMENSION_META[v]){
+      S.salesDimension=v;
+      try{localStorage.setItem('tally_sales_dimension',v);}catch(ignore){}
+      render();
+    }
   }
 });
 document.addEventListener('input',e=>{
@@ -166,7 +207,7 @@ document.addEventListener('input',e=>{
   if(a==='sales-cat-custom-to'){S.salesCategoryCustomTo=el.value;render();return;}
 });
 // Column-group resize: dragging ANY month/year column resizes ALL of them together
-// (per explicit user instruction), while Total/Category keep independent widths —
+// (per explicit user instruction), while Total/%/Dimension keep independent widths —
 // same mousedown/mousemove/mouseup pattern as the generic grid's per-column resize
 // in Common.html, just writing into S.salesCategory*Width instead of a per-key map.
 let salesCatResizeCtx=null;
@@ -179,16 +220,17 @@ document.addEventListener('mousedown',e=>{
 document.addEventListener('mousemove',e=>{
   if(!salesCatResizeCtx)return;
   const nw=Math.max(70,Math.round(salesCatResizeCtx.startW+(e.clientX-salesCatResizeCtx.startX)));
-  const selector=salesCatResizeCtx.target==='total'?'.scp-total':salesCatResizeCtx.target==='category'?'.scp-cat':'.scp-period';
+  const selector=salesCatResizeCtx.target==='total'?'.scp-total':salesCatResizeCtx.target==='pct'?'.scp-pct':salesCatResizeCtx.target==='category'?'.scp-cat':'.scp-period';
   document.querySelectorAll('.scp-table '+selector).forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
 });
 document.addEventListener('mouseup',()=>{
   if(!salesCatResizeCtx)return;
-  const targetClass=salesCatResizeCtx.target==='total'?'scp-total':salesCatResizeCtx.target==='category'?'scp-cat':'scp-period';
+  const targetClass=salesCatResizeCtx.target==='total'?'scp-total':salesCatResizeCtx.target==='pct'?'scp-pct':salesCatResizeCtx.target==='category'?'scp-cat':'scp-period';
   const el=document.querySelector('.scp-table th.'+targetClass);
   const nw=el?el.getBoundingClientRect().width:null;
   if(nw){
     if(salesCatResizeCtx.target==='total')S.salesCategoryTotalWidth=Math.round(nw);
+    else if(salesCatResizeCtx.target==='pct')S.salesCategoryPctWidth=Math.round(nw);
     else if(salesCatResizeCtx.target==='category')S.salesCategoryCatWidth=Math.round(nw);
     else S.salesCategoryColWidth=Math.round(nw);
   }

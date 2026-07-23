@@ -210,9 +210,14 @@ function salesCategoryPeriods_(mode){
   if(mode==='year'){
     let years=selectedFinancialYears();
     if(!years.length)years=availableFinancialYears().map(f=>f.key);
+    // Per explicit user instruction, a Yearly column is labelled with its Financial
+    // Year start year PLUS the Apr-to-Mar span it actually covers — e.g.
+    // "2023 (Apr 2023 To Mar 2024)" — never a plain calendar year, since Tally's
+    // year always runs April through March, not January through December.
     return years.slice().sort().map(key=>{
       const fy=financialYearFromKey(key);
-      return {key,label:String(fy.start.getFullYear()),test:r=>financialYearKey(r.date)===key};
+      const startYear=fy.start.getFullYear(),endYear=fy.end.getFullYear();
+      return {key,label:`${startYear} (Apr ${startYear} To Mar ${endYear})`,test:r=>financialYearKey(r.date)===key};
     });
   }
   if(mode==='custom'){
@@ -220,30 +225,54 @@ function salesCategoryPeriods_(mode){
     const to=S.salesCategoryCustomTo||toISO(new Date());
     return [{key:'custom',label:fmtDDMMMYYYY(fromISO(from))+' – '+fmtDDMMMYYYY(fromISO(to)),test:r=>inRange(r.date,from,to)}];
   }
-  // month (default)
-  return selectedFYMonths().map(m=>({key:m.y+'-'+m.m,label:m.label,test:r=>{
+  // month (default) — short 2-digit year ("Apr 23" instead of "Apr 2023") per
+  // explicit user instruction, kept LOCAL to this pivot's own column labels only;
+  // the shared selectedFYMonths() helper (used by Sales Trend / Cash Flow chart
+  // labels elsewhere) is deliberately left untouched.
+  return selectedFYMonths().map(m=>({key:m.y+'-'+m.m,label:m.label.replace(/\d{4}/,y=>y.slice(-2)),test:r=>{
     const t=parseDT(r.date);if(t===null)return false;
     const d=new Date(t);return d.getFullYear()===m.y&&d.getMonth()===m.m;
   }}));
 }
-function buildSalesCategoryPivot(mode){
+// Reads whichever SALES field the currently selected dimension groups by — Category
+// (raw SALES "CATEGORY" column, existing default), Party Name (Invoice To — the
+// customer on that SALES line), or State (raw SALES "STATE" column). Per explicit
+// user request ("CATEGORY MEIN DROPDOWN AAYE CATEGORY/PARTY NAME/STATE AND AMT USKE
+// ACCORDING CHANGE HO") the pivot rows/amounts must recompute against whichever of
+// these three the dropdown currently has selected — this is the single place that
+// mapping lives, so buildSalesDimensionPivot_ below stays dimension-agnostic.
+function salesDimensionRawValue_(row,dimension){
+  if(dimension==='partyName')return row.invoiceTo;
+  if(dimension==='state')return row.state;
+  return row.category;
+}
+function buildSalesDimensionPivot_(mode,dimension){
   const periods=salesCategoryPeriods_(mode);
-  const byCategory={};
+  const byDim={};
   dataForFY('sales').forEach(r=>{
-    const cat=String(r.category||'').trim()||'Uncategorized';
-    if(!byCategory[cat])byCategory[cat]={category:cat,total:0,periods:{}};
+    const dimVal=String(salesDimensionRawValue_(r,dimension)||'').trim()||'Uncategorized';
+    if(!byDim[dimVal])byDim[dimVal]={dimVal,total:0,periods:{}};
     const amt=Number(r.amount)||0;
     for(let i=0;i<periods.length;i++){
-      if(periods[i].test(r)){ byCategory[cat].periods[periods[i].key]=(byCategory[cat].periods[periods[i].key]||0)+amt; break; }
+      if(periods[i].test(r)){ byDim[dimVal].periods[periods[i].key]=(byDim[dimVal].periods[periods[i].key]||0)+amt; break; }
     }
   });
-  const rows=Object.values(byCategory).map(c=>{
+  const rows=Object.values(byDim).map(c=>{
     periods.forEach(p=>{ if(!(p.key in c.periods)) c.periods[p.key]=0; });
     c.total=periods.reduce((s,p)=>s+(c.periods[p.key]||0),0);
     return c;
   });
   return {periods,rows};
 }
+// Which SALES field the Duration pivot currently groups by — driven by the header
+// dropdown (see renderSalesCategoryPivot() in Finance.html). Label = shown in the
+// dropdown option and the toolbar row count; plural = the row-count text next to
+// the inline Refresh button ("15 Categories" / "15 Party Names" / "15 States").
+const SALES_DIMENSION_META={
+  category:{label:'Category',plural:'Categories'},
+  partyName:{label:'Party Name',plural:'Party Names'},
+  state:{label:'State',plural:'States'}
+};
 function buildVendorList(){
   const byParty={};
   dataForFY('payables').forEach(r=>{
@@ -265,7 +294,13 @@ const GRID_DEFS={
   customerList:{cols:CUSTOMER_COLS,data:buildCustomerList},vendorList:{cols:VENDOR_COLS,data:buildVendorList},
   salesReport:{cols:SALES_REPORT_COLS,data:buildSalesReport,showSortArrows:true,expandable:true,
     rowKey:r=>String(r.invoiceNo)+'|'+String(r.invoiceTo),
-    renderDetail:r=>renderSalesReportDetail_(r)},
+    renderDetail:r=>renderSalesReportDetail_(r),
+    // Lazily looked up (defined in Finance.html, which loads AFTER Grids.html) only
+    // when actually invoked during render — by then every script has run, so the
+    // reference always resolves. This keeps the Sales/Duration toggle on the SAME
+    // toolbar row as the row count/Refresh/Columns controls, per explicit user
+    // instruction ("ye ek line pe chaiye upar niche nahi chahiye").
+    toolbarExtra:()=>(typeof renderSalesReportViewToggle_==='function'?renderSalesReportViewToggle_():'')},
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},
