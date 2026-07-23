@@ -474,24 +474,25 @@ table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
 .sr-detail-label::before{content:'▤';font-size:13px;color:var(--accent-dark);}
 .sr-detail-label b{color:var(--ink);}
 .muted-cell{color:var(--muted);font-style:italic;}
-/* Sub-grid (the expanded detail table itself): light-blue header instead of the
-   generic grid's dark navy header, and a visibly larger/more readable body font —
-   both per explicit user feedback ("sun tablle ke haders me se background color kuch
-   light blue choose kar lo, table font small" / increase readability). Toolbar and
-   pagination are also shrunk since this table lives inside an already-compact card. */
-.dt-toolbar.sub-grid{margin-bottom:9px;gap:8px;}
-.dt-toolbar.sub-grid .count{font-size:11px;}
+/* Sub-grid (the expanded detail table itself): light-blue header with dense,
+   easy-to-scan line items. Amount GST context is intentionally demoted into a
+   small light subtitle so it does not make the header row tall. */
+.dt-toolbar.sub-grid{margin-bottom:7px;gap:8px;}
+.dt-toolbar.sub-grid .count{font-size:10.5px;}
 .dt-table-wrap.sub-grid{border-radius:9px;box-shadow:none;}
 .dt-table-wrap.sub-grid table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);}
-.dt-table-wrap.sub-grid table.dt thead th .th-label{color:var(--accent-dark);font-size:11px;font-weight:700;}
+.dt-table-wrap.sub-grid table.dt thead th .th-inner{padding:5px 9px;gap:2px;min-height:30px;}
+.dt-table-wrap.sub-grid table.dt thead th .th-label{color:var(--accent-dark);font-size:9.5px;font-weight:700;line-height:1.15;letter-spacing:.04em;}
+.dt-table-wrap.sub-grid table.dt thead th .th-sub{display:block;margin-top:1px;color:#7894C8;font-size:8px;font-weight:700;line-height:1.1;letter-spacing:0;text-transform:none;}
 .dt-table-wrap.sub-grid table.dt thead th .sort-ic{color:var(--accent-dark);}
 .dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready{color:#6E93E8;}
 .dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready:hover{color:var(--accent-dark);}
 .dt-table-wrap.sub-grid table.dt thead th .search-ic{color:var(--accent-dark);opacity:.7;}
 .dt-table-wrap.sub-grid table.dt thead th .search-ic:hover{opacity:1;}
-.dt-table-wrap.sub-grid table.dt tbody td{font-size:13.5px;padding:10px 14px;}
+.dt-table-wrap.sub-grid table.dt tbody td{font-size:12px;line-height:1.25;padding:6px 10px;}
+.dt-table-wrap.sub-grid table.dt tbody td.nowrap{white-space:nowrap;word-break:normal;overflow:hidden;text-overflow:ellipsis;}
 .dt-table-wrap.sub-grid table.dt tbody tr:nth-child(even){background:var(--accent-tint2);}
-.dt-pagination.sub-grid{padding:8px 12px;font-size:11px;}
+.dt-pagination.sub-grid{padding:7px 10px;font-size:10.5px;}
 .code-pill{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:11px;color:var(--accent-dark);background:var(--accent-tint);border-radius:5px;padding:3px 8px;display:inline-block;}
 .pill-danger{color:var(--danger);background:var(--danger-tint);}
 .pill-success{color:var(--success);background:var(--success-tint);}

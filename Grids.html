@@ -106,12 +106,12 @@ const SALES_REPORT_COLS=[
 // sub-table's own rows are self-describing if later reused/exported on their own,
 // without needing to cross-reference the collapsed parent row.
 const SALES_REPORT_DETAIL_COLS=[
-  {key:'invoiceNo',label:'Invoice No',width:130},
+  {key:'invoiceNo',label:'Invoice No',width:130,nowrap:true},
   {key:'date',label:'Date',width:110,date:true},
   {key:'description',label:'Description',width:240},
   {key:'category',label:'Category',width:190},
-  {key:'amount',label:'Amount (Incl. GST)',width:150,num:true},
-  {key:'amountExclGst',label:'Amount (Excl. GST)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
+  {key:'amount',label:'Amount',headerSub:'With GST',width:150,num:true},
+  {key:'amountExclGst',label:'Amount',headerSub:'W/O GST',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
 ];
 
 function firstUseful(current,next){return current||next||'';}
