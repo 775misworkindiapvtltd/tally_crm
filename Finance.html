@@ -123,7 +123,20 @@ function renderSalesCategoryPivot(){
       ${periods.map(p=>`<td class="scp-cell scp-period${!r.periods[p.key]?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${r.periods[p.key]?fmtNum(r.periods[p.key]):'—'}</td>`).join('')}
     </tr>`).join(''):`<tr><td colspan="${periods.length+3}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
 
+  // The Category pivot is a bespoke table (not the generic renderGrid engine — see the
+  // comment above), so it never got the shared toolbar's "⟳ Refresh" button that every
+  // other page/grid has. Per explicit user report ("is page mein refresh button gayab
+  // hai add") this toolbar row adds that same Refresh button (reusing the existing
+  // data-action="refreshpage" handler in Common.html, so Category still only re-fetches
+  // Sales Report's own scoped sheets — see PAGE_CHUNK_KEYS) plus a matching row count,
+  // consistent with every other table in the app.
+  const catToolbar=`<div class="dt-toolbar sales-cat-toolbar">
+      <div class="count">${rows.length} categories</div>
+      <button class="btn btn-ghost" data-action="refreshpage" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
+    </div>`;
+
   return `${modeBar}
+    ${catToolbar}
     <div class="dt-table-wrap sales-cat-wrap">
       <div class="dt-scroll">
         <table class="dt scp-table">
