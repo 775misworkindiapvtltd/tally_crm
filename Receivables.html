@@ -1,20 +1,13 @@
 <script>
-/* ============================= RECEIVABLES / AGEING ============================= */
-function renderRecvDashboard(){
-  const rows=dataForFY('receivables'),overdue=rows.filter(r=>Number(r.overdueDays)>0),current=rows.filter(r=>Number(r.overdueDays)<=0);
-  const total=sumBy(rows,'pendingAmount'),age=ageingBuckets(rows,'pendingAmount'),top=topN(rows,'partyName','pendingAmount',8),max=Math.max(1,...top.map(x=>x.value));
-  return `<div class="dash-grid">
-    <div class="card"><div class="card-label">Total Outstanding</div><div class="card-value">${fmtINR(total)}</div><div class="card-sub">${rows.length} open bills</div></div>
-    <div class="card"><div class="card-label">Overdue Bills</div><div class="card-value">${overdue.length}</div><div class="card-sub">${fmtINR(sumBy(overdue,'pendingAmount'))} was due but not received</div></div>
-    <div class="card"><div class="card-label">Not Yet Due</div><div class="card-value">${current.length}</div><div class="card-sub">${fmtINR(sumBy(current,'pendingAmount'))} still to come</div></div>
-    <div class="card"><div class="card-label">Avg Overdue Days</div><div class="card-value">${overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0}</div></div></div>
-    <div class="dash-row"><div class="panel"><div class="panel-title">Top Customers</div><div class="panel-body"><div class="bar-chart">${top.map(c=>`<div class="bar-item"><div class="b-label">${esc(c.label)}</div><div class="bar-track"><div class="bar-fill recv" style="width:${Math.max(4,c.value/max*100)}%"></div></div><div class="b-val">${fmtINR(c.value)}</div></div>`).join('')}</div></div></div><div class="panel"><div class="panel-title">Ageing Snapshot</div><div class="panel-body"><div class="age-buckets">${Object.keys(age).map(k=>`<div class="age-bucket"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(age[k])}</div></div>`).join('')}</div></div></div></div>
-    <section class="recv-dashboard-table">
-      <div class="recv-dashboard-table-head"><div><h3>Receivables Details</h3><span>Search, filter, sort, resize, and manage visible columns</span></div></div>
-      ${renderGrid('receivablesDashboard')}
-    </section>`;
-}
-registerPage('recvDashboard',renderRecvDashboard);
+/* ============================= RECEIVABLES / AGEING =============================
+ * The standalone "Receivables Dashboard" page was removed per explicit user
+ * instruction — its KPI cards (Total Outstanding/Overdue Bills/Not Yet Due/Avg
+ * Overdue Days) and the flat "Receivables Details" grid table have been moved
+ * into the Receivables Ageing Summary page's "All Data" tab below (see
+ * renderAgeing()). The old Top Customers bar chart and Ageing Snapshot buckets
+ * from that dashboard were explicitly NOT carried over ("top customers and
+ * ageing chart not needed").
+ */
 
 /* ============================= AGEING — PARTY PIVOT ============================= *
  * One row per party. Party Name sits in the middle. LEFT of it are OVERDUE buckets
@@ -52,15 +45,22 @@ function ageingPivotRows(kind){
   return Object.values(byParty);
 }
 
+// Column widths trimmed down (was 110px per bucket / 240px name / 150px total,
+// ~1270px total) so the full pivot table — all 10 columns — fits on one screen
+// on a 13"-14" laptop without horizontal scroll, per explicit user instruction.
 const AGEING_PIVOT_COLS=[
-  {key:'od90',label:'90+ Days',side:'od',width:110},{key:'od6190',label:'61-90 Days',side:'od',width:110},
-  {key:'od3160',label:'31-60 Days',side:'od',width:110},{key:'od030',label:'0-30 Days',side:'od',width:110},
-  {key:'partyName',label:'Party Name',side:'name',width:240},
-  {key:'nd030',label:'0-30 Days',side:'nd',width:110},{key:'nd3160',label:'31-60 Days',side:'nd',width:110},
-  {key:'nd6190',label:'61-90 Days',side:'nd',width:110},{key:'nd90',label:'90+ Days',side:'nd',width:110},
-  {key:'total',label:'Total Amount',side:'total',width:150}
+  {key:'od90',label:'90+ Days',side:'od',width:88},{key:'od6190',label:'61-90 Days',side:'od',width:88},
+  {key:'od3160',label:'31-60 Days',side:'od',width:88},{key:'od030',label:'0-30 Days',side:'od',width:88},
+  {key:'partyName',label:'Party Name',side:'name',width:190},
+  {key:'nd030',label:'0-30 Days',side:'nd',width:88},{key:'nd3160',label:'31-60 Days',side:'nd',width:88},
+  {key:'nd6190',label:'61-90 Days',side:'nd',width:88},{key:'nd90',label:'90+ Days',side:'nd',width:88},
+  {key:'total',label:'Total Amount',side:'total',width:120}
 ];
 
+// Renders just the pivot <table> itself — the party-name search box used to live
+// inline here, but it's now built by renderAgeing() and placed on the SAME row as
+// the All Data/Ageing Wise tabs (see .ageing-mode-bar), per explicit user
+// instruction that the search must not push onto its own line.
 function renderAgeingPivot(kind){
   const isRecv=kind==='recv';
   const tableKey=isRecv?'ageingPivotRecv':'ageingPivotPay';
@@ -99,11 +99,7 @@ function renderAgeingPivot(kind){
     }).join('')}</tr>`).join(''):`<tr><td colspan="${AGEING_PIVOT_COLS.length}"><div class="empty-state"><div class="big">No matching parties</div></div></td></tr>`;
 
   return `
-    <div class="apv-searchbar">
-      <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(st.filters.partyName||'')}">
-      <span class="apv-count">${rows.length} parties</span>
-    </div>
-    <div class="dt-table-wrap">
+    <div class="dt-table-wrap apv-wrap">
       <div class="dt-scroll">
         <table class="dt apv-table">
           <thead>
@@ -116,12 +112,78 @@ function renderAgeingPivot(kind){
     </div>`;
 }
 
+/* ============================= AGEING PAGE — Receivable/Payable, All Data/Ageing Wise =============================
+ * Kind tabs (Receivable Ageing / Payable Ageing) — added per explicit user
+ * instruction so both Ageing Summary dashboards are reachable from ONE page via
+ * a tab click, in addition to the existing sidebar "Ageing Summary" submenu.
+ * Mode tabs (All Data / Ageing Wise) — "All Data" now holds everything that used
+ * to live on the separate Receivables/Payables Dashboard page: the 4 KPI cards
+ * plus the full flat, searchable/filterable/sortable/resizable grid. The old
+ * Top Customers bar chart and Ageing Snapshot buckets were dropped ("top
+ * customers and ageing chart not needed"). "Ageing Wise" keeps the party-pivot
+ * table. Both tab rows share ONE line with whatever search box is relevant to
+ * the active mode, so nothing pushes onto its own extra line.
+ */
 function renderAgeing(kind){
   const isRecv=kind==='recv',rows=dataForFY(isRecv?'receivables':'payables'),amtKey=isRecv?'pendingAmount':'closingBalance';
-  const overdue=rows.filter(r=>Number(r.overdueDays)>0),upcoming=rows.filter(r=>Number(r.overdueDays)<=0),mode=S.ageingMode||'all';
-  return `<div class="view-toggle"><button class="${mode==='all'?'active':''}" data-action="ageing-mode" data-mode="all">All Data</button><button class="${mode==='ageing'?'active':''}" data-action="ageing-mode" data-mode="ageing">Ageing Wise</button></div>
-    ${mode==='ageing'?`<div class="dash-grid ageing-summary-cards"><div class="card"><div class="card-label">${isRecv?'Paisa Aana Tha, Aaya Nahi':'Payment Karna Tha, Hua Nahi'}</div><div class="card-value">${fmtINR(sumBy(overdue,amtKey))}</div><div class="card-sub">${overdue.length} overdue bills</div></div><div class="card"><div class="card-label">${isRecv?'Paisa Abhi Aana Hai':'Payment Abhi Karna Hai'}</div><div class="card-value">${fmtINR(sumBy(upcoming,amtKey))}</div><div class="card-sub">${upcoming.length} not-yet-due bills</div></div><div class="card"><div class="card-label">Total Amount</div><div class="card-value">${fmtINR(sumBy(rows,amtKey))}</div><div class="card-sub">${rows.length} total bills</div></div></div>`:''}
-    ${renderAgeingPivot(kind)}`;
+  const overdue=rows.filter(r=>Number(r.overdueDays)>0),notYetDue=rows.filter(r=>Number(r.overdueDays)<=0),mode=S.ageingMode||'all';
+
+  const kindTabs=`<div class="view-toggle ageing-kind-tabs">
+      <button class="${isRecv?'active':''}" data-action="nav" data-page="ageingRecv">Receivable Ageing</button>
+      <button class="${!isRecv?'active':''}" data-action="nav" data-page="ageingPay">Payable Ageing</button>
+    </div>`;
+
+  const tableKey=isRecv?'ageingPivotRecv':'ageingPivotPay';
+  const pivotSt=tableState(tableKey);
+  const pivotQ=(pivotSt.filters.partyName||'').toLowerCase();
+  const pivotAll=ageingPivotRows(kind);
+  const pivotCount=pivotQ?pivotAll.filter(r=>r.partyName.toLowerCase().includes(pivotQ)).length:pivotAll.length;
+
+  const modeTabs=`<div class="view-toggle ageing-mode-tabs">
+      <button class="${mode==='all'?'active':''}" data-action="ageing-mode" data-mode="all">All Data</button>
+      <button class="${mode==='ageing'?'active':''}" data-action="ageing-mode" data-mode="ageing">Ageing Wise</button>
+    </div>`;
+  // Party-name search only makes sense while the pivot table is on screen: for
+  // Receivables that's the "Ageing Wise" tab only (since "All Data" now shows the
+  // flat grid, which has its own per-column search built in); for Payables the
+  // pivot is shown in BOTH tabs, so its search stays visible either way.
+  const pivotVisible=mode==='ageing'||!isRecv;
+  const searchBox=pivotVisible?`<div class="apv-searchbar">
+      <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(pivotSt.filters.partyName||'')}">
+      <span class="apv-count">${pivotCount} parties</span>
+    </div>`:'';
+  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${searchBox}</div>`;
+
+  if(mode==='ageing'){
+    return `${kindTabs}${modeBar}
+      <div class="dash-grid ageing-page-cards ageing-summary-cards">
+        <div class="card"><div class="card-label">${isRecv?'Paisa Aana Tha, Aaya Nahi':'Payment Karna Tha, Hua Nahi'}</div><div class="card-value">${fmtINR(sumBy(overdue,amtKey))}</div><div class="card-sub">${overdue.length} overdue bills</div></div>
+        <div class="card"><div class="card-label">${isRecv?'Paisa Abhi Aana Hai':'Payment Abhi Karna Hai'}</div><div class="card-value">${fmtINR(sumBy(notYetDue,amtKey))}</div><div class="card-sub">${notYetDue.length} not-yet-due bills</div></div>
+        <div class="card"><div class="card-label">Total Amount</div><div class="card-value">${fmtINR(sumBy(rows,amtKey))}</div><div class="card-sub">${rows.length} total bills</div></div>
+      </div>
+      ${renderAgeingPivot(kind)}`;
+  }
+
+  // "All Data" — for Receivables specifically, this now shows what used to live on
+  // the separate standalone "Receivables Dashboard" page (removed per explicit user
+  // instruction): the 4 KPI cards + full flat searchable/filterable/sortable grid.
+  // Payables Ageing's "All Data" tab is untouched (still the plain pivot table) since
+  // only the Receivables Dashboard removal/merge was requested — Payables Dashboard
+  // stays a separate page, reachable from the sidebar as before.
+  if(isRecv){
+    return `${kindTabs}${modeBar}
+      <div class="dash-grid ageing-page-cards ageing-alldata-cards">
+        <div class="card"><div class="card-label">Total Outstanding</div><div class="card-value">${fmtINR(sumBy(rows,amtKey))}</div><div class="card-sub">${rows.length} open bills</div></div>
+        <div class="card"><div class="card-label">Overdue Bills</div><div class="card-value">${overdue.length}</div><div class="card-sub">${fmtINR(sumBy(overdue,amtKey))} was due but not received</div></div>
+        <div class="card"><div class="card-label">Not Yet Due</div><div class="card-value">${notYetDue.length}</div><div class="card-sub">${fmtINR(sumBy(notYetDue,amtKey))} still to come</div></div>
+        <div class="card"><div class="card-label">Avg Overdue Days</div><div class="card-value">${overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0}</div></div>
+      </div>
+      <section class="recv-dashboard-table">
+        <div class="recv-dashboard-table-head"><div><h3>Receivables Details</h3><span>Search, filter, sort, resize, and manage visible columns</span></div></div>
+        ${renderGrid('receivablesDashboard')}
+      </section>`;
+  }
+  return `${kindTabs}${modeBar}${renderAgeingPivot(kind)}`;
 }
 registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=>renderAgeing('pay'));
 

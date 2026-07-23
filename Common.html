@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.7 (dashboard panel-foot totals in blue)";
+const APP_BUILD = "2026-07-23.8 (Ageing tabs, All Data merge, scroll-jump fix)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -462,7 +462,6 @@ const NAV_ITEMS=[
   {key:'dashboard',      label:'Dashboard',            group:null, icon:'grid'},
   {key:'execSummary',    label:'Executive Summary',    group:null, icon:'summary'},
 
-  {key:'recvDashboard',  label:'Receivables Dashboard',group:'Receivables', icon:'in'},
   {key:'customerList',   label:'Customer List',        group:'Receivables', icon:'customer'},
   {key:'receipt',        label:'Receipt List',         group:'Receivables', icon:'arrow-down'},
   {key:'collectionAnalysis',label:'Collection Analysis',group:'Receivables', icon:'collection'},
@@ -493,7 +492,6 @@ const NAV_ITEMS=[
 const PAGE_TITLES={
   dashboard:{t:'Finance Command Center',s:'Complete Overview of Your Business Performance'},
   execSummary:{t:'Executive Summary',s:'High-level snapshot for leadership'},
-  recvDashboard:{t:'Receivables Dashboard',s:'Outstanding customer bills at a glance'},
   mapView:{t:'India Sales Map',s:'State-wise sales with city drill-down'},
   ageingRecv:{t:'Receivables Ageing Summary',s:'All data and ageing-wise receivable analysis'},
   customerList:{t:'Customer List',s:'Unique customers and invoice totals from SALES'},
@@ -893,17 +891,29 @@ document.addEventListener('click',e=>{
   if(a==='open-sidebar'){S.sidebarOpen=true;render();return;}
   if(a==='close-sidebar'){S.sidebarOpen=false;render();return;}
   if(a==='toggle-theme'){
+    // Updated in-place (no render()) — a full re-render replaces the whole `.content`
+    // element, which was resetting scroll position to the top on every click of this
+    // topbar-right control. Toggling the dark class + swapping the button's own icon
+    // directly keeps the page exactly where the user was looking. Per explicit user
+    // instruction: "on evry click dashboard move nahi hona chahiye".
     S.darkMode=!S.darkMode;
     document.documentElement.classList.toggle('dark',S.darkMode);
     try{localStorage.setItem('tally_dark_mode',S.darkMode?'true':'false');}catch(e){}
-    render();return;
+    el.textContent=S.darkMode?'☀️':'🌙';
+    return;
   }
   if(a==='set-fontsize'){
+    // Same reasoning as toggle-theme above — update the zoom level and the active
+    // button highlight directly on the existing DOM instead of calling render(),
+    // so the page/table scroll position never jumps.
     const size=parseInt(el.getAttribute('data-size'),10);
     if(FONT_SIZE_OPTIONS.indexOf(size)!==-1){
       S.fontSize=size;
       try{localStorage.setItem('tally_font_size',String(size));}catch(e){}
-      render();
+      const contentEl=document.querySelector('.content');
+      if(contentEl)contentEl.style.zoom=size/100;
+      const group=el.closest('.topbar-fontsize');
+      if(group)group.querySelectorAll('button').forEach(b=>b.classList.toggle('active',parseInt(b.getAttribute('data-size'),10)===size));
     }
     return;
   }
