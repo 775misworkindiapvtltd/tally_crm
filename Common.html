@@ -558,8 +558,6 @@ function renderShell(inner){
           ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
         </div>
         <div class="topbar-right">
-          <div class="tb-search">🔍 Search Customer / Invoice / Receipt / Voucher…</div>
-          <div class="tb-icon-btn" data-action="nav" data-page="alerts" title="Alerts">${NAV_ICONS.bell}${alerts?`<span class="dot">${alerts}</span>`:''}</div>
           <div class="topbar-controls"><button data-action="toggle-theme" title="Toggle dark/light mode">${S.darkMode?'☀️':'🌙'}</button></div>
           <div class="topbar-welcome"><b>${esc(S.user.name)}</b><span>${esc(S.user.role||'Team Member')}</span></div>
           <div class="avatar">${initials}</div>
