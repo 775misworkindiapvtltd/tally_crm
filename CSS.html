@@ -283,20 +283,26 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .bar-fill.pay{background:linear-gradient(90deg,var(--pay),#F5B15E);}
 .bar-item .b-val{width:88px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--ink);flex:none;}
 
-.age-buckets{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
-.age-bucket{background:var(--accent-tint2);border:1px solid var(--line);border-radius:9px;padding:10px 8px;text-align:center;}
-.age-bucket .ab-label{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
-.age-bucket .ab-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--ink);margin-top:4px;}
+/* Ageing buckets (Receivable/Payable Ageing Snapshot): the bucket range label
+   ("0-30 Days" etc) must stay on ONE line in a small bold font, with the amount
+   sitting BELOW it in a lighter grey — per the reference screenshot. There are
+   always exactly 4 buckets from ageingBuckets() (0-30/31-60/61-90/90+), so the
+   grid is 4 columns, not 5 — the old repeat(5,1fr) left a dead unused column of
+   white space to the right of every row. */
+.age-buckets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.age-bucket{background:var(--accent-tint2);border:1px solid var(--line);border-radius:9px;padding:8px 6px;text-align:center;}
+.age-bucket .ab-label{font-size:10px;font-weight:700;color:var(--ink-secondary);letter-spacing:.01em;white-space:nowrap;}
+.age-bucket .ab-val{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:600;color:var(--muted);margin-top:3px;white-space:nowrap;}
 .age-bucket.danger{background:var(--danger-tint);}
 .age-bucket.danger .ab-val{color:var(--danger);}
 
 /* ---------- CHARTS ---------- */
 .chart-wrap{position:relative;width:100%;height:220px;}
 .chart-wrap.sm{height:160px;}
-.chart-wrap.donut{height:190px;}
-.donut-panel-body{display:flex;align-items:center;gap:18px;}
-.donut-panel-body .chart-wrap{flex:none;width:150px;height:150px;}
-.donut-legend{flex:1;display:flex;flex-direction:column;gap:9px;}
+.chart-wrap.donut{height:150px;}
+.donut-panel-body{display:flex;align-items:center;gap:12px;}
+.donut-panel-body .chart-wrap{flex:none;width:128px;height:128px;}
+.donut-legend{flex:1;display:flex;flex-direction:column;gap:7px;}
 .donut-legend .dl-row{display:flex;align-items:center;gap:8px;font-size:11.5px;}
 .donut-legend .dl-dot{width:9px;height:9px;border-radius:50%;flex:none;}
 .donut-legend .dl-label{flex:1;color:var(--ink-secondary);font-weight:600;}
@@ -311,18 +317,18 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .sales-topline-title>span:first-child{min-width:0;}
 .sales-topline-period{flex:none;margin-top:-2px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:9px;line-height:1.1;font-weight:700;color:var(--muted);white-space:nowrap;}
 .sales-topline-period::after{content:'⌄';margin-left:4px;color:var(--accent-dark);}
-.sales-topline-body{padding:12px 16px 10px;display:flex;flex-direction:column;align-items:stretch;gap:9px;}
-.sales-topline-chart{align-self:center;flex:none;width:116px;height:116px;}
-.sales-topline-summary{display:flex;align-items:center;justify-content:center;gap:7px;padding:1px 0 2px;text-transform:uppercase;letter-spacing:.04em;font-size:8.5px;font-weight:700;color:var(--muted);}
+.sales-topline-body{padding:9px 16px 5px;display:flex;flex-direction:column;align-items:stretch;gap:5px;}
+.sales-topline-chart{align-self:center;flex:none;width:88px;height:88px;}
+.sales-topline-summary{display:flex;align-items:center;justify-content:center;gap:7px;padding:0 0 1px;text-transform:uppercase;letter-spacing:.04em;font-size:8.5px;font-weight:700;color:var(--muted);}
 .sales-topline-summary strong{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0;color:var(--ink);white-space:nowrap;}
 .sales-topline-legend{display:flex;flex-direction:column;gap:0;}
-.sales-topline-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:10px;padding:6px 0;border-bottom:1px solid var(--line-light);min-height:25px;font-size:10px;line-height:1.2;}
+.sales-topline-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:10px;padding:4px 0;border-bottom:1px solid var(--line-light);min-height:21px;font-size:10px;line-height:1.2;}
 .sales-topline-row:last-child{border-bottom:0;}
 .sales-topline-category{display:flex;align-items:center;gap:7px;min-width:0;color:var(--ink-secondary);font-weight:700;}
 .sales-topline-dot{width:7px;height:7px;border-radius:50%;flex:none;}
 .sales-topline-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .sales-topline-amount{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--ink);white-space:nowrap;text-align:right;}
-.sales-topline-foot{justify-content:center;padding:9px 16px!important;}
+.sales-topline-foot{justify-content:center;padding:6px 16px!important;}
 .sales-topline-foot a{color:var(--accent-dark);font-size:10px;font-weight:700;text-decoration:none;white-space:nowrap;cursor:pointer;}
 .sales-topline-foot a span{margin-left:4px;font-size:13px;line-height:0;vertical-align:-1px;}
 .donut-center-total{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;pointer-events:none;}
