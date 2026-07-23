@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.1 (Sales Report Category pivot)";
+const APP_BUILD = "2026-07-23.2 (refresh pill + scoped Sales refresh)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 
@@ -241,9 +241,23 @@ async function loadAll(){
 // this avoids partial numbers, repeated page movement, and a table changing mid-scroll.
 const CHUNK_KEYS=['receivables','payables','expense','expenseTrend','receipt','payment','sales','balance','diagnostics'];
 
-async function loadChunks(){
+// Page-scoped refresh: clicking the inline "Refresh" button on a specific page only
+// re-fetches the sheet(s) that page actually needs, instead of pulling every
+// registered chunk — per explicit user instruction ("Sales Report mein refresh
+// select karu to sirf isi se related sheets se data pick ho, baki ka nahi, else time
+// jyada lagta hai"). Sales Report reads SALES (buildSalesReport) plus RECEIVABLES
+// (for the linked Pending Amount/Overdue Days on each invoice) — nothing else. Any
+// page NOT listed here keeps doing a full refresh (see refreshpage handler below),
+// and the sidebar "Sync with Tally" button always does a full refresh regardless of
+// which page is open, since that button is the explicit "sync everything" action.
+const PAGE_CHUNK_KEYS={
+  salesReport:['sales','receivables']
+};
+
+async function loadChunks(chunkKeys){
+  const keys=(chunkKeys&&chunkKeys.length)?chunkKeys:CHUNK_KEYS;
   let completed=0;const livePayload={};
-  for(const key of CHUNK_KEYS){
+  for(const key of keys){
     try{
       const data=await runServer('getChunk',key);
       if(data===null||data===undefined)continue;
@@ -279,17 +293,24 @@ async function loadHeavyData(skipInitialRender){
   render();
 }
 
-async function refreshData(){
+async function refreshData(chunkKeys){
   S.syncing=true;S.diagBannerDismissed=false;render();
-  const result=await loadChunks();
+  const result=await loadChunks(chunkKeys);
   S.syncing=false;
   if(applyCompletedLiveSync_(result)){
     await writeCachedSnapshot_();
     Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].numFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
-    showToast("Sheet se latest data mil gaya.",false);
+    showToast((chunkKeys&&chunkKeys.length)?"Is report se related sheet se latest data mil gaya.":"Sheet se latest data mil gaya.",false);
   }else{
     showToast("Live sync nahi hua — cached data hi dikh raha hai.",true);
   }
+}
+// Refreshes only the current page's own sheet(s) when a page-scoped mapping exists
+// in PAGE_CHUNK_KEYS (e.g. Sales Report -> just SALES + RECEIVABLES); otherwise falls
+// back to the normal full refresh so every other page's behavior is unchanged.
+function refreshCurrentPage(){
+  const scoped=PAGE_CHUNK_KEYS[S.page];
+  return refreshData(scoped);
 }
 
 /* ============================= HELPERS ============================= */
@@ -534,6 +555,7 @@ function renderShell(inner){
         <div class="topbar-left">
           <button class="hamburger" data-action="open-sidebar">☰</button>
           <div class="tb-title"><h2>${esc(title.t)} <span style="font-size:10px;color:var(--muted);">ⓘ</span></h2><div class="sub">${esc(title.s)}</div></div>
+          ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
         </div>
         <div class="topbar-right">
           <div class="tb-search">🔍 Search Customer / Invoice / Receipt / Voucher…</div>
@@ -731,7 +753,7 @@ function renderGrid(tableKey){
   return `
     <div class="dt-toolbar${subGrid?' sub-grid':''}">
       <div class="count">${total} of ${def.data().length} rows</div>
-      ${subGrid?'':`<button class="btn btn-ghost" data-action="syncnow" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`}
+      ${subGrid?'':`<button class="btn btn-ghost" data-action="refreshpage" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`}
       <div class="dt-colmenu-wrap">
         <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:7px 14px;">Columns ▾</button>
         ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
@@ -834,7 +856,8 @@ document.addEventListener('click',e=>{
   if(a==='ageing-nav-toggle'){S.ageingOpen=!S.ageingOpen;render();return;}
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='logout'){void writeCachedSnapshot_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
-  if(a==='syncnow'){refreshData();return;}
+  if(a==='syncnow'){refreshData();return;} // sidebar "Sync with Tally" — always a full refresh
+  if(a==='refreshpage'){refreshCurrentPage();return;} // per-page "Refresh" button — scoped when PAGE_CHUNK_KEYS has an entry for the current page
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;persistGridPrefs_(t);render();return;}
   if(a==='togglerowexpand'){
