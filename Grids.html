@@ -110,8 +110,8 @@ const SALES_REPORT_DETAIL_COLS=[
   {key:'date',label:'Date',width:110,date:true},
   {key:'description',label:'Description',width:240},
   {key:'category',label:'Category',width:190},
-  {key:'amount',label:'Amount',headerSub:'With GST',width:150,num:true},
-  {key:'amountExclGst',label:'Amount',headerSub:'W/O GST',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
+  {key:'amount',label:'Amount',headerSub:'With GST',headerTotal:true,width:150,num:true},
+  {key:'amountExclGst',label:'Amount',headerSub:'W/O GST',headerTotal:true,width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
 ];
 
 function firstUseful(current,next){return current||next||'';}
@@ -190,7 +190,7 @@ function buildSalesReport(){
 // elegant boxed look requested ("sub table acchese elegatnt box me open hone").
 function renderSalesReportDetail_(masterRow){
   const detailKey='salesReportDetail:'+String(masterRow.invoiceNo)+'|'+String(masterRow.invoiceTo);
-  GRID_DEFS[detailKey]={cols:SALES_REPORT_DETAIL_COLS,data:()=>masterRow.lines||[],showSortArrows:true,subGrid:true};
+  GRID_DEFS[detailKey]={cols:SALES_REPORT_DETAIL_COLS,data:()=>masterRow.lines||[],showSortArrows:true,subGrid:true,noPagination:true};
   return `<div class="sr-detail-card">
     <div class="sr-detail-label">Line items for Invoice <b>${esc(masterRow.invoiceNo)}</b> — ${esc(masterRow.invoiceTo)} · ${masterRow.lines.length} row(s)</div>
     ${renderGrid(detailKey)}

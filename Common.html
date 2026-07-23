@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-21.5 (compact Sales sub-table)";
+const APP_BUILD = "2026-07-21.6 (Sales detail totals)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 
@@ -598,9 +598,9 @@ function renderGrid(tableKey){
       if(x<y)return-1*st.dir;if(x>y)return 1*st.dir;return 0;
     });
   }
-  const total=rows.length;const ps=compact?total||1:st.pageSize;const tp=Math.max(1,Math.ceil(total/ps));
+  const total=rows.length;const noPagination=!!def.noPagination;const unpaged=compact||noPagination;const ps=unpaged?total||1:st.pageSize;const tp=Math.max(1,Math.ceil(total/ps));
   if(st.page>tp)st.page=tp;if(st.page<1)st.page=1;
-  const si=compact?0:(st.page-1)*ps;const pageRows=compact?rows:rows.slice(si,si+ps);
+  const si=unpaged?0:(st.page-1)*ps;const pageRows=unpaged?rows:rows.slice(si,si+ps);
   const baseKeys=def.cols.map(c=>c.key);
   if(!st.order.length)st.order=baseKeys.slice();
   st.order=st.order.filter(k=>baseKeys.indexOf(k)!==-1).concat(baseKeys.filter(k=>st.order.indexOf(k)===-1));
@@ -636,7 +636,12 @@ function renderGrid(tableKey){
     }
     const searchIcon=c.date?'📅':(c.filterType==='select'||c.filterType==='number-range')?'▾':'⌕';
     const searchTitle=c.date?'Filter by date range':c.filterType==='select'?'Filter this column':c.filterType==='number-range'?'Filter by price range':'Search this column';
-    const headerLabel=c.headerSub?`${esc(c.label)}<span class="th-sub">${esc(c.headerSub)}</span>`:esc(c.label);
+    const headerTotal=c.headerTotal?(()=>{
+      const amounts=rows.map(r=>r[c.key]).filter(v=>v!==null&&v!==undefined&&v!=='');
+      if(!amounts.length)return '—';
+      return fmtINRCompact(amounts.reduce((sum,v)=>sum+(Number(v)||0),0));
+    })():null;
+    const headerLabel=`${esc(c.label)}${c.headerSub?`<span class="th-sub">${esc(c.headerSub)}</span>`:''}${headerTotal!==null?`<span class="th-total">Total: ${esc(headerTotal)}</span>`:''}`;
     return `<th style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
       <div class="th-inner"><div class="th-row">
         <span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${headerLabel}</span>
@@ -708,9 +713,9 @@ function renderGrid(tableKey){
     return `<div class="dt-table-wrap compact${dashboardReport?` dashboard-report dashboard-report-${esc(def.reportType||'')}`:''}"><div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
   }
 
-  // `subGrid` (e.g. the Sales Report expandable detail table) uses a lighter, more
-  // compact toolbar/pagination footer than the main full-page grid — the light-blue
-  // header + larger font come from CSS `.dt-table-wrap.sub-grid`, keyed off this class.
+  // `subGrid` (e.g. the Sales Report expandable detail table) uses a lighter,
+  // compact toolbar. A sub-grid can also opt out of pagination so every invoice
+  // line stays visible together inside its expanded card.
   const subGrid=!!def.subGrid;
 
   return `
@@ -726,7 +731,7 @@ function renderGrid(tableKey){
       <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
     </div>
     <div class="mcard-list">${mcards}</div>
-    <div class="dt-pagination${subGrid?' sub-grid':''}">
+    ${noPagination?'':`<div class="dt-pagination${subGrid?' sub-grid':''}">
       <div class="pp">Rows per page: <select data-action="pagesize" data-table="${tableKey}">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${st.pageSize===n?'selected':''}>${n}</option>`).join("")}</select></div>
       <div>${total===0?'0':`${rf}–${rt}`} of ${total}</div>
       <div class="nav">
@@ -736,7 +741,7 @@ function renderGrid(tableKey){
         <button data-action="pagenext" data-table="${tableKey}" ${st.page>=tp?'disabled':''}>›</button>
         <button data-action="pagelast" data-table="${tableKey}" ${st.page>=tp?'disabled':''}>»</button>
       </div>
-    </div>`;
+    </div>`}`;
 }
 
 // Mobile card fallback renderer — each grid def can supply mcard(r) for a custom layout;
