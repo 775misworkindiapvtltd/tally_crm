@@ -17,6 +17,18 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
+/* Fixes "swiping left/right with two fingers logs me out": on trackpads/touchpads,
+   a horizontal two-finger swipe over page content that has no horizontal scroll of
+   its own is interpreted by the browser as a back/forward navigation gesture. That
+   reloads the whole single-page app, wiping the in-memory login state and dropping
+   the user back to the login screen — it was never really "logging out", the whole
+   page was reloading. overscroll-behavior-x:none tells the browser not to trigger
+   that navigation gesture from within our own scroll containers (a matching
+   overscroll-behavior-x is also set on .content/.dt-scroll below, since the gesture
+   is triggered from whichever element the swipe actually happens over). Session
+   persistence (see persistSessionUserId_/loadAll() in Common.html) is the second,
+   belt-and-suspenders half of the fix, in case any browser reload still slips through.*/
+html,body{overscroll-behavior-x:none;}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:13px;transition:background .3s,color .3s;overflow:hidden;}
 html.dark{
   --sidebar:#0A0E1A;--sidebar-hover:#141A2C;--sidebar-active:#1B2338;--sidebar-line:#1C2336;
@@ -138,7 +150,16 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome b{color:var(--ink);font-weight:700;font-size:12px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
 .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4C5FE0);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
-.content{padding:6px 8px 12px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto;}
+.content{padding:6px 8px 12px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto;overscroll-behavior-x:none;}
+/* Text size control (A- / A / A+ / A++) — sits top-right in the topbar, next to the
+   dark/light toggle. "A" (100%, normal website font) is the default the first time
+   the app opens since it reads best in dense tables, per explicit user instruction;
+   the chosen size is remembered afterwards via localStorage (see Common.html). The
+   active preset is highlighted the same way the dark/light toggle button is. */
+.topbar-fontsize{display:flex;align-items:center;gap:2px;background:var(--bg);border:1.5px solid var(--line);border-radius:6px;padding:2px;flex:none;}
+.topbar-fontsize button{border:none;background:transparent;cursor:pointer;padding:5px 8px;border-radius:4px;font-size:11px;font-weight:700;color:var(--ink-secondary);transition:all .12s;line-height:1;font-family:'Inter',system-ui,sans-serif;}
+.topbar-fontsize button:hover{background:var(--accent-tint);color:var(--accent-dark);}
+.topbar-fontsize button.active{background:var(--accent);color:#fff;}
 
 .toast{position:fixed;top:16px;right:16px;z-index:100;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.12);display:flex;align-items:center;gap:10px;animation:toast-in .22s cubic-bezier(.2,.8,.4,1);background:var(--success-tint);color:var(--success);border:1px solid #BEE3C9;}
 @keyframes toast-in{from{opacity:0;transform:translateY(-10px) scale(.96);}to{opacity:1;transform:none;}}
@@ -501,7 +522,7 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .recv-dashboard-table table.dt tbody td{padding:6px 10px;font-size:11.5px;line-height:1.25;}
 .recv-dashboard-table .dt-pagination{padding:7px 10px;font-size:11px;}
 .recv-dashboard-table .dt-pagination select,.recv-dashboard-table .dt-pagination .nav button{font-size:11px;padding:4px 8px;}
-.dt-scroll{flex:1;overflow:auto;min-height:0;}
+.dt-scroll{flex:1;overflow:auto;min-height:0;overscroll-behavior-x:none;}
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
 table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}
 table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;gap:5px;position:relative;min-height:36px;}

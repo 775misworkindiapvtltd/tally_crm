@@ -9,9 +9,15 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.5 (Dashboard KPI strip cleanup)";
+const APP_BUILD = "2026-07-23.6 (text size control + swipe-logout fix)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
+// Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
+// (tables/panels) via CSS zoom — 100 ("A", normal website font) is the default the
+// FIRST time the app opens, since normal size reads best in dense tables per explicit
+// user instruction. The chosen size is remembered (localStorage) for every later visit.
+const FONT_SIZE_OPTIONS = [90,100,115,130];
+const FONT_SIZE_LABELS = {90:'A-',100:'A',115:'A+',130:'A++'};
 
 /* ============================= STATE ============================= */
 function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50,expanded:new Set()};}
@@ -86,8 +92,18 @@ let S = {
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
-try{ const fs=parseInt(localStorage.getItem('tally_font_size'),10); if(fs>=80&&fs<=130){S.fontSize=fs;} }catch(e){}
+// Text size: only restore a value that's still one of the current presets — if a
+// user's browser has a stray value from an older/removed preset, silently fall back
+// to the "A" (100%, normal) default rather than applying an unrecognised size.
+try{ const fs=parseInt(localStorage.getItem('tally_font_size'),10); if(FONT_SIZE_OPTIONS.indexOf(fs)!==-1){S.fontSize=fs;} }catch(e){}
 try{ const dim=localStorage.getItem('tally_sales_dimension'); if(dim==='category'||dim==='partyName'||dim==='state'){S.salesDimension=dim;} }catch(e){}
+// Remembered login session id — see establishSession_()/loadAll() below. This lets a
+// signed-in user auto-resume instantly if the page ever gets reloaded unintentionally
+// (e.g. a two-finger trackpad swipe triggering the browser's back/forward navigation
+// gesture — see the overscroll-behavior-x CSS fix for the primary cause — or a normal
+// browser refresh), instead of being dropped back to the login screen.
+function persistSessionUserId_(id){ try{localStorage.setItem('tally_session_user_id',String(id));}catch(e){} }
+function clearPersistedSessionUserId_(){ try{localStorage.removeItem('tally_session_user_id');}catch(e){} }
 
 /* ============================= APPS SCRIPT BRIDGE ============================= */
 function runServer(fnName,arg){
@@ -238,6 +254,27 @@ async function loadAll(){
     S.users=(loginData&&loginData.users)||[];
     S.loadError="";
   }catch(err){ S.loadError=err.message; }
+  // Auto-resume a previously signed-in user if the page reloaded unintentionally
+  // (e.g. an accidental two-finger swipe triggering the browser's back/forward
+  // navigation gesture, or a manual refresh) — this is the actual fix for "swiping
+  // logs me out": the swipe was reloading the whole app, and since login state only
+  // ever lived in memory, that reload always dropped back to the login screen no
+  // matter what. Session persistence removes the forced re-login; the CSS
+  // overscroll-behavior-x fix below removes the swipe-triggered reload itself.
+  let resumedUser=null;
+  try{
+    const savedId=localStorage.getItem('tally_session_user_id');
+    if(savedId)resumedUser=S.users.find(u=>String(u.id)===savedId)||null;
+  }catch(e){}
+  if(resumedUser){
+    S.user=resumedUser;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();
+    loadGridPrefsCache_();
+    Object.keys(S.dt).forEach(applyPersistedGridPrefs_);
+    await hydrateCachedData_();
+    S.syncing=true;S.ready=true;render();startClock();
+    void loadHeavyData(true);
+    return;
+  }
   S.ready=true;render();startClock();
 }
 
@@ -367,6 +404,7 @@ function nextLogoutTs(){
 }
 function forceNightLogout(){
   void writeCachedSnapshot_();
+  clearPersistedSessionUserId_();
   S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;
   S.loginError="Raat ke auto-logout ke kaaran aap sign out ho gaye. Kripya dobara login karein.";
   render();
@@ -399,6 +437,7 @@ function firstAllowedPage(){ return NAV_ITEMS[0]?NAV_ITEMS[0].key:null; }
 async function doLogin(id,pw){
   const u=S.users.find(x=>x.id.toLowerCase()===id.trim().toLowerCase()&&String(x.password)===pw);
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
+  persistSessionUserId_(u.id);
   S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();
   S.cacheLoaded=false;S.lastSync='';S.lastSyncAt=0;S.lastSyncSource='';
   // Load this user's remembered column hide/order/width/sort/page-size settings, then
@@ -563,12 +602,15 @@ function renderShell(inner){
           ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
         </div>
         <div class="topbar-right">
+          <div class="topbar-fontsize" role="group" aria-label="Text size">
+            ${FONT_SIZE_OPTIONS.map(fs=>`<button class="${S.fontSize===fs?'active':''}" data-action="set-fontsize" data-size="${fs}" title="Text size ${FONT_SIZE_LABELS[fs]}">${esc(FONT_SIZE_LABELS[fs])}</button>`).join('')}
+          </div>
           <div class="topbar-controls"><button data-action="toggle-theme" title="Toggle dark/light mode">${S.darkMode?'☀️':'🌙'}</button></div>
           <div class="topbar-welcome"><b>${esc(S.user.name)}</b><span>${esc(S.user.role||'Team Member')}</span></div>
           <div class="avatar">${initials}</div>
         </div>
       </div>
-      <div class="content">${inner}</div>
+      <div class="content" style="zoom:${(S.fontSize||100)/100};">${inner}</div>
     </div>
     ${bottomNav}
   </div>
@@ -856,10 +898,19 @@ document.addEventListener('click',e=>{
     try{localStorage.setItem('tally_dark_mode',S.darkMode?'true':'false');}catch(e){}
     render();return;
   }
+  if(a==='set-fontsize'){
+    const size=parseInt(el.getAttribute('data-size'),10);
+    if(FONT_SIZE_OPTIONS.indexOf(size)!==-1){
+      S.fontSize=size;
+      try{localStorage.setItem('tally_font_size',String(size));}catch(e){}
+      render();
+    }
+    return;
+  }
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='ageing-nav-toggle'){S.ageingOpen=!S.ageingOpen;render();return;}
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
-  if(a==='logout'){void writeCachedSnapshot_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
+  if(a==='logout'){void writeCachedSnapshot_();clearPersistedSessionUserId_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
   if(a==='syncnow'){refreshData();return;} // sidebar "Sync with Tally" — always a full refresh
   if(a==='refreshpage'){refreshCurrentPage();return;} // per-page "Refresh" button — scoped when PAGE_CHUNK_KEYS has an entry for the current page
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
