@@ -196,6 +196,54 @@ function renderSalesReportDetail_(masterRow){
     ${renderGrid(detailKey)}
   </div>`;
 }
+// ============================= SALES REPORT — CATEGORY-WISE PIVOT =============================
+// Built per user's reference screenshot (their internal MIS sheet): rows = distinct
+// Category values found on raw SALES lines, columns = either months of the selected
+// financial year(s), each selected financial year itself, or one Custom Range — plus
+// a Total column (placed LEFT of Category, per explicit user instruction "AND LEFT
+// MEIN AA JAYE CATEGORY SE PEHLE") and a Total row pinned to the top of the header
+// (per "TOTAL SADKE UPAR AA JAYE"). Unlike buildSalesReport() (which groups by unique
+// Invoice No for the master/detail table), this pivot works on every RAW SALES line —
+// one invoice can carry several categories across its lines, and each line's amount
+// belongs to whichever category is on that specific line.
+function salesCategoryPeriods_(mode){
+  if(mode==='year'){
+    let years=selectedFinancialYears();
+    if(!years.length)years=availableFinancialYears().map(f=>f.key);
+    return years.slice().sort().map(key=>{
+      const fy=financialYearFromKey(key);
+      return {key,label:String(fy.start.getFullYear()),test:r=>financialYearKey(r.date)===key};
+    });
+  }
+  if(mode==='custom'){
+    const from=S.salesCategoryCustomFrom||toISO(new Date());
+    const to=S.salesCategoryCustomTo||toISO(new Date());
+    return [{key:'custom',label:fmtDDMMMYYYY(fromISO(from))+' – '+fmtDDMMMYYYY(fromISO(to)),test:r=>inRange(r.date,from,to)}];
+  }
+  // month (default)
+  return selectedFYMonths().map(m=>({key:m.y+'-'+m.m,label:m.label,test:r=>{
+    const t=parseDT(r.date);if(t===null)return false;
+    const d=new Date(t);return d.getFullYear()===m.y&&d.getMonth()===m.m;
+  }}));
+}
+function buildSalesCategoryPivot(mode){
+  const periods=salesCategoryPeriods_(mode);
+  const byCategory={};
+  dataForFY('sales').forEach(r=>{
+    const cat=String(r.category||'').trim()||'Uncategorized';
+    if(!byCategory[cat])byCategory[cat]={category:cat,total:0,periods:{}};
+    const amt=Number(r.amount)||0;
+    for(let i=0;i<periods.length;i++){
+      if(periods[i].test(r)){ byCategory[cat].periods[periods[i].key]=(byCategory[cat].periods[periods[i].key]||0)+amt; break; }
+    }
+  });
+  const rows=Object.values(byCategory).map(c=>{
+    periods.forEach(p=>{ if(!(p.key in c.periods)) c.periods[p.key]=0; });
+    c.total=periods.reduce((s,p)=>s+(c.periods[p.key]||0),0);
+    return c;
+  });
+  return {periods,rows};
+}
 function buildVendorList(){
   const byParty={};
   dataForFY('payables').forEach(r=>{

@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-21.7 (Receivables dashboard table)";
+const APP_BUILD = "2026-07-23.1 (Sales Report Category pivot)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 
@@ -69,6 +69,16 @@ let S = {
   followUpDone:{}, // client-side "marked as followed up" set (not persisted to sheet)
   ageingOpen:false, ageingMode:'all',
   map:{selectedState:'',zoom:1},
+  // Sales Report top toggle: 'sales' = existing invoice-wise master/detail grid
+  // (unchanged), 'category' = the Category-wise Monthly/Yearly/Custom pivot below
+  // (see renderSalesCategoryPivot() in Finance.html). This pivot is a bespoke table
+  // (not the generic renderGrid engine) because of one custom requirement: resizing
+  // ANY single month/year column must resize ALL month/year columns together, which
+  // the generic per-column-independent resize doesn't support — so it tracks its own
+  // sort/resize/mode state here instead of reusing tableState().
+  salesReportView:'sales', salesCategoryMode:'month', salesCategoryCustomFrom:'', salesCategoryCustomTo:'',
+  salesCategorySort:'total', salesCategorySortDir:-1,
+  salesCategoryColWidth:110, salesCategoryTotalWidth:130, salesCategoryCatWidth:210,
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}

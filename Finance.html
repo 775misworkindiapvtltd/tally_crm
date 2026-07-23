@@ -38,8 +38,149 @@ registerPage('salesDashboard',renderSalesDashboard);
 // call — same as customerList/vendorList — so hide/unhide columns, resize,
 // per-column filter, and sort all come for free from the generic (non-compact) grid
 // engine, on BOTH the master table and every expanded sub-table.
-function renderSalesReport(){return renderGrid('salesReport');}
+// Top toggle button — per explicit user instruction ("is page pe column se pehle
+// button aa jayega SALES / CATEGORY") — placed BEFORE the grid's own column header
+// row, switching the whole page body between the existing invoice-wise master/detail
+// grid ("Sales" — unchanged, exactly what's already live) and the new Category-wise
+// Monthly/Yearly/Custom Range pivot modelled on the user's reference screenshot.
+function renderSalesReport(){
+  const view=S.salesReportView||'sales';
+  return `<div class="view-toggle">
+      <button class="${view==='sales'?'active':''}" data-action="sales-report-view" data-view="sales">Sales</button>
+      <button class="${view==='category'?'active':''}" data-action="sales-report-view" data-view="category">Category</button>
+    </div>
+    ${view==='category'?renderSalesCategoryPivot():renderGrid('salesReport')}`;
+}
 registerPage('salesReport',renderSalesReport);
+
+// Category-wise pivot: MODE toggle (Yearly/Monthly/Custom Range) at the top, then a
+// table with a Total column pinned LEFT of Category ("total sabse upar aa jaye" /
+// "left mein aa jaye category se pehle" — total is both the leftmost column AND
+// pinned to the header, per the user's screenshot), followed by one column per
+// month/FY/custom-range period. Every row is sortable (click any header, incl. Total
+// and Category) and every column is resizable — but per explicit instruction
+// ("agar mein resize karu month year col ko to karu ek ko sabhi ko applicable ho")
+// resizing ANY single month/year column resizes ALL of them together; Category and
+// Total keep their own independent widths. Header labels have NO parenthetical unit
+// text so the header row stays a single short line ("header ko chhod ke" — a plain,
+// uncluttered header).
+function renderSalesCategoryPivot(){
+  const mode=S.salesCategoryMode||'month';
+  const {periods,rows}=buildSalesCategoryPivot(mode);
+  const sortKey=S.salesCategorySort||'total',sortDir=S.salesCategorySortDir===1?1:-1;
+  const sorted=rows.slice().sort((a,b)=>{
+    if(sortKey==='category'){
+      const x=a.category.toLowerCase(),y=b.category.toLowerCase();
+      if(x<y)return -1*sortDir;if(x>y)return 1*sortDir;return 0;
+    }
+    const x=sortKey==='total'?a.total:(a.periods[sortKey]||0);
+    const y=sortKey==='total'?b.total:(b.periods[sortKey]||0);
+    return (x-y)*sortDir;
+  });
+  const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+  const periodGrandTotals={};periods.forEach(p=>{periodGrandTotals[p.key]=rows.reduce((s,r)=>s+(r.periods[p.key]||0),0);});
+
+  const modeBar=`<div class="view-toggle sales-cat-mode-toggle">
+      <button class="${mode==='month'?'active':''}" data-action="sales-cat-mode" data-mode="month">Monthly</button>
+      <button class="${mode==='year'?'active':''}" data-action="sales-cat-mode" data-mode="year">Yearly</button>
+      <button class="${mode==='custom'?'active':''}" data-action="sales-cat-mode" data-mode="custom">Custom Range</button>
+    </div>
+    ${mode==='custom'?`<div class="fbar-daterange sales-cat-daterange">
+      <span>From</span><input type="date" data-action="sales-cat-custom-from" value="${esc(S.salesCategoryCustomFrom||'')}">
+      <span>To</span><input type="date" data-action="sales-cat-custom-to" value="${esc(S.salesCategoryCustomTo||'')}">
+    </div>`:''}`;
+
+  const totW=S.salesCategoryTotalWidth||130,catW=S.salesCategoryCatWidth||210,colW=S.salesCategoryColWidth||110;
+  const sortArrow=k=>sortKey===k?(sortDir===1?'▲':'▼'):'↕';
+  // S.No — every other table/grid in the app (Sales Report itself, Customer List,
+  // Receivables, etc.) has this as its leftmost column, so it's added here too for
+  // the same consistent numbering convention, ahead of Total/Category.
+  const snoTh=`<th class="scp-th scp-sno" style="width:52px;min-width:52px;max-width:52px;"><div class="scp-th-inner" style="justify-content:center;cursor:default;">S.No</div></th>`;
+  const totalTh=`<th class="scp-th scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;" data-action="sales-cat-sort" data-col="total">
+      <div class="scp-th-inner"><span>Total</span><span class="scp-sort-ic">${sortArrow('total')}</span></div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="total"></div>
+    </th>`;
+  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;" data-action="sales-cat-sort" data-col="category">
+      <div class="scp-th-inner"><span>Category</span><span class="scp-sort-ic">${sortArrow('category')}</span></div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="category"></div>
+    </th>`;
+  const periodTh=periods.map(p=>`<th class="scp-th scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;" data-action="sales-cat-sort" data-col="${esc(p.key)}">
+      <div class="scp-th-inner"><span title="${esc(p.label)}">${esc(p.label)}</span><span class="scp-sort-ic">${sortArrow(p.key)}</span></div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="period"></div>
+    </th>`).join('');
+
+  const totalsRow=`<tr class="scp-totals-row">
+      <td class="scp-tot scp-sno" style="width:52px;min-width:52px;max-width:52px;"></td>
+      <td class="scp-tot scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;">${fmtNum(grandTotal)}</td>
+      <td class="scp-tot scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">TOTAL</td>
+      ${periods.map(p=>`<td class="scp-tot scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${fmtNum(periodGrandTotals[p.key]||0)}</td>`).join('')}
+    </tr>`;
+
+  const body=sorted.length?sorted.map((r,idx)=>`<tr>
+      <td class="scp-cell scp-sno" style="width:52px;min-width:52px;max-width:52px;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
+      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;">${fmtNum(r.total)}</td>
+      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">${esc(r.category)}</td>
+      ${periods.map(p=>`<td class="scp-cell scp-period${!r.periods[p.key]?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${r.periods[p.key]?fmtNum(r.periods[p.key]):'—'}</td>`).join('')}
+    </tr>`).join(''):`<tr><td colspan="${periods.length+3}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
+
+  return `${modeBar}
+    <div class="dt-table-wrap sales-cat-wrap">
+      <div class="dt-scroll">
+        <table class="dt scp-table">
+          <thead>
+            ${totalsRow}
+            <tr>${snoTh}${totalTh}${catTh}${periodTh}</tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');if(!el)return;
+  const a=el.getAttribute('data-action');
+  if(a==='sales-report-view'){S.salesReportView=el.getAttribute('data-view');render();return;}
+  if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');render();return;}
+  if(a==='sales-cat-sort'){
+    const col=el.getAttribute('data-col');
+    if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='category'?1:-1;}
+    render();return;
+  }
+});
+document.addEventListener('input',e=>{
+  const el=e.target,a=el.getAttribute('data-action');
+  if(a==='sales-cat-custom-from'){S.salesCategoryCustomFrom=el.value;render();return;}
+  if(a==='sales-cat-custom-to'){S.salesCategoryCustomTo=el.value;render();return;}
+});
+// Column-group resize: dragging ANY month/year column resizes ALL of them together
+// (per explicit user instruction), while Total/Category keep independent widths —
+// same mousedown/mousemove/mouseup pattern as the generic grid's per-column resize
+// in Common.html, just writing into S.salesCategory*Width instead of a per-key map.
+let salesCatResizeCtx=null;
+document.addEventListener('mousedown',e=>{
+  const el=e.target.closest('[data-action="sales-cat-resize"]');if(!el)return;
+  const target=el.getAttribute('data-target');const th=el.closest('th');
+  salesCatResizeCtx={target,startX:e.clientX,startW:th.getBoundingClientRect().width};
+  e.preventDefault();
+});
+document.addEventListener('mousemove',e=>{
+  if(!salesCatResizeCtx)return;
+  const nw=Math.max(70,Math.round(salesCatResizeCtx.startW+(e.clientX-salesCatResizeCtx.startX)));
+  const selector=salesCatResizeCtx.target==='total'?'.scp-total':salesCatResizeCtx.target==='category'?'.scp-cat':'.scp-period';
+  document.querySelectorAll('.scp-table '+selector).forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+});
+document.addEventListener('mouseup',()=>{
+  if(!salesCatResizeCtx)return;
+  const targetClass=salesCatResizeCtx.target==='total'?'scp-total':salesCatResizeCtx.target==='category'?'scp-cat':'scp-period';
+  const el=document.querySelector('.scp-table th.'+targetClass);
+  const nw=el?el.getBoundingClientRect().width:null;
+  if(nw){
+    if(salesCatResizeCtx.target==='total')S.salesCategoryTotalWidth=Math.round(nw);
+    else if(salesCatResizeCtx.target==='category')S.salesCategoryCatWidth=Math.round(nw);
+    else S.salesCategoryColWidth=Math.round(nw);
+  }
+  salesCatResizeCtx=null;render();
+});
 CHART_DEFS['salesDashboard']=function(){
   const months=selectedFYMonths();
   const salesRows=voucherSales_();
