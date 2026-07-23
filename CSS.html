@@ -461,13 +461,37 @@ table.dt tbody tr:hover{background:var(--accent-tint2);}
 table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
 /* Sales Report expandable master/detail rows. */
 .exp-toggle-cell{text-align:center;padding:0!important;}
-.exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;color:var(--accent-dark);font-size:11px;cursor:pointer;user-select:none;}
-.exp-toggle:hover{background:var(--accent-tint2);}
-.exp-detail-row td{background:var(--accent-tint2);padding:10px 14px 14px!important;border-bottom:2px solid var(--line);}
+.exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;background:var(--accent);font-size:13px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(46,107,242,.35);transition:all .12s;}
+.exp-toggle:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 3px 8px rgba(46,107,242,.4);}
+.exp-toggle.open{background:var(--accent-dark);}
+/* The whole expanded strip gets soft padding + a subtle tinted backdrop behind the
+   card so the card itself reads as "floating" above the row it belongs to — this is
+   the "elegant box" look requested, as opposed to the plain nested table before. */
+.exp-detail-row td{background:var(--bg);padding:14px 16px 18px!important;border-bottom:2px solid var(--line);}
 .exp-detail-wrap{max-width:100%;}
-.sr-detail-label{font-size:11px;font-weight:700;color:var(--ink-secondary);margin-bottom:8px;}
+.sr-detail-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 18px rgba(20,30,60,.08);overflow:hidden;padding:14px 16px 16px;}
+.sr-detail-label{font-size:12.5px;font-weight:700;color:var(--ink-secondary);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.sr-detail-label::before{content:'▤';font-size:13px;color:var(--accent-dark);}
 .sr-detail-label b{color:var(--ink);}
 .muted-cell{color:var(--muted);font-style:italic;}
+/* Sub-grid (the expanded detail table itself): light-blue header instead of the
+   generic grid's dark navy header, and a visibly larger/more readable body font —
+   both per explicit user feedback ("sun tablle ke haders me se background color kuch
+   light blue choose kar lo, table font small" / increase readability). Toolbar and
+   pagination are also shrunk since this table lives inside an already-compact card. */
+.dt-toolbar.sub-grid{margin-bottom:9px;gap:8px;}
+.dt-toolbar.sub-grid .count{font-size:11px;}
+.dt-table-wrap.sub-grid{border-radius:9px;box-shadow:none;}
+.dt-table-wrap.sub-grid table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);}
+.dt-table-wrap.sub-grid table.dt thead th .th-label{color:var(--accent-dark);font-size:11px;font-weight:700;}
+.dt-table-wrap.sub-grid table.dt thead th .sort-ic{color:var(--accent-dark);}
+.dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready{color:#6E93E8;}
+.dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready:hover{color:var(--accent-dark);}
+.dt-table-wrap.sub-grid table.dt thead th .search-ic{color:var(--accent-dark);opacity:.7;}
+.dt-table-wrap.sub-grid table.dt thead th .search-ic:hover{opacity:1;}
+.dt-table-wrap.sub-grid table.dt tbody td{font-size:13.5px;padding:10px 14px;}
+.dt-table-wrap.sub-grid table.dt tbody tr:nth-child(even){background:var(--accent-tint2);}
+.dt-pagination.sub-grid{padding:8px 12px;font-size:11px;}
 .code-pill{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:11px;color:var(--accent-dark);background:var(--accent-tint);border-radius:5px;padding:3px 8px;display:inline-block;}
 .pill-danger{color:var(--danger);background:var(--danger-tint);}
 .pill-success{color:var(--success);background:var(--success-tint);}

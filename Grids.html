@@ -101,10 +101,15 @@ const SALES_REPORT_COLS=[
 // Detail sub-table — every individual SALES line belonging to one invoice. Category
 // here is the single raw value per line (never concatenated), so it keeps the plain
 // text filter+sort every other column gets — no special select/token handling needed.
+// Invoice No is repeated on every line (per explicit user request — "invoice number
+// wapise se dikha sakte hai kyuki hum iske later kuh report le sakte hai") so this
+// sub-table's own rows are self-describing if later reused/exported on their own,
+// without needing to cross-reference the collapsed parent row.
 const SALES_REPORT_DETAIL_COLS=[
-  {key:'date',label:'Date',width:120,date:true},
-  {key:'description',label:'Description',width:260},
-  {key:'category',label:'Category',width:200},
+  {key:'invoiceNo',label:'Invoice No',width:130},
+  {key:'date',label:'Date',width:110,date:true},
+  {key:'description',label:'Description',width:240},
+  {key:'category',label:'Category',width:190},
   {key:'amount',label:'Amount (Incl. GST)',width:150,num:true},
   {key:'amountExclGst',label:'Amount (Excl. GST)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
 ];
@@ -152,7 +157,7 @@ function buildSalesReport(){
     g.phone=firstUseful(g.phone,r.phone);g.email=firstUseful(g.email,r.email);
     const lineAmount=Number(r.amount)||0;
     const lineExclGst=(r.amountExclGst===null||r.amountExclGst===undefined)?null:Number(r.amountExclGst)||0;
-    g.lines.push({date:r.date,description:r.description||'',category:r.category||'',amount:lineAmount,amountExclGst:lineExclGst});
+    g.lines.push({invoiceNo:g.invoiceNo,date:r.date,description:r.description||'',category:r.category||'',amount:lineAmount,amountExclGst:lineExclGst});
     g.amount+=lineAmount;
     if(lineExclGst!==null){g.amountExclGst+=lineExclGst;g.hasAnyExclGst=true;}
   });
@@ -175,17 +180,21 @@ function buildSalesReport(){
   }).sort((a,b)=>a.invoiceNo.localeCompare(b.invoiceNo));
 }
 // Renders the expandable sub-table for one Sales Report master row (its individual
-// SALES lines: Date/Description/Category/Amount/Amount-Excl-GST). A separate
-// GRID_DEF is registered on the fly, keyed by invoice+party so every expanded
-// invoice keeps its OWN independent filter/sort/hidden-column state — reusing the
-// exact same generic grid engine (renderGrid) as the master table and every other
-// grid in the app, so filters, sorting, and column hide/unhide all work here too,
-// per explicit user instruction ("All filters, hide unhide col otpion will be
-// there n main and sub table").
+// SALES lines: Invoice No/Date/Description/Category/Amount/Amount-Excl-GST). A
+// separate GRID_DEF is registered on the fly, keyed by invoice+party so every
+// expanded invoice keeps its OWN independent filter/sort/hidden-column state —
+// reusing the exact same generic grid engine (renderGrid) as the master table and
+// every other grid in the app, so filters, sorting, and column hide/unhide all work
+// here too, per explicit user instruction ("All filters, hide unhide col otpion
+// will be there n main and sub table"). Wrapped in `.sr-detail-card` for the
+// elegant boxed look requested ("sub table acchese elegatnt box me open hone").
 function renderSalesReportDetail_(masterRow){
   const detailKey='salesReportDetail:'+String(masterRow.invoiceNo)+'|'+String(masterRow.invoiceTo);
-  GRID_DEFS[detailKey]={cols:SALES_REPORT_DETAIL_COLS,data:()=>masterRow.lines||[],showSortArrows:true};
-  return `<div class="sr-detail-label">Line items for Invoice <b>${esc(masterRow.invoiceNo)}</b> — ${masterRow.lines.length} row(s)</div>${renderGrid(detailKey)}`;
+  GRID_DEFS[detailKey]={cols:SALES_REPORT_DETAIL_COLS,data:()=>masterRow.lines||[],showSortArrows:true,subGrid:true};
+  return `<div class="sr-detail-card">
+    <div class="sr-detail-label">Line items for Invoice <b>${esc(masterRow.invoiceNo)}</b> — ${esc(masterRow.invoiceTo)} · ${masterRow.lines.length} row(s)</div>
+    ${renderGrid(detailKey)}
+  </div>`;
 }
 function buildVendorList(){
   const byParty={};

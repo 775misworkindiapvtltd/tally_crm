@@ -688,7 +688,7 @@ function renderGrid(tableKey){
     if(expandable){
       const rowKey=String(def.rowKey?def.rowKey(r):si+idx);
       const isOpen=st.expanded.has(rowKey);
-      expCell=`<td class="exp-toggle-cell"><span class="exp-toggle" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'▾':'▸'}</span></td>`;
+      expCell=`<td class="exp-toggle-cell"><span class="exp-toggle${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span></td>`;
       if(isOpen){
         const detailHtml=def.renderDetail?def.renderDetail(r):'';
         const colspan=1+visCols.length+1; // expand col + data cols + S.No col
@@ -707,20 +707,25 @@ function renderGrid(tableKey){
     return `<div class="dt-table-wrap compact${dashboardReport?` dashboard-report dashboard-report-${esc(def.reportType||'')}`:''}"><div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
   }
 
+  // `subGrid` (e.g. the Sales Report expandable detail table) uses a lighter, more
+  // compact toolbar/pagination footer than the main full-page grid — the light-blue
+  // header + larger font come from CSS `.dt-table-wrap.sub-grid`, keyed off this class.
+  const subGrid=!!def.subGrid;
+
   return `
-    <div class="dt-toolbar">
+    <div class="dt-toolbar${subGrid?' sub-grid':''}">
       <div class="count">${total} of ${def.data().length} rows</div>
-      <button class="btn btn-ghost" data-action="syncnow" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
+      ${subGrid?'':`<button class="btn btn-ghost" data-action="syncnow" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`}
       <div class="dt-colmenu-wrap">
         <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:7px 14px;">Columns ▾</button>
         ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
       </div>
     </div>
-    <div class="dt-table-wrap">
+    <div class="dt-table-wrap${subGrid?' sub-grid':''}">
       <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
     </div>
     <div class="mcard-list">${mcards}</div>
-    <div class="dt-pagination">
+    <div class="dt-pagination${subGrid?' sub-grid':''}">
       <div class="pp">Rows per page: <select data-action="pagesize" data-table="${tableKey}">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${st.pageSize===n?'selected':''}>${n}</option>`).join("")}</select></div>
       <div>${total===0?'0':`${rf}–${rt}`} of ${total}</div>
       <div class="nav">
