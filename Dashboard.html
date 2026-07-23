@@ -61,7 +61,7 @@ function renderDashboard(){
   const cur=periodMetrics();
   const fyLabel=selectedFYLabel();
 
-  const totalRecv=outstandingReceivable(), totalPay=outstandingPayable(), cashPos=cashInHandBank();
+  const totalRecv=outstandingReceivable(), totalPay=outstandingPayable();
   const totalSales=totalSalesFromSalesSheet();
   const overdueRecvRows=dataForFY('receivables').filter(r=>Number(r.overdueDays)>0);
   const overduePayRows=dataForFY('payables').filter(r=>Number(r.overdueDays)>0);
@@ -71,15 +71,21 @@ function renderDashboard(){
 
   // "vs previous period" comparison chips removed along with the Date Range/Compare UI
   // (there is no period to compare against anymore) — cards now show plain totals.
+  // Per explicit user instruction: the "Payments" card is removed from this KPI strip,
+  // "Outstanding Payables" is relabelled "Total Payable" (value/logic unchanged), and
+  // "Cash in Hand / Bank" on THIS strip specifically now shows Total Sales - Total
+  // Expenses (cashInHandBank(), used elsewhere on Cash Flow/Balance Sheet/Executive
+  // Summary, is left untouched since those pages need the actual receipt/payment
+  // ledger-based cash position).
+  const cashInHandKpi=totalSales-cur.expense;
   const kpis=[
     {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard'},
     {label:'Total Expenses',value:cur.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard'},
     {label:'Total Receivables',value:totalRecv,icon:'in',cls:'c-blue',page:'recvDashboard'},
-    {label:'Outstanding Payables',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard'},
+    {label:'Total Payable',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard'},
     {label:'Collections',value:cur.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
-    {label:'Payments',value:cur.payments,icon:'arrow-up',cls:'c-purple',page:'payDashboard'},
     {label:'Net Profit',value:cur.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss'},
-    {label:'Cash in Hand / Bank',value:cashPos,icon:'cashflow',cls:'c-blue',page:'cashFlow'},
+    {label:'Cash in Hand / Bank',value:cashInHandKpi,icon:'cashflow',cls:'c-blue',page:'cashFlow'},
   ];
 
   const kpiCards=kpis.map(k=>{
