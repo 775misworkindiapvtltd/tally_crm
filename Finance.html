@@ -28,10 +28,16 @@ function renderSalesDashboard(){
 }
 registerPage('salesDashboard',renderSalesDashboard);
 
-// One row per unique Invoice No from the SALES sheet (see buildSalesReport() in
-// Grids.html for the grouping/aggregation logic). Plain renderGrid() call — same as
-// customerList/vendorList — so hide/unhide columns, resize, per-column filter, and
-// sort all come for free from the generic (non-compact) grid engine.
+// Expandable master/detail Sales Report: one MASTER row per unique Invoice No +
+// party (from the SALES sheet, see buildSalesReport() in Grids.html), each expandable
+// via the ▸/▾ toggle into its own individually filterable/sortable sub-table of raw
+// SALES lines (Date/Description/Category/Amount, incl. and excl. GST) — see
+// renderSalesReportDetail_() in Grids.html and the `expandable` support added to
+// renderGrid() in Common.html. Master rows also surface the linked RECEIVABLES
+// Pending Amount/Overdue Days for that invoice when one exists. Plain renderGrid()
+// call — same as customerList/vendorList — so hide/unhide columns, resize,
+// per-column filter, and sort all come for free from the generic (non-compact) grid
+// engine, on BOTH the master table and every expanded sub-table.
 function renderSalesReport(){return renderGrid('salesReport');}
 registerPage('salesReport',renderSalesReport);
 CHART_DEFS['salesDashboard']=function(){

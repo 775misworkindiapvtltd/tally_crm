@@ -69,28 +69,44 @@ const EXPENSE_CATEGORY_DASH_COLS=[
 const SUBCATEGORY_COLS=[
   {key:'label',label:'Sub Category',width:220},{key:'value',label:'Amount',width:160,num:true},{key:'pct',label:'% of Total',width:130}
 ];
-// Sales Report — one row per unique Invoice No, grouped from the SALES sheet. Uses the
-// standard (non-compact) full grid so column hide/unhide, resize, per-column filter,
-// and sort all work exactly like every other data grid in the app.
+// Sales Report — one MASTER row per unique Invoice No, grouped from the SALES sheet
+// (see buildSalesReport() below). Party/contact fields + Amount are shown on this
+// master row; each raw SALES line (Date/Description/Category/Amount) that makes up
+// the invoice is only shown when the row is expanded via the ▸/▾ toggle — see the
+// `expandable`/`detailCols` handling in renderGrid() (Common.html). Both the master
+// grid and every expanded sub-grid get the full generic engine (filter, sort,
+// hide/unhide columns, resize) because each expanded invoice gets its OWN nested
+// grid registered on the fly — see renderSalesReportDetail_() below.
 //
-// Category is a concatenated string (e.g. "MOBILE APP - PANSARI & PHP - PANSARI") when
-// one invoice has multiple line items, so its column gets a dropdown filter that
-// matches against each atomic category token via filterValues() rather than the raw
-// string. Total Price (amount) gets a min/max numeric range filter instead of a plain
-// text filter. Invoice To (company name) keeps the grid engine's default text
-// filter+sort — no special flags needed there, exactly like every other party-name
-// column in the app (Party Name, Customer, Vendor Name, etc).
-function salesCategoryTokens_(value){return String(value||'').split(' & ').map(s=>s.trim()).filter(Boolean);}
+// "—" (an em-dash, styled muted) is shown instead of a fabricated 0 whenever a value
+// genuinely isn't known — Amount (Excl. GST) when the SALES sheet has no GST column,
+// and the two Receivable columns when no RECEIVABLES row's Bill Ref No matches this
+// Invoice No.
+function muted_(html){return `<span class="muted-cell">${html}</span>`;}
+function renderMoneyOrDash_(v){return v==null?muted_('—'):fmtNum(v);}
 const SALES_REPORT_COLS=[
   {key:'invoiceNo',label:'Invoice No',width:140},{key:'invoiceTo',label:'Invoice To',width:200},
-  {key:'address',label:'Address',width:260},{key:'state',label:'State',width:110},
+  {key:'address',label:'Address',width:240},{key:'state',label:'State',width:110},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
   {key:'phone',label:'Phone',width:150},{key:'email',label:'Email',width:210},
+  {key:'amount',label:'Total Price (Incl. GST)',width:160,num:true,filterType:'number-range'},
+  {key:'amountExclGst',label:'Amount (Excl. GST)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)},
+  {key:'recvPendingAmount',label:'Pending (Receivable)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.recvPendingAmount)},
+  {key:'recvOverdueDays',label:'Overdue Days',width:120,num:true,render:(r)=>{
+    if(r.recvOverdueDays==null)return muted_('—');
+    const d=Number(r.recvOverdueDays)||0,tone=d>60?'danger':d>20?'warning':'success';
+    return `<span class="dreport-overdue ${tone}">${esc(fmtNum(d))}</span>`;
+  }}
+];
+// Detail sub-table — every individual SALES line belonging to one invoice. Category
+// here is the single raw value per line (never concatenated), so it keeps the plain
+// text filter+sort every other column gets — no special select/token handling needed.
+const SALES_REPORT_DETAIL_COLS=[
+  {key:'date',label:'Date',width:120,date:true},
   {key:'description',label:'Description',width:260},
-  {key:'amount',label:'Total Price',width:140,num:true,filterType:'number-range'},
-  {key:'category',label:'Category',width:220,filterType:'select',
-    filterValues:r=>salesCategoryTokens_(r.category),
-    filterOptions:rows=>{const set=new Set();rows.forEach(r=>salesCategoryTokens_(r.category).forEach(t=>set.add(t)));return Array.from(set).sort((a,b)=>a.localeCompare(b));}}
+  {key:'category',label:'Category',width:200},
+  {key:'amount',label:'Amount (Incl. GST)',width:150,num:true},
+  {key:'amountExclGst',label:'Amount (Excl. GST)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
 ];
 
 function firstUseful(current,next){return current||next||'';}
@@ -108,37 +124,68 @@ function buildCustomerList(){
   });
   return Object.values(byCustomer).map(c=>({invoiceTo:c.invoiceTo,address:c.address,state:c.state,gstNo:c.gstNo,contactPerson:c.contactPerson,phone:c.phone,email:c.email,totalInvoices:c.invoiceNos.size||c.rowCount,totalAmount:c.totalAmount})).sort((a,b)=>a.invoiceTo.localeCompare(b.invoiceTo));
 }
-// Groups SALES rows by unique Invoice No. Party/contact fields (Invoice To, Address,
-// State, GST No., Contact Person, Phone, Email) are taken once per invoice via
-// firstUseful() — they're the same across every line of one invoice. Description and
-// Category are concatenated (each distinct value joined with " & ") so two line items
-// on the same invoice show up as "Pansari Mobile App & PHP Development" etc. Total
-// Price is the SUM of every line's amount for that invoice, per user instruction.
-function joinUnique_(list,sep){
-  const seen=new Set(),out=[];
-  list.forEach(v=>{const t=String(v||'').trim();if(!t)return;const k=t.toLowerCase();if(seen.has(k))return;seen.add(k);out.push(t);});
-  return out.join(sep);
-}
+// Groups SALES rows by unique Invoice No + party fields (Invoice To, Address, State,
+// GST No., Contact Person, Phone, Email) — per explicit user instruction, this is the
+// dedup key rather than Invoice No alone, though in practice one Invoice No always
+// belongs to one party. Party/contact fields are taken once per invoice via
+// firstUseful() (first non-blank line wins). Every raw SALES line for the invoice is
+// kept (not concatenated) in `lines`, for the expandable sub-table — each line carries
+// its own Date/Description/Category/Amount/Amount-Excl-GST. Total Price (both
+// incl./excl. GST) is the SUM of every line's amount for that invoice.
+//
+// Receivable linkage: the RECEIVABLES sheet's Bill Ref No is matched against this
+// Invoice No (case-insensitive) so the master row can also show Pending Amount +
+// Overdue Days for that invoice, without duplicating the receivable calculation logic
+// used elsewhere (outstandingReceivable(), ageingBuckets(), etc). If no receivable row
+// matches (already fully paid, or billed outside the RECEIVABLES sheet), both fields
+// stay null and the grid shows "—" rather than a fabricated 0/blank.
 function buildSalesReport(){
   const byInvoice={};
+  const order=[];
   dataForFY('sales').forEach(r=>{
     const invoiceNo=String(r.invoiceNo||'').trim();if(!invoiceNo)return;
-    const key=invoiceNo.toLowerCase();
-    if(!byInvoice[key])byInvoice[key]={invoiceNo,invoiceTo:'',address:'',state:'',gstNo:'',contactPerson:'',phone:'',email:'',descriptions:[],categories:[],amount:0};
+    const key=invoiceNo.toLowerCase()+'|'+String(r.invoiceTo||'').trim().toLowerCase();
+    if(!byInvoice[key]){byInvoice[key]={invoiceNo,invoiceTo:'',address:'',state:'',gstNo:'',contactPerson:'',phone:'',email:'',lines:[],amount:0,amountExclGst:0,hasAnyExclGst:false};order.push(key);}
     const g=byInvoice[key];
     g.invoiceTo=firstUseful(g.invoiceTo,r.invoiceTo);g.address=firstUseful(g.address,r.address);g.state=firstUseful(g.state,r.state);
     g.gstNo=firstUseful(g.gstNo,r.gstNo);g.contactPerson=firstUseful(g.contactPerson,r.contactPerson);
     g.phone=firstUseful(g.phone,r.phone);g.email=firstUseful(g.email,r.email);
-    if(r.description)g.descriptions.push(r.description);
-    if(r.category)g.categories.push(r.category);
-    g.amount+=Number(r.amount)||0;
+    const lineAmount=Number(r.amount)||0;
+    const lineExclGst=(r.amountExclGst===null||r.amountExclGst===undefined)?null:Number(r.amountExclGst)||0;
+    g.lines.push({date:r.date,description:r.description||'',category:r.category||'',amount:lineAmount,amountExclGst:lineExclGst});
+    g.amount+=lineAmount;
+    if(lineExclGst!==null){g.amountExclGst+=lineExclGst;g.hasAnyExclGst=true;}
   });
-  return Object.values(byInvoice).map(g=>({
-    invoiceNo:g.invoiceNo,invoiceTo:g.invoiceTo,address:g.address,state:g.state,gstNo:g.gstNo,
-    contactPerson:g.contactPerson,phone:g.phone,email:g.email,
-    description:joinUnique_(g.descriptions,' & '),category:joinUnique_(g.categories,' & '),
-    amount:g.amount
-  })).sort((a,b)=>a.invoiceNo.localeCompare(b.invoiceNo));
+  const recvByInvoice={};
+  dataForFY('receivables').forEach(r=>{
+    const key=String(r.billRefNo||'').trim().toLowerCase();if(!key)return;
+    if(!recvByInvoice[key])recvByInvoice[key]=r; // first match wins if duplicated
+  });
+  return order.map(key=>{
+    const g=byInvoice[key];
+    const recv=recvByInvoice[String(g.invoiceNo).trim().toLowerCase()];
+    return {
+      invoiceNo:g.invoiceNo,invoiceTo:g.invoiceTo,address:g.address,state:g.state,gstNo:g.gstNo,
+      contactPerson:g.contactPerson,phone:g.phone,email:g.email,
+      amount:g.amount,amountExclGst:g.hasAnyExclGst?Math.round(g.amountExclGst*100)/100:null,
+      lines:g.lines.slice().sort((a,b)=>(parseDT(a.date)||0)-(parseDT(b.date)||0)),
+      recvPendingAmount:recv?Number(recv.pendingAmount)||0:null,
+      recvOverdueDays:recv?Number(recv.overdueDays)||0:null
+    };
+  }).sort((a,b)=>a.invoiceNo.localeCompare(b.invoiceNo));
+}
+// Renders the expandable sub-table for one Sales Report master row (its individual
+// SALES lines: Date/Description/Category/Amount/Amount-Excl-GST). A separate
+// GRID_DEF is registered on the fly, keyed by invoice+party so every expanded
+// invoice keeps its OWN independent filter/sort/hidden-column state — reusing the
+// exact same generic grid engine (renderGrid) as the master table and every other
+// grid in the app, so filters, sorting, and column hide/unhide all work here too,
+// per explicit user instruction ("All filters, hide unhide col otpion will be
+// there n main and sub table").
+function renderSalesReportDetail_(masterRow){
+  const detailKey='salesReportDetail:'+String(masterRow.invoiceNo)+'|'+String(masterRow.invoiceTo);
+  GRID_DEFS[detailKey]={cols:SALES_REPORT_DETAIL_COLS,data:()=>masterRow.lines||[],showSortArrows:true};
+  return `<div class="sr-detail-label">Line items for Invoice <b>${esc(masterRow.invoiceNo)}</b> — ${masterRow.lines.length} row(s)</div>${renderGrid(detailKey)}`;
 }
 function buildVendorList(){
   const byParty={};
@@ -158,7 +205,9 @@ const GRID_DEFS={
   expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
   receipt:{cols:RECEIPT_COLS,data:()=>dataForFY('receipt')},payment:{cols:RECEIPT_COLS,data:()=>dataForFY('payment')},
   customerList:{cols:CUSTOMER_COLS,data:buildCustomerList},vendorList:{cols:VENDOR_COLS,data:buildVendorList},
-  salesReport:{cols:SALES_REPORT_COLS,data:buildSalesReport,showSortArrows:true},
+  salesReport:{cols:SALES_REPORT_COLS,data:buildSalesReport,showSortArrows:true,expandable:true,
+    rowKey:r=>String(r.invoiceNo)+'|'+String(r.invoiceTo),
+    renderDetail:r=>renderSalesReportDetail_(r)},
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},

@@ -283,7 +283,32 @@ function mapSalesRows_(rows, headerRow) {
   // customer-list fields above, so hidden/reordered columns don't break it.
   var descriptionIdx = findColIndexByHeaderContains_(headerRow, ['DESCRIPTION', 'PARTICULAR', 'ITEM DESCRIPTION', 'ITEM NAME', 'PRODUCT']);
 
+  // GST breakdown for the Sales Report's "Amount (Excl. GST)" column, per explicit
+  // user request ("show me with without gst amount as well"). There is no fixed
+  // column for this in the documented SALES layout, so — same tolerant header-text
+  // search used for every other SALES field above — we look for whichever of these
+  // a given sheet actually has, in priority order:
+  //   1) an explicit taxable-value column (already excl. GST, use directly)
+  //   2) an explicit GST amount column (Total Price - GST amount = excl. GST)
+  //   3) a GST rate/% column (back-calculate: Total Price / (1 + rate/100))
+  // If NONE of these exist, amountExclGst is left as null (not a guessed value) —
+  // the Sales Report shows "—" for that row rather than a fabricated number.
+  var taxableIdx = findColIndexByHeaderContains_(headerRow, ['TAXABLE VALUE', 'TAXABLE AMOUNT', 'TAXABLE']);
+  var gstAmountIdx = findColIndexByHeaderContains_(headerRow, ['GST AMOUNT', 'TAX AMOUNT', 'TOTAL GST', 'GST VALUE']);
+  var gstRateIdx = findColIndexByHeaderContains_(headerRow, ['GST RATE', 'GST %', 'GST PERCENT', 'TAX RATE']);
+
   return rows.map(function (row) {
+    var totalAmount = numOrZero_(row[amountIdx]);
+    var amountExclGst = null;
+    if (taxableIdx !== -1) {
+      amountExclGst = numOrZero_(row[taxableIdx]);
+    } else if (gstAmountIdx !== -1) {
+      amountExclGst = totalAmount - numOrZero_(row[gstAmountIdx]);
+    } else if (gstRateIdx !== -1) {
+      var rate = numOrZero_(row[gstRateIdx]);
+      amountExclGst = rate > 0 ? totalAmount / (1 + rate / 100) : totalAmount;
+    }
+    if (amountExclGst !== null) amountExclGst = Math.round(amountExclGst * 100) / 100;
     return {
       date: fmtDateOnly_(row[0]) /* column A */,
       invoiceNo: invoiceNoIdx === -1 ? '' : fmtValue_(row[invoiceNoIdx]),
@@ -296,7 +321,8 @@ function mapSalesRows_(rows, headerRow) {
       phone: phoneIdx === -1 ? '' : fmtValue_(row[phoneIdx]),
       email: emailIdx === -1 ? '' : fmtValue_(row[emailIdx]),
       description: descriptionIdx === -1 ? '' : fmtValue_(row[descriptionIdx]),
-      amount: numOrZero_(row[amountIdx]),
+      amount: totalAmount,
+      amountExclGst: amountExclGst /* null when no GST column was found on the sheet */,
       category: fmtValue_(row[categoryIdx])
     };
   });

@@ -459,6 +459,15 @@ table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);bor
 table.dt tbody tr:nth-child(even){background:#FAFBFD;}
 table.dt tbody tr:hover{background:var(--accent-tint2);}
 table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
+/* Sales Report expandable master/detail rows. */
+.exp-toggle-cell{text-align:center;padding:0!important;}
+.exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;color:var(--accent-dark);font-size:11px;cursor:pointer;user-select:none;}
+.exp-toggle:hover{background:var(--accent-tint2);}
+.exp-detail-row td{background:var(--accent-tint2);padding:10px 14px 14px!important;border-bottom:2px solid var(--line);}
+.exp-detail-wrap{max-width:100%;}
+.sr-detail-label{font-size:11px;font-weight:700;color:var(--ink-secondary);margin-bottom:8px;}
+.sr-detail-label b{color:var(--ink);}
+.muted-cell{color:var(--muted);font-style:italic;}
 .code-pill{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:11px;color:var(--accent-dark);background:var(--accent-tint);border-radius:5px;padding:3px 8px;display:inline-block;}
 .pill-danger{color:var(--danger);background:var(--danger-tint);}
 .pill-success{color:var(--success);background:var(--success-tint);}
