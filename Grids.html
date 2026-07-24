@@ -272,20 +272,27 @@ function salesCategoryPeriods_(mode){
   if(mode==='year'){
     let years=selectedFinancialYears();
     if(!years.length)years=availableFinancialYears().map(f=>f.key);
-    // Per explicit user instruction, a Yearly column is labelled with its Financial
-    // Year start year PLUS the Apr-to-Mar span it actually covers — e.g.
-    // "2023 (Apr 2023 To Mar 2024)" — never a plain calendar year, since Tally's
-    // year always runs April through March, not January through December.
+    // Per explicit user instruction, a Yearly column shows ONLY the financial year
+    // span in brackets — e.g. "(Apr 2023 – Mar 2024)" — without the leading "2023"
+    // prefix that used to precede it. The label wraps naturally inside the column
+    // header when the column is resized narrower (white-space:normal on .scp-th-inner).
     return years.slice().sort().map(key=>{
       const fy=financialYearFromKey(key);
       const startYear=fy.start.getFullYear(),endYear=fy.end.getFullYear();
-      return {key,label:`${startYear} (Apr ${startYear} To Mar ${endYear})`,test:r=>financialYearKey(r.date)===key};
+      return {key,label:`(Apr ${startYear} – Mar ${endYear})`,test:r=>financialYearKey(r.date)===key};
     });
   }
   if(mode==='custom'){
-    const from=S.salesCategoryCustomFrom||toISO(new Date());
-    const to=S.salesCategoryCustomTo||toISO(new Date());
-    return [{key:'custom',label:fmtDDMMMYYYY(fromISO(from))+' – '+fmtDDMMMYYYY(fromISO(to)),test:r=>inRange(r.date,from,to)}];
+    // Custom Range now uses selected Financial Year(s) from S.salesCategoryCustomFYs
+    // instead of raw date inputs, per explicit user instruction. Each selected FY
+    // becomes its own column (same as Yearly mode, but only the FYs the user picked).
+    let years=S.salesCategoryCustomFYs||[];
+    if(!years.length)years=availableFinancialYears().map(f=>f.key);
+    return years.slice().sort().map(key=>{
+      const fy=financialYearFromKey(key);
+      const startYear=fy.start.getFullYear(),endYear=fy.end.getFullYear();
+      return {key,label:`(Apr ${startYear} – Mar ${endYear})`,test:r=>financialYearKey(r.date)===key};
+    });
   }
   // month (default) — short 2-digit year ("Apr 23" instead of "Apr 2023") per
   // explicit user instruction, kept LOCAL to this pivot's own column labels only;

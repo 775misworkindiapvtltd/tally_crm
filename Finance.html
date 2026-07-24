@@ -94,22 +94,19 @@ function renderSalesCategoryPivot(){
   // Per explicit user instruction: Monthly/Yearly/Custom Range must all render on
   // ONE row together with the row-count/Refresh/Sales-Duration toggle beneath it —
   // NOT split into separate stacked rows above/below each other.
-  // Custom Range: a single FY-style button + popover (matching the app-wide
-  // .fy-multi/.fy-multi-btn/.fy-menu pattern used by the main Financial Year
-  // filter — see renderFilterBar() in Filters.html) instead of two bare
-  // <input type="date"> boxes sitting directly in the toolbar, per explicit user
-  // instruction ("Customer range financial year button chaiye rather than input
-  // boxes"). The two date inputs still exist (unchanged handlers/state), just
-  // moved inside this popover so they only take up space while it's open.
-  const customFrom=S.salesCategoryCustomFrom||'',customTo=S.salesCategoryCustomTo||'';
-  const customBtnLabel=(customFrom&&customTo)?`${fmtDDMMMYYYY(fromISO(customFrom))} – ${fmtDDMMMYYYY(fromISO(customTo))}`:'Select Range';
+  // Custom Range: now uses the same Financial Year multi-select popover as the
+  // main dashboard filter (can select multiple FYs or single FY) instead of bare
+  // date input boxes, per explicit user instruction ("ismein financial summary wise
+  // aaye jaise dashboard mein aata hai same, can select multi can select single").
+  // The selected FYs are stored in S.salesCategoryCustomFYs (array of FY keys).
+  const customFYs=S.salesCategoryCustomFYs||[];
+  const allFYs=availableFinancialYears();
+  const customFYLabel=customFYs.length?customFYs.map(k=>{const f=financialYearFromKey(k);return f?`${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)}`:k;}).join(', '):'Select Financial Year(s)';
   const customRangeBtn=mode==='custom'?`<div class="fy-multi sales-cat-range-multi">
-      <button type="button" class="fy-multi-btn" data-action="sales-cat-range-open">${esc(customBtnLabel)} <span>▾</span></button>
+      <button type="button" class="fy-multi-btn" data-action="sales-cat-range-open">${esc(customFYLabel)} <span>▾</span></button>
       ${S.salesCategoryRangeOpen?`<div class="fy-menu sales-cat-range-menu">
-        <div class="fbar-daterange sales-cat-daterange">
-          <span>From</span><input type="date" data-action="sales-cat-custom-from" value="${esc(customFrom)}">
-          <span>To</span><input type="date" data-action="sales-cat-custom-to" value="${esc(customTo)}">
-        </div>
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="sales-cat-fy-all" ${customFYs.length===allFYs.length?'checked':''}> <span>Select All</span></label></div>
+        ${allFYs.map(f=>`<div class="fy-option"><label><input type="checkbox" data-action="sales-cat-fy-toggle" data-key="${esc(f.key)}" ${customFYs.includes(f.key)?'checked':''}> <span>${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)} (Apr ${f.start.getFullYear()} – Mar ${f.end.getFullYear()})</span></label></div>`).join('')}
       </div>`:''}
     </div>`:'';
   const modeBar=`<div class="view-toggle sales-cat-mode-toggle">
@@ -200,6 +197,17 @@ document.addEventListener('click',e=>{
     if(a==='sales-report-view'){S.salesReportView=el.getAttribute('data-view');render();return;}
     if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');render();return;}
     if(a==='sales-cat-range-open'){S.salesCategoryRangeOpen=!S.salesCategoryRangeOpen;render();return;}
+    if(a==='sales-cat-fy-all'){
+      const allKeys=availableFinancialYears().map(f=>f.key);
+      S.salesCategoryCustomFYs=S.salesCategoryCustomFYs.length===allKeys.length?[]:allKeys.slice();
+      render();return;
+    }
+    if(a==='sales-cat-fy-toggle'){
+      const key=el.getAttribute('data-key');
+      const idx=S.salesCategoryCustomFYs.indexOf(key);
+      if(idx===-1)S.salesCategoryCustomFYs.push(key);else S.salesCategoryCustomFYs.splice(idx,1);
+      render();return;
+    }
     if(a==='sales-cat-sort'){
       // Skip sort if a column resize just completed — the mouseup event from the
       // resize handle bubbles up as a click on the parent <th> which also has
@@ -228,8 +236,8 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('input',e=>{
   const el=e.target,a=el.getAttribute('data-action');
-  if(a==='sales-cat-custom-from'){S.salesCategoryCustomFrom=el.value;render();return;}
-  if(a==='sales-cat-custom-to'){S.salesCategoryCustomTo=el.value;render();return;}
+  // (Old sales-cat-custom-from/to handlers removed — Custom Range now uses FY
+  // multi-select checkboxes instead of date inputs, per explicit user instruction.)
 });
 // Column-group resize: dragging ANY month/year column resizes ALL of them together
 // (per explicit user instruction), while Total/%/Dimension keep independent widths —

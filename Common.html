@@ -105,6 +105,10 @@ let S = {
   // instruction ("Customer range financial year button chaiye rather than input
   // boxes"). This just tracks whether that popover is currently open.
   salesCategoryRangeOpen:false,
+  // Custom Range FY multi-select — array of FY keys the user has ticked, per
+  // explicit user instruction ("financial summary wise aaye jaise dashboard mein
+  // aata hai...can select multi can select single").
+  salesCategoryCustomFYs:[],
   salesCategorySort:'total', salesCategorySortDir:-1,
   salesCategoryColWidth:110, salesCategoryTotalWidth:130, salesCategoryCatWidth:210, salesCategoryPctWidth:90,
   // Which field the Duration pivot groups by — 'category' (default), 'partyName'
