@@ -157,10 +157,15 @@ function ageingKpiCard_(label,value,sub,icon,cls){
 function renderAgeing(kind){
   const isRecv=kind==='recv',rows=dataForFY(isRecv?'receivables':'payables'),amtKey=isRecv?'pendingAmount':'closingBalance';
   const overdue=rows.filter(r=>Number(r.overdueDays)>0),notYetDue=rows.filter(r=>Number(r.overdueDays)<=0),mode=S.ageingMode||'all';
-  // Receivable Ageing / Payable Ageing switch now lives in the topbar next to the
-  // A-/A/A+/A++ text-size control (see renderShell() in Common.html) instead of
-  // its own row here, per explicit user instruction — this saves a full row of
-  // vertical space on every Ageing Summary page load.
+  // Receivable Ageing / Payable Ageing switch — moved back OUT of the topbar and
+  // into the page body, per explicit user instruction ("Receivable Ageing Summary
+  // and payable ageing summary button, All Data/Ageing Wise inke button se pehel
+  // aa jaye...basically in second line"). This renders as its own row ABOVE the
+  // All Data/Ageing Wise mode-tabs row (see kindTabs+modeBar below).
+  const kindTabs=`<div class="view-toggle ageing-kind-tabs">
+      <button class="${isRecv?'active':''}" data-action="nav" data-page="ageingRecv" title="Receivable Ageing Summary">Receivable Ageing Summary</button>
+      <button class="${!isRecv?'active':''}" data-action="nav" data-page="ageingPay" title="Payable Ageing Summary">Payable Ageing Summary</button>
+    </div>`;
 
   const tableKey=isRecv?'ageingPivotRecv':'ageingPivotPay';
   const pivotSt=tableState(tableKey);
@@ -185,9 +190,11 @@ function renderAgeing(kind){
       <span class="apv-count">${pivotCount} parties</span>
     </div>`:'';
   const modeBar=`<div class="ageing-mode-bar">${modeTabs}${searchBox}</div>`;
+  // Row 1 (kind switch) stacked directly above Row 2 (mode tabs + search).
+  const pageTabsBar=`${kindTabs}${modeBar}`;
 
   if(mode==='ageing'){
-    return `${modeBar}
+    return `${pageTabsBar}
       <div class="dash-grid ageing-page-cards ageing-summary-cards">
         ${ageingKpiCard_(isRecv?'Paisa Aana Tha, Aaya Nahi':'Payment Karna Tha, Hua Nahi',fmtINR(sumBy(overdue,amtKey)),`${overdue.length} overdue bills`,'clock','c-red')}
         ${ageingKpiCard_(isRecv?'Paisa Abhi Aana Hai':'Payment Abhi Karna Hai',fmtINR(sumBy(notYetDue,amtKey)),`${notYetDue.length} not-yet-due bills`,isRecv?'in':'out','c-green')}
@@ -203,7 +210,7 @@ function renderAgeing(kind){
   // only the Receivables Dashboard removal/merge was requested — Payables Dashboard
   // stays a separate page, reachable from the sidebar as before.
   if(isRecv){
-    return `${modeBar}
+    return `${pageTabsBar}
       <div class="dash-grid ageing-page-cards ageing-alldata-cards">
         ${ageingKpiCard_('Total Outstanding',fmtINR(sumBy(rows,amtKey)),`${rows.length} open bills`,'in','c-blue')}
         ${ageingKpiCard_('Overdue Bills',overdue.length,`${fmtINR(sumBy(overdue,amtKey))} was due but not received`,'clock','c-red')}
@@ -214,7 +221,7 @@ function renderAgeing(kind){
         ${renderGrid('receivablesDashboard')}
       </section>`;
   }
-  return `${modeBar}${renderAgeingPivot(kind)}`;
+  return `${pageTabsBar}${renderAgeingPivot(kind)}`;
 }
 registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=>renderAgeing('pay'));
 

@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.17 (all grid toolbars: drop row count, Refresh+Columns right-aligned)";
+const APP_BUILD = "2026-07-23.18 (ageing kind-switch moved in-page above mode tabs, KPI cards shrunk to kpi-strip size)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -625,10 +625,6 @@ function renderShell(inner){
           ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
         </div>
         <div class="topbar-right">
-          ${(S.page==='ageingRecv'||S.page==='ageingPay')?`<div class="topbar-ageing-switch" role="group" aria-label="Ageing summary type">
-            <button class="${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv" title="Receivable Ageing Summary">Receivable Ageing Summary</button>
-            <button class="${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay" title="Payable Ageing Summary">Payable Ageing Summary</button>
-          </div>`:''}
           <div class="topbar-fontsize" role="group" aria-label="Text size">
             ${FONT_SIZE_OPTIONS.map(fs=>`<button class="${S.fontSize===fs?'active':''}" data-action="set-fontsize" data-size="${fs}" title="Text size ${FONT_SIZE_LABELS[fs]}">${esc(FONT_SIZE_LABELS[fs])}</button>`).join('')}
           </div>

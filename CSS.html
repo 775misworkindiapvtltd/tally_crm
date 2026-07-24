@@ -160,14 +160,10 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-fontsize button{border:none;background:transparent;cursor:pointer;padding:5px 8px;border-radius:4px;font-size:11px;font-weight:700;color:var(--ink-secondary);transition:all .12s;line-height:1;font-family:'Inter',system-ui,sans-serif;}
 .topbar-fontsize button:hover{background:var(--accent-tint);color:var(--accent-dark);}
 .topbar-fontsize button.active{background:var(--accent);color:#fff;}
-/* Receivable/Payable Ageing switch — moved up into the topbar (next to the
-   A-/A/A+/A++ text-size control) instead of taking its own full-width row inside
-   the page body, per explicit user instruction ("isko jaha A+ A++ wala hai usi
-   me top pe dikha sakte hain"). Only rendered while on ageingRecv/ageingPay. */
-.topbar-ageing-switch{display:flex;align-items:center;gap:2px;background:var(--bg);border:1.5px solid var(--line);border-radius:6px;padding:2px;flex:none;}
-.topbar-ageing-switch button{border:none;background:transparent;cursor:pointer;padding:5px 10px;border-radius:4px;font-size:11px;font-weight:700;color:var(--ink-secondary);transition:all .12s;line-height:1;font-family:'Inter',system-ui,sans-serif;white-space:nowrap;}
-.topbar-ageing-switch button:hover{background:var(--accent-tint);color:var(--accent-dark);}
-.topbar-ageing-switch button.active{background:var(--accent);color:#fff;}
+/* Receivable/Payable Ageing switch — moved back OUT of the topbar and into the
+   page body per explicit user instruction (renders as its own row ABOVE the All
+   Data/Ageing Wise mode tabs — see .ageing-kind-tabs below, and kindTabs in
+   renderAgeing() in Receivables.html). The old topbar-only placement is gone. */
 
 .toast{position:fixed;top:16px;right:16px;z-index:100;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.12);display:flex;align-items:center;gap:10px;animation:toast-in .22s cubic-bezier(.2,.8,.4,1);background:var(--success-tint);color:var(--success);border:1px solid #BEE3C9;}
 @keyframes toast-in{from{opacity:0;transform:translateY(-10px) scale(.96);}to{opacity:1;transform:none;}}
@@ -244,6 +240,14 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    both rows are left-aligned (align-self:flex-start on .view-toggle already does
    this) and the mode-tabs row shares ONE line with the party search box so nothing
    pushes onto an extra line, per explicit user instruction. */
+/* Row 1 above the mode tabs — Receivable Ageing Summary / Payable Ageing Summary
+   switch, moved here from the topbar per explicit user instruction ("Receivable
+   Ageing Summary and payable ageing summary button, All Data/Ageing Wise inke
+   button se pehel aa jaye...basically in second line"). Kept compact/small like
+   the mode tabs below it, not the larger default .view-toggle size, so this extra
+   row stays neat and doesn't eat vertical space. */
+.ageing-kind-tabs{padding:3px;gap:2px;margin-bottom:8px;}
+.ageing-kind-tabs button{padding:6px 14px;font-size:11.5px;border-radius:5px;}
 .ageing-mode-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
 .ageing-mode-bar .view-toggle{margin-bottom:0;}
 /* All Data / Ageing Wise — shrunk to a smaller, denser pill than the default
@@ -254,12 +258,16 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .ageing-mode-tabs{padding:3px;gap:2px;}
 .ageing-mode-tabs button{padding:6px 12px;font-size:11.5px;border-radius:5px;}
 .ageing-page-cards{margin-bottom:10px;}
-/* Ageing KPI cards reuse the same look as the Main Dashboard's kpi-strip cards
-   (icon chip top-right, uppercase label, bold value, muted sub-line) instead of
-   the plain text-only cards used before, per explicit user instruction
-   ("kpi cards ke formatting dashboard jaise kpi cards jaise kar do"). */
-.ageing-kpi-card{padding:12px 14px;}
+/* Ageing KPI cards — shrunk to match the Main Dashboard's kpi-strip card sizing
+   exactly (smaller icon, smaller value font, tighter padding) instead of the
+   larger base .card size, per explicit user instruction ("kpi kards ko resize
+   karke small kar do just like in dashboard tab...small neat and clean"). */
+.ageing-kpi-card{padding:12px 13px;}
 .ageing-kpi-card .card-top{margin-bottom:7px;}
+.ageing-kpi-card .card-icon{width:30px;height:30px;border-radius:8px;}
+.ageing-kpi-card .card-icon svg{width:15px;height:15px;}
+.ageing-kpi-card .card-label{font-size:9px;}
+.ageing-kpi-card .card-value{font-size:15.5px;}
 
 /* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
 /* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line. The
