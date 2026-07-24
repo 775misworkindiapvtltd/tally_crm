@@ -166,22 +166,21 @@ function renderSalesCategoryPivot(){
       ${periods.map(p=>`<td class="scp-cell scp-period${!r.periods[p.key]?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${r.periods[p.key]?fmtNum(r.periods[p.key]):'—'}</td>`).join('')}
     </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
 
-  // The Duration pivot is a bespoke table (not the generic renderGrid engine — see
-  // the comment above), so it never got the shared toolbar's "⟳ Refresh" button that
-  // every other page/grid has. This toolbar row adds that same Refresh button
-  // (reusing the existing data-action="refreshpage" handler in Common.html, so this
-  // view still only re-fetches Sales Report's own scoped sheets — see PAGE_CHUNK_KEYS)
-  // plus a matching row count — AND the Sales/Duration toggle, on the SAME line, per
-  // explicit user instruction ("15 categories Refresh LEFT MEIN, right mein Sales |
-  // Duration").
+  // Layout (per explicit user instruction — positions numbered per screenshot):
+  // Row 1 (left): Sales / Duration toggle + Monthly / Yearly / Custom Range
+  // Row 1 (right): "15 Categories" count + ⟳ Refresh + Columns ▾
+  // This swaps positions 1↔2 from the previous layout and keeps 3 directly after
+  // the Sales/Duration toggle (all on one thin row, left to right).
   const catToolbar=`<div class="dt-toolbar sales-cat-toolbar">
-      <div class="count">${rows.length} ${esc(dimMeta.plural)}</div>
-      <button class="btn btn-ghost" data-action="refreshpage" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
       ${renderSalesReportViewToggle_()}
+      ${modeBar}
+      <div class="report-switcher-right">
+        <span class="count">${rows.length} ${esc(dimMeta.plural)}</span>
+        <button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
+      </div>
     </div>`;
 
   return `${catToolbar}
-    ${modeBar}
     <div class="dt-table-wrap sales-cat-wrap">
       <div class="dt-scroll">
         <table class="dt scp-table">
