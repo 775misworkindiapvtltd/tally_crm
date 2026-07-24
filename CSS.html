@@ -160,6 +160,14 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-fontsize button{border:none;background:transparent;cursor:pointer;padding:5px 8px;border-radius:4px;font-size:11px;font-weight:700;color:var(--ink-secondary);transition:all .12s;line-height:1;font-family:'Inter',system-ui,sans-serif;}
 .topbar-fontsize button:hover{background:var(--accent-tint);color:var(--accent-dark);}
 .topbar-fontsize button.active{background:var(--accent);color:#fff;}
+/* Receivable/Payable Ageing switch — moved up into the topbar (next to the
+   A-/A/A+/A++ text-size control) instead of taking its own full-width row inside
+   the page body, per explicit user instruction ("isko jaha A+ A++ wala hai usi
+   me top pe dikha sakte hain"). Only rendered while on ageingRecv/ageingPay. */
+.topbar-ageing-switch{display:flex;align-items:center;gap:2px;background:var(--bg);border:1.5px solid var(--line);border-radius:6px;padding:2px;flex:none;}
+.topbar-ageing-switch button{border:none;background:transparent;cursor:pointer;padding:5px 10px;border-radius:4px;font-size:11px;font-weight:700;color:var(--ink-secondary);transition:all .12s;line-height:1;font-family:'Inter',system-ui,sans-serif;white-space:nowrap;}
+.topbar-ageing-switch button:hover{background:var(--accent-tint);color:var(--accent-dark);}
+.topbar-ageing-switch button.active{background:var(--accent);color:#fff;}
 
 .toast{position:fixed;top:16px;right:16px;z-index:100;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.12);display:flex;align-items:center;gap:10px;animation:toast-in .22s cubic-bezier(.2,.8,.4,1);background:var(--success-tint);color:var(--success);border:1px solid #BEE3C9;}
 @keyframes toast-in{from{opacity:0;transform:translateY(-10px) scale(.96);}to{opacity:1;transform:none;}}
@@ -236,10 +244,22 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    both rows are left-aligned (align-self:flex-start on .view-toggle already does
    this) and the mode-tabs row shares ONE line with the party search box so nothing
    pushes onto an extra line, per explicit user instruction. */
-.ageing-kind-tabs{margin-bottom:10px;}
-.ageing-mode-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.ageing-mode-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
 .ageing-mode-bar .view-toggle{margin-bottom:0;}
-.ageing-page-cards{margin-bottom:12px;}
+/* All Data / Ageing Wise — shrunk to a smaller, denser pill than the default
+   .view-toggle (used elsewhere for e.g. Sales/Duration) so it reads as a compact
+   professional control that doesn't consume extra vertical space, per explicit
+   user instruction ("All data, aging ka button size and text ko small kar
+   sakte hai...so that it looks neat and professional looking dashboard"). */
+.ageing-mode-tabs{padding:3px;gap:2px;}
+.ageing-mode-tabs button{padding:6px 12px;font-size:11.5px;border-radius:5px;}
+.ageing-page-cards{margin-bottom:10px;}
+/* Ageing KPI cards reuse the same look as the Main Dashboard's kpi-strip cards
+   (icon chip top-right, uppercase label, bold value, muted sub-line) instead of
+   the plain text-only cards used before, per explicit user instruction
+   ("kpi cards ke formatting dashboard jaise kpi cards jaise kar do"). */
+.ageing-kpi-card{padding:12px 14px;}
+.ageing-kpi-card .card-top{margin-bottom:7px;}
 
 /* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
 /* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line, per
@@ -470,9 +490,14 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .qa-btn .qa-ic svg{width:16px;height:16px;}
 .qa-btn span.qa-txt{font-size:10.5px;font-weight:700;color:var(--ink-secondary);}
 
-/* ---------- DATA GRID (generic engine) ---------- */
-.dt-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex:none;flex-wrap:wrap;}
-.dt-toolbar .count{font-size:12px;color:var(--muted);font-weight:500;}
+/* ---------- DATA GRID (generic engine) ----------
+   Toolbar (row-count + Refresh + Columns) and the pagination footer below the
+   table were both carrying noticeably more top/bottom breathing room than the
+   rest of the compact dashboard — per explicit user instruction ("228 of 228
+   rows, refresh columns ke neeche bhi bahut space hai"), both are tightened here
+   so every grid page reads denser/more professional and saves vertical space. */
+.dt-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex:none;flex-wrap:wrap;}
+.dt-toolbar .count{font-size:11.5px;color:var(--muted);font-weight:500;}
 .dt-colmenu-wrap{position:relative;margin-left:auto;}
 .dt-colmenu{position:absolute;right:0;top:38px;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.12);padding:12px;min-width:270px;max-height:420px;overflow:auto;z-index:20;}
 .dt-colmenu .h{font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;font-weight:700;margin-bottom:8px;}
@@ -524,11 +549,11 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
    It deliberately keeps its own vertical scroll area while retaining the shared
    flexible-grid controls: every header sorts/searches/filters, and Columns opens
    the persisted hide/show, reorder, and resize options. */
-.recv-dashboard-table{height:540px;min-height:0;display:flex;flex-direction:column;margin:0 0 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
-.recv-dashboard-table-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px 9px;border-bottom:1px solid var(--line-light);margin-bottom:8px;flex:none;}
+.recv-dashboard-table{height:540px;min-height:0;display:flex;flex-direction:column;margin:0 0 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
+.recv-dashboard-table-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px 6px;border-bottom:1px solid var(--line-light);margin-bottom:6px;flex:none;}
 .recv-dashboard-table-head h3{font-size:13px;font-weight:700;color:var(--ink);}
 .recv-dashboard-table-head span{display:block;margin-top:2px;font-size:10.5px;color:var(--muted);}
-.recv-dashboard-table .dt-toolbar{margin:0 0 8px;gap:8px;}
+.recv-dashboard-table .dt-toolbar{margin:0 0 6px;gap:8px;}
 .recv-dashboard-table .dt-toolbar .count{font-size:11px;}
 .recv-dashboard-table .dt-toolbar .btn{padding:6px 11px!important;font-size:11px;}
 .recv-dashboard-table .dt-table-wrap{flex:1;min-height:0;}
@@ -607,7 +632,7 @@ table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
 .pill-success{color:var(--success);background:var(--success-tint);}
 .empty-state{padding:60px 20px;text-align:center;color:var(--muted);}
 .empty-state .big{font-family:'Space Grotesk',sans-serif;font-size:15px;color:var(--ink-secondary);margin-bottom:6px;font-weight:600;}
-.dt-pagination{display:flex;align-items:center;gap:16px;flex-wrap:wrap;flex:none;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px;font-size:12px;color:var(--muted);font-weight:500;}
+.dt-pagination{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:none;background:var(--surface);border-top:1px solid var(--line);padding:7px 14px;font-size:11.5px;color:var(--muted);font-weight:500;}
 .dt-pagination .pp{display:flex;align-items:center;gap:8px;}
 .dt-pagination select{padding:5px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;}
 .dt-pagination .nav{display:flex;align-items:center;gap:4px;margin-left:auto;}

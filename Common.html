@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.8 (Ageing tabs, All Data merge, scroll-jump fix)";
+const APP_BUILD = "2026-07-23.9 (Ageing UI polish + tighter grid toolbar spacing)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -600,6 +600,10 @@ function renderShell(inner){
           ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
         </div>
         <div class="topbar-right">
+          ${(S.page==='ageingRecv'||S.page==='ageingPay')?`<div class="topbar-ageing-switch" role="group" aria-label="Ageing summary type">
+            <button class="${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv" title="Receivable Ageing Summary">Receivable Ageing Summary</button>
+            <button class="${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay" title="Payable Ageing Summary">Payable Ageing Summary</button>
+          </div>`:''}
           <div class="topbar-fontsize" role="group" aria-label="Text size">
             ${FONT_SIZE_OPTIONS.map(fs=>`<button class="${S.fontSize===fs?'active':''}" data-action="set-fontsize" data-size="${fs}" title="Text size ${FONT_SIZE_LABELS[fs]}">${esc(FONT_SIZE_LABELS[fs])}</button>`).join('')}
           </div>
@@ -796,10 +800,10 @@ function renderGrid(tableKey){
   return `
     <div class="dt-toolbar${subGrid?' sub-grid':''}">
       <div class="count">${total} of ${def.data().length} rows</div>
-      ${subGrid?'':`<button class="btn btn-ghost" data-action="refreshpage" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`}
+      ${subGrid?'':`<button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`}
       ${def.toolbarExtra?def.toolbarExtra():''}
       <div class="dt-colmenu-wrap">
-        <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:7px 14px;">Columns ▾</button>
+        <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:5px 12px;font-size:11.5px;">Columns ▾</button>
         ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
       </div>
     </div>
