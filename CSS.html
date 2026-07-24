@@ -328,11 +328,14 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 table.scp-table th,table.scp-table td{box-sizing:border-box;}
 /* LEFT-FREEZE: S.No, Total, % Amt, and Category/Party Name columns stay pinned on
    the left when scrolling horizontally through the month/year period columns, per
-   explicit user instruction ("ye right scroll mein hide na ho freeze ho jaye"). */
-table.scp-table .scp-sno{position:sticky;left:0;z-index:3;}
-table.scp-table .scp-total{position:sticky;left:52px;z-index:3;}
-table.scp-table .scp-pct{position:sticky;left:182px;z-index:3;}
-table.scp-table .scp-cat{position:sticky;left:272px;z-index:3;border-right:2px solid var(--line)!important;}
+   explicit user instruction ("ye right scroll mein hide na ho freeze ho jaye").
+   The actual left:Xpx values are computed inline from the current column widths in
+   Finance.html (since the user can resize columns) — CSS just sets position:sticky
+   and the z-index layering. */
+table.scp-table .scp-sno{position:sticky;z-index:3;}
+table.scp-table .scp-total{position:sticky;z-index:3;}
+table.scp-table .scp-pct{position:sticky;z-index:3;}
+table.scp-table .scp-cat{position:sticky;z-index:3;border-right:2px solid var(--line)!important;}
 /* Header row cells need higher z-index since they're BOTH sticky-top AND sticky-left */
 table.scp-table thead .scp-sno,table.scp-table thead .scp-total,table.scp-table thead .scp-pct,table.scp-table thead .scp-cat{z-index:6;}
 /* Body cells need a solid background so scrolled content doesn't show through */

@@ -117,23 +117,24 @@ function renderSalesCategoryPivot(){
     ${customRangeBtn}`;
 
   const totW=S.salesCategoryTotalWidth||130,pctW=S.salesCategoryPctWidth||90,catW=S.salesCategoryCatWidth||210,colW=S.salesCategoryColWidth||110;
+  // Left-freeze positions computed from actual column widths (user can resize them,
+  // so these can't be hardcoded CSS values) — per explicit user instruction ("ye
+  // right scroll mein hide na ho freeze ho jaye").
+  const snoW=52,leftTotal=snoW,leftPct=snoW+totW,leftCat=snoW+totW+pctW;
   const sortArrow=k=>sortKey===k?(sortDir===1?'▲':'▼'):'↕';
   // S.No — every other table/grid in the app (Sales Report itself, Customer List,
   // Receivables, etc.) has this as its leftmost column, so it's added here too for
   // the same consistent numbering convention, ahead of Total/%/Dimension.
-  const snoTh=`<th class="scp-th scp-sno" style="width:52px;min-width:52px;max-width:52px;"><div class="scp-th-inner" style="justify-content:center;cursor:default;">S.No</div></th>`;
-  const totalTh=`<th class="scp-th scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;" data-action="sales-cat-sort" data-col="total">
+  const snoTh=`<th class="scp-th scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"><div class="scp-th-inner" style="justify-content:center;cursor:default;">S.No</div></th>`;
+  const totalTh=`<th class="scp-th scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;" data-action="sales-cat-sort" data-col="total">
       <div class="scp-th-inner"><span>Total</span><span class="scp-sort-ic">${sortArrow('total')}</span></div>
       <div class="scp-resize" data-action="sales-cat-resize" data-target="total"></div>
     </th>`;
-  const pctTh=`<th class="scp-th scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;" data-action="sales-cat-sort" data-col="pct">
+  const pctTh=`<th class="scp-th scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;" data-action="sales-cat-sort" data-col="pct">
       <div class="scp-th-inner"><span>% Amt</span><span class="scp-sort-ic">${sortArrow('pct')}</span></div>
       <div class="scp-resize" data-action="sales-cat-resize" data-target="pct"></div>
     </th>`;
-  // Dimension header doubles as the dropdown requested — clicking the label still
-  // sorts by that column; the <select> beside it switches Category/Party Name/State
-  // without leaving the header row, per explicit user instruction.
-  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">
+  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">
       <div class="scp-th-inner scp-dim-inner">
         <select class="scp-dim-select" data-action="sales-dimension-select" title="Group rows by">
           ${Object.keys(SALES_DIMENSION_META).map(k=>`<option value="${k}" ${dimension===k?'selected':''}>${esc(SALES_DIMENSION_META[k].label)}</option>`).join('')}
@@ -148,18 +149,18 @@ function renderSalesCategoryPivot(){
     </th>`).join('');
 
   const totalsRow=`<tr class="scp-totals-row">
-      <td class="scp-tot scp-sno" style="width:52px;min-width:52px;max-width:52px;"></td>
-      <td class="scp-tot scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;">${fmtNum(grandTotal)}</td>
-      <td class="scp-tot scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;">100.0%</td>
-      <td class="scp-tot scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">TOTAL</td>
+      <td class="scp-tot scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"></td>
+      <td class="scp-tot scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;">${fmtNum(grandTotal)}</td>
+      <td class="scp-tot scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">100.0%</td>
+      <td class="scp-tot scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">TOTAL</td>
       ${periods.map(p=>`<td class="scp-tot scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${fmtNum(periodGrandTotals[p.key]||0)}</td>`).join('')}
     </tr>`;
 
   const body=sorted.length?sorted.map((r,idx)=>`<tr>
-      <td class="scp-cell scp-sno" style="width:52px;min-width:52px;max-width:52px;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
-      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;">${fmtNum(r.total)}</td>
-      <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;">${pctOf(r.total)}</td>
-      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;">${esc(r.dimVal)}</td>
+      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
+      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;">${fmtNum(r.total)}</td>
+      <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
+      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
       ${periods.map(p=>`<td class="scp-cell scp-period${!r.periods[p.key]?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${r.periods[p.key]?fmtNum(r.periods[p.key]):'—'}</td>`).join('')}
     </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
 
