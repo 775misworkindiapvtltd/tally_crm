@@ -136,13 +136,6 @@ const SALES_REPORT_COLS=[
   // has in the current financial-year selection, per explicit user instruction
   // ("if client is pansari, to table me jitni baar bhi pansari hai sabka sum bhi
   // dikhe"). Computed once in buildSalesReport() below and copied onto every row.
-  {key:'cumulativeAmount',label:'Cumulative Amount',width:170,num:true,filterType:'number-range'},
-  {key:'recvPendingAmount',label:'Pending (Receivable)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.recvPendingAmount)},
-  {key:'recvOverdueDays',label:'Overdue Days',width:120,num:true,render:(r)=>{
-    if(r.recvOverdueDays==null)return muted_('—');
-    const d=Number(r.recvOverdueDays)||0,tone=d>60?'danger':d>20?'warning':'success';
-    return `<span class="dreport-overdue ${tone}">${esc(fmtNum(d))}</span>`;
-  }}
 ];
 // Detail sub-table — every individual SALES line belonging to one invoice. Category
 // here is the single raw value per line (never concatenated), so it keeps the plain

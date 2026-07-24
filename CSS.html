@@ -291,12 +291,13 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    (row count + Refresh on the left, the toggle on the right) unchanged. */
 /* Sales/Duration toggle, Mode toggle (Monthly/Yearly/Custom Range) all sit on the
    SAME toolbar row now (Sales/Duration on the left, mode pills next, count+Refresh
-   pushed to the right) per explicit user instruction ("jo 1 pe hai usko 2 ki jagah
-   kardo, jo 2 pe hai usko 1 ki jagah kardo, and jo 3 pe hai usko 1 ki new jagah
-   ke baad kardo"). Margin-bottom removed from modes since they're inline now. */
-.sales-cat-toolbar{flex-wrap:wrap;}
-.sales-cat-toolbar .sales-report-view-toggle{margin:0;flex:none;}
-.sales-cat-toolbar .sales-cat-mode-toggle{margin:0;flex:none;}
+   pushed to the right) per explicit user instruction. Height reduced per explicit
+   user instruction ("point 1 and point 2 ka height kum kardo"). */
+.sales-cat-toolbar{flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+.sales-cat-toolbar .sales-report-view-toggle{margin:0;flex:none;padding:2px;gap:2px;}
+.sales-cat-toolbar .sales-report-view-toggle button{padding:5px 12px;font-size:11px;}
+.sales-cat-toolbar .sales-cat-mode-toggle{margin:0;flex:none;padding:2px;gap:2px;}
+.sales-cat-toolbar .sales-cat-mode-toggle button{padding:5px 12px;font-size:11px;}
 .sales-cat-toolbar .sales-cat-range-multi{margin:0;flex:none;}
 /* Duration pivot's "Custom Range" control — an FY-style button + popover (reusing
    the app-wide .fy-multi/.fy-multi-btn/.fy-menu look from the main Financial Year
@@ -589,7 +590,7 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
    rest of the compact dashboard — per explicit user instruction ("228 of 228
    rows, refresh columns ke neeche bhi bahut space hai"), both are tightened here
    so every grid page reads denser/more professional and saves vertical space. */
-.dt-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex:none;flex-wrap:wrap;}
+.dt-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex:none;flex-wrap:wrap;}
 /* Every grid's toolbar (not just the report-switcher pages) no longer shows the
    "N of N rows" count, per explicit user instruction ("jitni bhi table hai isme
    39 of 39 rows remove kar do"). Refresh + Columns now sit together on the RIGHT
