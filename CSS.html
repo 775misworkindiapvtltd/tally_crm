@@ -336,15 +336,10 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    to the NEAREST scrolling ancestor). calc(100vh - 170px) leaves room for the topbar
    + toolbar row above, per explicit user instruction ("header freeze nahi hue hai
    niche ka table ho gya hai"). */
-/* The Duration pivot's .dt-scroll needs bounded height so position:sticky works,
-   but must NOT leave blank space below the data when rows don't fill the viewport.
-   flex:1 + min-height:0 + overflow:auto makes it fill available space only (no
-   forced height), while still providing the scroll context for sticky headers. The
-   parent .dt-table-wrap.sales-cat-wrap also gets flex:none so it doesn't stretch
-   beyond its content height, per explicit user instruction ("RED HIGHLIGHTED JO SPACE
-   HAI USKO REMOVE KARDO AND NICHE TUK AANE DO DATA KO SCROLL BAR WHA TUK AA JAEYGA"). */
-.sales-cat-wrap .dt-scroll{flex:1;min-height:0;overflow:auto;max-height:calc(100vh - 160px);}
-.dt-table-wrap.sales-cat-wrap{overflow:visible;flex:none;}
+/* The Duration pivot inherits the global .dt-table-wrap flex:none + .dt-scroll
+   max-height rules above. overflow:visible is still needed specifically here so
+   position:sticky on cells works (the generic overflow:hidden would clip them). */
+.dt-table-wrap.sales-cat-wrap{overflow:visible;}
 /* box-sizing:border-box ensures that when the column resize handler reads
    getBoundingClientRect().width (which includes border+padding) and writes it back
    as style.width, the column stays at the exact same visual width instead of
@@ -641,7 +636,7 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .dt-colmenu label{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:5px 4px;cursor:pointer;border-radius:4px;}
 .dt-colmenu label:hover{background:var(--accent-tint2);}
 .dt-colmenu-row{display:flex;align-items:center;gap:8px;border-radius:5px;}.dt-colmenu-row>label{flex:1;min-width:0}.dt-colmenu-row>label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.col-shift{display:flex;gap:3px}.col-shift button{width:25px;height:25px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink-secondary);cursor:pointer}.col-shift button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}.col-shift button:disabled{opacity:.25;cursor:default;}
-.dt-table-wrap{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.dt-table-wrap{flex:none;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.04);}
 .dt-table-wrap.compact{flex:none;height:390px;}
 .dt-table-wrap.compact .dt-scroll{max-height:390px;}
 /* Dashboard mini reports: dense screenshot-like tables, no S.No column, clipped
@@ -696,7 +691,7 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .recv-dashboard-table .dt-toolbar{margin:0 0 6px;gap:8px;}
 .recv-dashboard-table .dt-toolbar .count{font-size:11px;}
 .recv-dashboard-table .dt-toolbar .btn{padding:6px 11px!important;font-size:11px;}
-.recv-dashboard-table .dt-table-wrap{flex:1;min-height:0;}
+.recv-dashboard-table .dt-table-wrap{flex:none;min-height:0;}
 .recv-dashboard-table .dt-scroll{overflow:auto;}
 .recv-dashboard-table table.dt thead th .th-inner{padding:6px 10px;gap:3px;min-height:31px;}
 .recv-dashboard-table table.dt thead th .th-label{font-size:9px;line-height:1.15;letter-spacing:.05em;}
@@ -705,7 +700,7 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .recv-dashboard-table table.dt tbody td{padding:6px 10px;font-size:11.5px;line-height:1.25;}
 .recv-dashboard-table .dt-pagination{padding:7px 10px;font-size:11px;}
 .recv-dashboard-table .dt-pagination select,.recv-dashboard-table .dt-pagination .nav button{font-size:11px;padding:4px 8px;}
-.dt-scroll{flex:1;overflow:auto;min-height:0;overscroll-behavior-x:none;}
+.dt-scroll{flex:1;overflow:auto;min-height:0;max-height:calc(100vh - 180px);overscroll-behavior-x:none;}
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
 table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}
 table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;gap:5px;position:relative;min-height:36px;}

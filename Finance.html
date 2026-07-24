@@ -278,8 +278,22 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('input',e=>{
   const el=e.target,a=el.getAttribute('data-action');
-  // Cross-filter search — live-filter the dropdown options as the user types
-  if(a==='sales-cross-search'){S.salesCrossFilterSearch=el.value;render();return;}
+  // Cross-filter search — debounced live-filter. Uses the same refocus pattern as
+  // ledger-search (save cursor pos → render → find the new input → focus + restore
+  // cursor) so typing stays fluid instead of losing focus after every keystroke,
+  // per explicit user instruction ("ek keyword type karte hi dusra type nahi hota
+  // hai fr se click karo to fr ek type hota hai").
+  if(a==='sales-cross-search'){
+    S.salesCrossFilterSearch=el.value;
+    clearTimeout(S._crossSearchTimer);
+    S._crossSearchTimer=setTimeout(()=>{
+      const pos=el.selectionStart;
+      render();
+      const ag=document.querySelector('input[data-action="sales-cross-search"]');
+      if(ag){ag.focus();ag.setSelectionRange(pos,pos);}
+    },200);
+    return;
+  }
   // (Old sales-cat-custom-from/to handlers removed — Custom Range now uses FY
   // multi-select checkboxes instead of date inputs, per explicit user instruction.)
 });
