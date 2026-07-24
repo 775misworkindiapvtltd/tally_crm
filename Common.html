@@ -635,7 +635,6 @@ function renderShell(inner){
           <b>${esc(S.lastSync||'No cached data yet')}</b>
           <span class="sync-source">${S.syncing&&S.cacheLoaded?'Showing cached data':S.lastSyncSource==='cache'?'Cached data':S.lastSyncSource==='live'?'Live Tally data':'Waiting for first sync'}</span>
         </div>
-        <div class="su" style="margin-top:8px;opacity:.6;">Build: ${esc(APP_BUILD)}</div>
         <div class="logout-btn" data-action="logout" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
       </div>
     </div>
