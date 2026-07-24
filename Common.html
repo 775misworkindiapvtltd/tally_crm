@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.12 (fix: sidebar nav scroll position reset on click)";
+const APP_BUILD = "2026-07-23.13 (Receivables report switcher tabs)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -810,16 +810,36 @@ function renderGrid(tableKey){
   // line stays visible together inside its expanded card.
   const subGrid=!!def.subGrid;
 
-  return `
-    <div class="dt-toolbar${subGrid?' sub-grid':''}">
-      <div class="count">${total} of ${def.data().length} rows</div>
-      ${subGrid?'':`<button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`}
-      ${def.toolbarExtra?def.toolbarExtra():''}
-      <div class="dt-colmenu-wrap">
+  const colMenuBtnHtml=`<div class="dt-colmenu-wrap">
         <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:5px 12px;font-size:11.5px;">Columns ▾</button>
         ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
+      </div>`;
+  const refreshBtnHtml=`<button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`;
+
+  // Report-switcher grids (Customer List/Receipt List/Collection Analysis/Follow Up
+  // List/Credit Notes — see def.reportTabs, wired in Grids.html) get a different
+  // toolbar layout per explicit user instruction: the "N of N rows" count is dropped
+  // entirely, the tab buttons that let you jump straight to any of the other
+  // Receivables reports come first (left side), and Refresh + Columns move together
+  // to the right corner, after the tabs.
+  const reportTabsHtml=def.reportTabs?def.reportTabs():'';
+  const toolbarHtml=reportTabsHtml?`
+    <div class="dt-toolbar report-switcher-toolbar">
+      ${reportTabsHtml}
+      <div class="report-switcher-right">
+        ${refreshBtnHtml}
+        ${colMenuBtnHtml}
       </div>
-    </div>
+    </div>`:`
+    <div class="dt-toolbar${subGrid?' sub-grid':''}">
+      <div class="count">${total} of ${def.data().length} rows</div>
+      ${subGrid?'':refreshBtnHtml}
+      ${def.toolbarExtra?def.toolbarExtra():''}
+      ${colMenuBtnHtml}
+    </div>`;
+
+  return `
+    ${toolbarHtml}
     <div class="dt-table-wrap${subGrid?' sub-grid':''}">
       <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
     </div>

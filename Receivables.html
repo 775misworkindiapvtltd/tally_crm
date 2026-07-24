@@ -206,10 +206,39 @@ registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=
 function renderPartyList(kind){const key=kind==='recv'?'customerList':'vendorList';return renderGrid(key);}
 registerPage('customerList',()=>renderPartyList('recv'));registerPage('vendorList',()=>renderPartyList('pay'));
 
+/* ============================= RECEIVABLES REPORT SWITCHER =============================
+ * Lets the user jump between the 5 Receivables reports (Customer List, Receipt List,
+ * Collection Analysis, Follow Up List, Credit Notes) via buttons that sit ABOVE each
+ * report's own table/cards, instead of going back to the sidebar every time — per
+ * explicit user instruction ("suppose i click of customer list, the table will open
+ * for customer list, while customer list is highlighted on button above").
+ * For the 4 grid-based reports this is woven directly into renderGrid()'s own
+ * toolbar row via GRID_DEFS[key].reportTabs (see renderGrid() in Common.html): the
+ * tab buttons come FIRST (left), Refresh + Columns move to the right corner after
+ * them, and the "N of N rows" count is dropped entirely — all per explicit user
+ * instruction. Collection Analysis isn't a grid (it's a KPI-card page), so the same
+ * tab row is rendered directly above its cards here instead.
+ */
+const RECEIVABLES_REPORT_TABS=[
+  {key:'customerList',label:'Customer List',icon:'customer'},
+  {key:'receipt',label:'Receipt List',icon:'arrow-down'},
+  {key:'collectionAnalysis',label:'Collection Analysis',icon:'collection'},
+  {key:'followUpList',label:'Follow Up List',icon:'followup'},
+  {key:'creditNotes',label:'Credit Notes',icon:'creditnote'},
+];
+function renderReceivablesReportTabs_(){
+  return `<div class="report-switcher-tabs">${RECEIVABLES_REPORT_TABS.map(t=>
+    `<button class="report-switcher-tab${S.page===t.key?' active':''}" data-action="nav" data-page="${t.key}">
+      <span class="rst-ic">${NAV_ICONS[t.icon]||''}</span>${esc(t.label)}
+    </button>`
+  ).join('')}</div>`;
+}
+
 function renderCollectionAnalysis(){
   const sales=sumBy(voucherSales_(),'debit'),collections=sumBy(dataForFY('receipt'),'debitLedgerAmount'),recv=outstandingReceivable();
   const dso=sales?recv/sales*selectedFYDayCount():0,eff=sales?Math.min(100,collections/sales*100):0;
-  return `<div class="dash-grid"><div class="card"><div class="card-label">DSO</div><div class="card-value">${dso.toFixed(1)} days</div></div><div class="card"><div class="card-label">Collection Efficiency</div><div class="card-value">${eff.toFixed(1)}%</div></div><div class="card"><div class="card-label">Collected</div><div class="card-value">${fmtINR(collections)}</div></div><div class="card"><div class="card-label">Sales</div><div class="card-value">${fmtINR(sales)}</div></div></div>`;
+  return `${renderReceivablesReportTabs_()}
+    <div class="dash-grid"><div class="card"><div class="card-label">DSO</div><div class="card-value">${dso.toFixed(1)} days</div></div><div class="card"><div class="card-label">Collection Efficiency</div><div class="card-value">${eff.toFixed(1)}%</div></div><div class="card"><div class="card-label">Collected</div><div class="card-value">${fmtINR(collections)}</div></div><div class="card"><div class="card-label">Sales</div><div class="card-value">${fmtINR(sales)}</div></div></div>`;
 }
 registerPage('collectionAnalysis',renderCollectionAnalysis);
 function renderFollowUpList(){return renderGrid('followUpList');}registerPage('followUpList',renderFollowUpList);

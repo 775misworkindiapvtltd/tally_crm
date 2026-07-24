@@ -297,8 +297,17 @@ const GRID_DEFS={
   expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
   receivablesDashboard:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables'),showSortArrows:true},
   payablesDashboard:{cols:PAYABLES_COLS,data:()=>dataForFY('payables'),showSortArrows:true},
-  receipt:{cols:RECEIPT_COLS,data:()=>dataForFY('receipt')},payment:{cols:RECEIPT_COLS,data:()=>dataForFY('payment')},
-  customerList:{cols:CUSTOMER_COLS,data:buildCustomerList},vendorList:{cols:VENDOR_COLS,data:buildVendorList},
+  receipt:{cols:RECEIPT_COLS,data:()=>dataForFY('receipt'),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
+  payment:{cols:RECEIPT_COLS,data:()=>dataForFY('payment')},
+  // reportTabs: lazily looked up the same way salesReport's toolbarExtra is (defined
+  // in Receivables.html, which loads AFTER Grids.html) — by the time renderGrid()
+  // actually calls it, every script has run. Adds the Customer List/Receipt
+  // List/Collection Analysis/Follow Up List/Credit Notes tab row to this grid's own
+  // toolbar so you can jump straight to any of the other 4 reports, per explicit
+  // user instruction. vendorList (Payables side) intentionally does NOT get this —
+  // only the 5 Receivables reports were asked for.
+  customerList:{cols:CUSTOMER_COLS,data:buildCustomerList,reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
+  vendorList:{cols:VENDOR_COLS,data:buildVendorList},
   salesReport:{cols:SALES_REPORT_COLS,data:buildSalesReport,showSortArrows:true,expandable:true,
     rowKey:r=>String(r.invoiceNo)+'|'+String(r.invoiceTo),
     renderDetail:r=>renderSalesReportDetail_(r),
@@ -309,8 +318,8 @@ const GRID_DEFS={
     // instruction ("ye ek line pe chaiye upar niche nahi chahiye").
     toolbarExtra:()=>(typeof renderSalesReportViewToggle_==='function'?renderSalesReportViewToggle_():'')},
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
-  followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0)},
-  creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows},
+  followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
+  creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows,reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,dashboardReport:true,reportType:'customers'},
   topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,dashboardReport:true,reportType:'vendors'},
   expenseCategoryDash:{cols:EXPENSE_CATEGORY_DASH_COLS,data:()=>S.dashExpenseCategories||[],compact:true,dashboardReport:true,reportType:'expenses'},

@@ -497,6 +497,20 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
    rows, refresh columns ke neeche bhi bahut space hai"), both are tightened here
    so every grid page reads denser/more professional and saves vertical space. */
 .dt-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex:none;flex-wrap:wrap;}
+/* Report-switcher toolbar — used on Customer List/Receipt List/Follow Up
+   List/Credit Notes (see GRID_DEFS[key].reportTabs in Grids.html) and Collection
+   Analysis (rendered directly above its cards in Receivables.html). Per explicit
+   user instruction: the "N of N rows" count is dropped, the tab buttons that jump
+   to any of the 5 Receivables reports come first (left), and Refresh + Columns sit
+   together in the right corner, after the tabs. */
+.report-switcher-toolbar{justify-content:space-between;}
+.report-switcher-right{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.report-switcher-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.report-switcher-tab{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-secondary);padding:7px 13px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .12s;white-space:nowrap;}
+.report-switcher-tab .rst-ic{width:14px;height:14px;display:inline-flex;flex:none;}
+.report-switcher-tab .rst-ic svg{width:14px;height:14px;}
+.report-switcher-tab:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
+.report-switcher-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .dt-toolbar .count{font-size:11.5px;color:var(--muted);font-weight:500;}
 .dt-colmenu-wrap{position:relative;margin-left:auto;}
 .dt-colmenu{position:absolute;right:0;top:38px;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.12);padding:12px;min-width:270px;max-height:420px;overflow:auto;z-index:20;}
