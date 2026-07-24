@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.16 (auto-refresh data every 10 min in background)";
+const APP_BUILD = "2026-07-23.17 (all grid toolbars: drop row count, Refresh+Columns right-aligned)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -859,11 +859,12 @@ function renderGrid(tableKey){
         ${colMenuBtnHtml}
       </div>
     </div>`:`
-    <div class="dt-toolbar${subGrid?' sub-grid':''}">
-      <div class="count">${total} of ${def.data().length} rows</div>
-      ${subGrid?'':refreshBtnHtml}
+    <div class="dt-toolbar${subGrid?' sub-grid':''} dt-toolbar-plain">
       ${def.toolbarExtra?def.toolbarExtra():''}
-      ${colMenuBtnHtml}
+      <div class="report-switcher-right">
+        ${subGrid?'':refreshBtnHtml}
+        ${colMenuBtnHtml}
+      </div>
     </div>`;
 
   return `

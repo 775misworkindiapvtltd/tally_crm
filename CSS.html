@@ -505,6 +505,14 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
    rows, refresh columns ke neeche bhi bahut space hai"), both are tightened here
    so every grid page reads denser/more professional and saves vertical space. */
 .dt-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex:none;flex-wrap:wrap;}
+/* Every grid's toolbar (not just the report-switcher pages) no longer shows the
+   "N of N rows" count, per explicit user instruction ("jitni bhi table hai isme
+   39 of 39 rows remove kar do"). Refresh + Columns now sit together on the RIGHT
+   side of the toolbar row via .report-switcher-right (reused here for consistency
+   with the report-switcher toolbar layout), instead of Refresh sitting on the left
+   next to a row count. def.toolbarExtra() content (e.g. Sales Report's own
+   Sales/Duration toggle) stays on the left. */
+.dt-toolbar-plain{justify-content:space-between;}
 /* Report-switcher toolbar — used on Customer List/Receipt List/Follow Up
    List/Credit Notes (see GRID_DEFS[key].reportTabs in Grids.html) and Collection
    Analysis (rendered directly above its cards in Receivables.html). Per explicit
