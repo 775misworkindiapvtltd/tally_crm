@@ -90,7 +90,10 @@ function renderMoneyOrDash_(v){return v==null?muted_('—'):fmtNum(v);}
 // per explicit user instruction ("Total price ke jagah amount (with gst) ye uske
 // neeche wali line me ayeha, samll grey font").
 const SALES_REPORT_COLS=[
-  {key:'invoiceNo',label:'Invoice No',width:140,expandToggle:true},{key:'invoiceTo',label:'Invoice To',width:200},
+  // nowrap:true + a slightly wider default (140 -> 150) so the invoice number value
+  // ("MIS-25-26-129" etc) always renders on ONE line instead of wrapping onto two —
+  // per explicit user instruction ("invoice number bhi ek he row me dikhe").
+  {key:'invoiceNo',label:'Invoice No',width:150,nowrap:true,expandToggle:true},{key:'invoiceTo',label:'Invoice To',width:200},
   {key:'address',label:'Address',width:240},{key:'state',label:'State',width:110},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
   {key:'phone',label:'Phone',width:150},{key:'email',label:'Email',width:210},
@@ -313,10 +316,12 @@ const GRID_DEFS={
     renderDetail:r=>renderSalesReportDetail_(r),
     // Lazily looked up (defined in Finance.html, which loads AFTER Grids.html) only
     // when actually invoked during render — by then every script has run, so the
-    // reference always resolves. This keeps the Sales/Duration toggle on the SAME
-    // toolbar row as the row count/Refresh/Columns controls, per explicit user
-    // instruction ("ye ek line pe chaiye upar niche nahi chahiye").
-    toolbarExtra:()=>(typeof renderSalesReportViewToggle_==='function'?renderSalesReportViewToggle_():'')},
+    // reference always resolves. Wired as `reportTabs` (not `toolbarExtra`) so this
+    // grid gets the same toolbar layout as the Receivables report-switcher pages —
+    // per explicit user instruction: the Sales/Duration toggle now sits on the LEFT,
+    // the "N of N rows" count is dropped entirely, and Refresh + Columns move
+    // together into the right corner.
+    reportTabs:()=>(typeof renderSalesReportViewToggle_==='function'?renderSalesReportViewToggle_():'')},
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
   followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows,reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},

@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.14 (Ageing pivot resizable Party Name col + sidebar scroll id fix)";
+const APP_BUILD = "2026-07-23.15 (Sales Report toolbar layout + one-line Invoice No + smaller S.No col)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -696,7 +696,10 @@ function renderGrid(tableKey){
   // old separate expand column for backward compatibility.
   const expandToggleCol=expandable?visCols.find(c=>c.expandToggle):null;
   const expTh=(expandable&&!expandToggleCol)?`<th style="width:34px;min-width:34px;max-width:34px;"></th>`:'';
-  const snoTh=`<th style="width:56px;min-width:56px;max-width:56px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
+  // S.No column shrunk from 56px -> 38px per explicit user instruction ("serial
+  // number col size reduce karo") — it only ever holds a short number, so it never
+  // needed the same width as a real data column.
+  const snoTh=`<th style="width:38px;min-width:38px;max-width:38px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
   let hdr=expTh+snoTh+visCols.map(c=>{
     const w=st.widths[c.key]||c.width||150;
     // Sales Report explicitly keeps a bidirectional arrow on every header so users
@@ -781,7 +784,7 @@ function renderGrid(tableKey){
       const toggleHtml=(expandToggleCol===c)?`<span class="exp-toggle-inline${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span>`:'';
       return `<td class="${cls}"${cellTitle}>${toggleHtml}${content}</td>`;
     }).join("");
-    const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;">${si+idx+1}</td>`;
+    const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;padding-left:4px;padding-right:4px;">${si+idx+1}</td>`;
     let expCell='',detailRow='';
     if(expandable&&!expandToggleCol){
       expCell=`<td class="exp-toggle-cell"><span class="exp-toggle${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span></td>`;

@@ -262,11 +262,19 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .ageing-kpi-card .card-top{margin-bottom:7px;}
 
 /* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
-/* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line, per
-   explicit user instruction — the toggle sits flush right via margin-left:auto so
-   it visually matches the position of the "Columns" button on every other grid. */
+/* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line. The
+   Sales/Duration toggle itself now sits on the LEFT on the master Sales grid (see
+   .report-switcher-toolbar — GRID_DEFS.salesReport.reportTabs in Grids.html), per
+   explicit user instruction ("sales and duration left me dikha do"). This
+   right-aligning rule is scoped to ONLY the bespoke Duration/category pivot's own
+   toolbar below (.sales-cat-toolbar), which keeps its previous established layout
+   (row count + Refresh on the left, the toggle on the right) unchanged. */
 .sales-cat-toolbar{flex-wrap:nowrap;}
-.sales-report-view-toggle{margin:0 0 0 auto;flex:none;}
+.sales-cat-toolbar .sales-report-view-toggle{margin:0 0 0 auto;flex:none;}
+/* Removes the default .view-toggle margin-bottom so the Sales/Duration toggle sits
+   flush within a single-line toolbar row instead of pushing extra space below it —
+   same reasoning as .ageing-mode-bar .view-toggle{margin-bottom:0;} elsewhere. */
+.report-switcher-toolbar .view-toggle{margin-bottom:0;}
 .sales-cat-mode-toggle{margin-bottom:10px;}
 .sales-cat-daterange{margin-bottom:14px;}
 .sales-cat-wrap table.dt.scp-table{table-layout:fixed;}
@@ -606,6 +614,10 @@ table.dt thead th .th-filter input::placeholder{color:#5A6070;}
 table.dt thead th .resize-handle{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:5;}
 table.dt thead th .resize-handle:hover,table.dt thead th .resize-handle.active{background:rgba(46,107,242,.5);}
 table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);border-right:1px solid #F2F0EA;font-size:12.5px;white-space:normal;word-break:break-word;vertical-align:middle;overflow-wrap:anywhere;}
+/* Columns explicitly flagged nowrap:true (e.g. Sales Report's Invoice No) always
+   stay on ONE line — clipped with an ellipsis rather than wrapping onto a second
+   line, per explicit user instruction ("invoice number bhi ek he row me dikhe"). */
+table.dt tbody td.nowrap{white-space:nowrap;word-break:normal;overflow:hidden;text-overflow:ellipsis;}
 table.dt tbody tr:nth-child(even){background:#FAFBFD;}
 table.dt tbody tr:hover{background:var(--accent-tint2);}
 table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
