@@ -114,18 +114,11 @@ function renderMoneyOrDash_(v){return v==null?muted_('—'):fmtNum(v);}
 // per explicit user instruction ("Total price ke jagah amount (with gst) ye uske
 // neeche wali line me ayeha, samll grey font").
 const SALES_REPORT_COLS=[
-  // nowrap:true removed per explicit user instruction ("warp text should be there
-  // if the column size is less") — the invoice number still renders on ONE line at
-  // its normal/default width (it comfortably fits), but now wraps onto a second
-  // line instead of getting clipped by an ellipsis if the column is resized
-  // narrower than the value. expandToggle host cell (Common.html/CSS.html) was
-  // updated the same way.
-  {key:'invoiceNo',label:'Invoice No',width:150,expandToggle:true},
-  // Invoice Date — pulled from the SALES sheet's date field (first/earliest date
-  // among the lines belonging to this invoice), per explicit user instruction
-  // ("ismein invoice date nahi aa rahi hai ye col add karo"). date:true enables
-  // the generic grid engine's built-in date-range filter on this column.
+  // Invoice Date comes FIRST, per explicit user instruction ("invoice date pehle
+  // ayega fr invoice no and so on"). date:true enables the generic grid engine's
+  // built-in date-range filter on this column.
   {key:'invoiceDate',label:'Invoice Date',width:120,date:true},
+  {key:'invoiceNo',label:'Invoice No',width:150,expandToggle:true},
   {key:'invoiceTo',label:'Invoice To',width:200},
   {key:'address',label:'Address',width:240},{key:'state',label:'State',width:110},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
