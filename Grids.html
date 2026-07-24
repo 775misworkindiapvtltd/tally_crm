@@ -120,7 +120,13 @@ const SALES_REPORT_COLS=[
   // line instead of getting clipped by an ellipsis if the column is resized
   // narrower than the value. expandToggle host cell (Common.html/CSS.html) was
   // updated the same way.
-  {key:'invoiceNo',label:'Invoice No',width:150,expandToggle:true},{key:'invoiceTo',label:'Invoice To',width:200},
+  {key:'invoiceNo',label:'Invoice No',width:150,expandToggle:true},
+  // Invoice Date — pulled from the SALES sheet's date field (first/earliest date
+  // among the lines belonging to this invoice), per explicit user instruction
+  // ("ismein invoice date nahi aa rahi hai ye col add karo"). date:true enables
+  // the generic grid engine's built-in date-range filter on this column.
+  {key:'invoiceDate',label:'Invoice Date',width:120,date:true},
+  {key:'invoiceTo',label:'Invoice To',width:200},
   {key:'address',label:'Address',width:240},{key:'state',label:'State',width:110},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
   {key:'phone',label:'Phone',width:150},{key:'email',label:'Email',width:210},
@@ -198,11 +204,15 @@ function buildSalesReport(){
   dataForFY('sales').forEach(r=>{
     const invoiceNo=String(r.invoiceNo||'').trim();if(!invoiceNo)return;
     const key=invoiceNo.toLowerCase()+'|'+String(r.invoiceTo||'').trim().toLowerCase();
-    if(!byInvoice[key]){byInvoice[key]={invoiceNo,invoiceTo:'',address:'',state:'',gstNo:'',contactPerson:'',phone:'',email:'',lines:[],amount:0,amountExclGst:0,hasAnyExclGst:false};order.push(key);}
+    if(!byInvoice[key]){byInvoice[key]={invoiceNo,invoiceTo:'',address:'',state:'',gstNo:'',contactPerson:'',phone:'',email:'',lines:[],amount:0,amountExclGst:0,hasAnyExclGst:false,invoiceDate:null};order.push(key);}
     const g=byInvoice[key];
     g.invoiceTo=firstUseful(g.invoiceTo,r.invoiceTo);g.address=firstUseful(g.address,r.address);g.state=firstUseful(g.state,r.state);
     g.gstNo=firstUseful(g.gstNo,r.gstNo);g.contactPerson=firstUseful(g.contactPerson,r.contactPerson);
     g.phone=firstUseful(g.phone,r.phone);g.email=firstUseful(g.email,r.email);
+    // Invoice Date: take the FIRST (earliest) date from the SALES lines belonging to
+    // this invoice — this is the invoice's own date. Per explicit user instruction
+    // ("ismein invoice date nahi aa rahi hai ye col add karo").
+    if(!g.invoiceDate&&r.date)g.invoiceDate=r.date;
     const lineAmount=Number(r.amount)||0;
     const lineExclGst=(r.amountExclGst===null||r.amountExclGst===undefined)?null:Number(r.amountExclGst)||0;
     g.lines.push({invoiceNo:g.invoiceNo,date:r.date,description:r.description||'',category:r.category||'',amount:lineAmount,amountExclGst:lineExclGst});
@@ -230,7 +240,7 @@ function buildSalesReport(){
     const recv=recvByInvoice[String(g.invoiceNo).trim().toLowerCase()];
     const custKey=String(g.invoiceTo||'').trim().toLowerCase();
     return {
-      invoiceNo:g.invoiceNo,invoiceTo:g.invoiceTo,address:g.address,state:g.state,gstNo:g.gstNo,
+      invoiceNo:g.invoiceNo,invoiceDate:g.invoiceDate||'',invoiceTo:g.invoiceTo,address:g.address,state:g.state,gstNo:g.gstNo,
       contactPerson:g.contactPerson,phone:g.phone,email:g.email,
       amount:g.amount,amountExclGst:g.hasAnyExclGst?Math.round(g.amountExclGst*100)/100:null,
       cumulativeAmount:Math.round((cumulativeByCustomer[custKey]||0)*100)/100,
