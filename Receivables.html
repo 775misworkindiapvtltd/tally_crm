@@ -163,15 +163,6 @@ function ageingKpiCard_(label,value,sub,icon,cls){
 function renderAgeing(kind){
   const isRecv=kind==='recv',rows=dataForFY(isRecv?'receivables':'payables'),amtKey=isRecv?'pendingAmount':'closingBalance';
   const overdue=rows.filter(r=>Number(r.overdueDays)>0),notYetDue=rows.filter(r=>Number(r.overdueDays)<=0),mode=S.ageingMode||'all';
-  // Receivable Ageing / Payable Ageing switch — moved back OUT of the topbar and
-  // into the page body, per explicit user instruction ("Receivable Ageing Summary
-  // and payable ageing summary button, All Data/Ageing Wise inke button se pehel
-  // aa jaye...basically in second line"). This renders as its own row ABOVE the
-  // All Data/Ageing Wise mode-tabs row (see kindTabs+modeBar below).
-  const kindTabs=`<div class="view-toggle ageing-kind-tabs">
-      <button class="${isRecv?'active':''}" data-action="nav" data-page="ageingRecv" title="Receivable Ageing Summary">Receivable Ageing Summary</button>
-      <button class="${!isRecv?'active':''}" data-action="nav" data-page="ageingPay" title="Payable Ageing Summary">Payable Ageing Summary</button>
-    </div>`;
 
   const tableKey=isRecv?'ageingPivotRecv':'ageingPivotPay';
   const pivotSt=tableState(tableKey);
@@ -179,12 +170,20 @@ function renderAgeing(kind){
   const pivotAll=ageingPivotRows(kind);
   const pivotCount=pivotQ?pivotAll.filter(r=>r.partyName.toLowerCase().includes(pivotQ)).length:pivotAll.length;
 
-  // "All Data"/"Ageing Wise" tabs — shrunk to a smaller, denser pill (see
-  // .ageing-mode-tabs in CSS.html) so they read as a compact professional control,
-  // not the larger default .view-toggle used for Sales Report's Sales/Duration.
+  // "All Data"/"Ageing Wise" tabs — per explicit user instruction, these now appear
+  // BEFORE the Receivable/Payable kind-switch (row ordering: mode tabs first, then
+  // kind switch on the same line or below). Shrunk to a smaller, denser pill (see
+  // .ageing-mode-tabs in CSS.html) so they read as a compact professional control.
   const modeTabs=`<div class="view-toggle ageing-mode-tabs">
       <button class="${mode==='all'?'active':''}" data-action="ageing-mode" data-mode="all">All Data</button>
       <button class="${mode==='ageing'?'active':''}" data-action="ageing-mode" data-mode="ageing">Ageing Wise</button>
+    </div>`;
+  // Receivable Ageing / Payable Ageing kind switch — now appears AFTER the All Data/
+  // Ageing Wise tabs, per explicit user instruction ("All Data, Ageing Wise merko
+  // Receivable n Payable button se pehle de do").
+  const kindTabs=`<div class="view-toggle ageing-kind-tabs">
+      <button class="${isRecv?'active':''}" data-action="nav" data-page="ageingRecv" title="Receivable Ageing Summary">Receivable Ageing Summary</button>
+      <button class="${!isRecv?'active':''}" data-action="nav" data-page="ageingPay" title="Payable Ageing Summary">Payable Ageing Summary</button>
     </div>`;
   // Party-name search only makes sense while the pivot table is on screen: for
   // Receivables that's the "Ageing Wise" tab only (since "All Data" now shows the
@@ -195,17 +194,9 @@ function renderAgeing(kind){
       <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(pivotSt.filters.partyName||'')}">
       <span class="apv-count">${pivotCount} parties</span>
     </div>`:'';
-  // Receivables' "All Data" tab embeds the receivablesDashboard grid (noToolbar:true
-  // — see GRID_DEFS in Grids.html), which normally means Refresh/Columns have
-  // nowhere to render. They're folded into THIS row instead — right-aligned, small
-  // font — so the whole ageing page header (kind switch + mode tabs + search/
-  // Refresh/Columns) stays on just two thin lines instead of three, per explicit
-  // user instruction ("refresh and column bhi ismi me right me adjust ho
-  // jaaye...ye ek line ka screen bacha lega").
   const dashboardControls=(isRecv&&mode==='all')?`<div class="ageing-dash-controls">${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_('receivablesDashboard')}</div>`:'';
-  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${searchBox}${dashboardControls}</div>`;
-  // Row 1 (kind switch) stacked directly above Row 2 (mode tabs + search/controls).
-  const pageTabsBar=`${kindTabs}${modeBar}`;
+  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${kindTabs}${searchBox}${dashboardControls}</div>`;
+  const pageTabsBar=modeBar;
 
   if(mode==='ageing'){
     return `${pageTabsBar}

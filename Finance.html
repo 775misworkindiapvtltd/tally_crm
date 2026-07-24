@@ -201,6 +201,11 @@ document.addEventListener('click',e=>{
     if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');render();return;}
     if(a==='sales-cat-range-open'){S.salesCategoryRangeOpen=!S.salesCategoryRangeOpen;render();return;}
     if(a==='sales-cat-sort'){
+      // Skip sort if a column resize just completed — the mouseup event from the
+      // resize handle bubbles up as a click on the parent <th> which also has
+      // data-action="sales-cat-sort", and triggering a sort here would re-render
+      // the table and appear to "undo" the resize the user just did.
+      if(salesCatResizedRecently)return;
       const col=el.getAttribute('data-col');
       if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='dim'?1:-1;}
       render();return;
@@ -231,11 +236,13 @@ document.addEventListener('input',e=>{
 // same mousedown/mousemove/mouseup pattern as the generic grid's per-column resize
 // in Common.html, just writing into S.salesCategory*Width instead of a per-key map.
 let salesCatResizeCtx=null;
+let salesCatResizedRecently=false;
 document.addEventListener('mousedown',e=>{
   const el=e.target.closest('[data-action="sales-cat-resize"]');if(!el)return;
   const target=el.getAttribute('data-target');const th=el.closest('th');
   salesCatResizeCtx={target,startX:e.clientX,startW:th.getBoundingClientRect().width};
   e.preventDefault();
+  e.stopPropagation(); // prevent the sort click on parent <th> from firing
 });
 document.addEventListener('mousemove',e=>{
   if(!salesCatResizeCtx)return;
@@ -254,7 +261,13 @@ document.addEventListener('mouseup',()=>{
     else if(salesCatResizeCtx.target==='category')S.salesCategoryCatWidth=Math.round(nw);
     else S.salesCategoryColWidth=Math.round(nw);
   }
-  salesCatResizeCtx=null;render();
+  salesCatResizeCtx=null;
+  // Flag that a resize just completed — the click event that follows mouseup on the
+  // parent <th> must NOT trigger a sort toggle (it would re-render and appear to
+  // "reset" the resize). The flag clears after one tick.
+  salesCatResizedRecently=true;
+  setTimeout(()=>{salesCatResizedRecently=false;},0);
+  render();
 });
 CHART_DEFS['salesDashboard']=function(){
   const months=selectedFYMonths();
