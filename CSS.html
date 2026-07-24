@@ -294,11 +294,16 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    pushed to the right) per explicit user instruction. Height reduced per explicit
    user instruction ("point 1 and point 2 ka height kum kardo"). */
 .sales-cat-toolbar{flex-wrap:wrap;gap:6px;margin-bottom:6px;}
-.sales-cat-toolbar .sales-report-view-toggle{margin:0;flex:none;padding:2px;gap:2px;}
-.sales-cat-toolbar .sales-report-view-toggle button{padding:5px 12px;font-size:11px;}
+/* Sales/Duration toggle — always compact (same thin size on BOTH the Sales grid's
+   report-switcher toolbar AND the Duration pivot's sales-cat-toolbar), per explicit
+   user instruction ("image 1 and image 2 jo size button hai vo same nahi hai,
+   jismein patla hai vo wala karna hai dono mein"). */
+.sales-report-view-toggle{padding:2px!important;gap:2px!important;margin:0!important;}
+.sales-report-view-toggle button{padding:5px 12px!important;font-size:11px!important;border-radius:5px!important;}
 .sales-cat-toolbar .sales-cat-mode-toggle{margin:0;flex:none;padding:2px;gap:2px;}
-.sales-cat-toolbar .sales-cat-mode-toggle button{padding:5px 12px;font-size:11px;}
+.sales-cat-toolbar .sales-cat-mode-toggle button{padding:5px 12px;font-size:11px;border-radius:5px;}
 .sales-cat-toolbar .sales-cat-range-multi{margin:0;flex:none;}
+.sales-cat-toolbar .sales-cat-range-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
 /* Duration pivot's "Custom Range" control — an FY-style button + popover (reusing
    the app-wide .fy-multi/.fy-multi-btn/.fy-menu look from the main Financial Year
    filter) instead of two bare date inputs sitting directly in the toolbar, per
