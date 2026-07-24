@@ -313,6 +313,13 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .sales-cat-mode-toggle{margin-bottom:0;}
 .sales-cat-daterange{margin-bottom:0;}
 .sales-cat-wrap table.dt.scp-table{table-layout:fixed;}
+/* The Duration pivot's own .dt-scroll must have a bounded height so IT (not the
+   page-level .content) becomes the scroll container — this is what makes
+   position:sticky on the <thead> cells actually work (sticky only activates relative
+   to the NEAREST scrolling ancestor). calc(100vh - 170px) leaves room for the topbar
+   + toolbar row above, per explicit user instruction ("header freeze nahi hue hai
+   niche ka table ho gya hai"). */
+.sales-cat-wrap .dt-scroll{max-height:calc(100vh - 170px);overflow:auto;}
 /* box-sizing:border-box ensures that when the column resize handler reads
    getBoundingClientRect().width (which includes border+padding) and writes it back
    as style.width, the column stays at the exact same visual width instead of
