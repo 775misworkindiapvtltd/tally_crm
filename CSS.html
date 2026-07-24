@@ -213,7 +213,7 @@ input,select,button{font-family:inherit;font-size:13px;}
    in one screen of my mac and other laptops too"). New total ≈1050px. */
 table.apv-table{table-layout:fixed;}
 table.apv-table thead tr.apv-totals-row th{display:none;} /* keep header cell semantics but hide duplicate; totals rendered as td row */
-table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11px;text-align:center;padding:6px 5px;border-bottom:1px solid var(--line);}
+table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:center;padding:6px 5px;border-bottom:1px solid var(--line);letter-spacing:-0.5px;}
 table.apv-table thead .apv-totals-row td.apv-name{background:var(--surface);}
 table.apv-table thead .apv-totals-row td.apv-tot-name{background:var(--surface);color:var(--muted);font-family:inherit;font-size:9px;letter-spacing:.06em;}
 table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:31px;z-index:4;background:#1E4FC4;color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
@@ -228,7 +228,7 @@ table.apv-table thead .apv-sort-ic{font-size:8.5px;flex:none;}
 /* Party Name body cells: LEFT-aligned per explicit user instruction ("i want this
    section to be left aligned"), while the header above stays centered (unchanged). */
 table.apv-table tbody td.apv-name{font-weight:700;color:var(--ink);text-align:left;padding:6px 10px;background:var(--accent-tint2);border-left:1px solid var(--line);border-right:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-table.apv-table tbody td.apv-cell{text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 8px;}
+table.apv-table tbody td.apv-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:11px;padding:6px 8px;letter-spacing:-0.5px;}
 table.apv-table tbody td.apv-cell.apv-od{color:#B4231E;background:#FEF4F3;}
 table.apv-table tbody td.apv-cell.apv-nd{color:#0E7C3F;background:#F2FBF6;}
 table.apv-table tbody td.apv-cell.apv-total{color:var(--ink);font-weight:700;background:var(--accent-tint2);}
@@ -714,7 +714,7 @@ table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);bor
 table.dt tbody td.nowrap{white-space:nowrap;word-break:normal;overflow:hidden;text-overflow:ellipsis;}
 table.dt tbody tr:nth-child(even){background:#FAFBFD;}
 table.dt tbody tr:hover{background:var(--accent-tint2);}
-table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
+table.dt tbody td.num{font-family:Tahoma,Geneva,sans-serif;text-align:right;letter-spacing:-0.5px;}
 /* Heatmap cell (e.g. Sales Report's Amount column) — background/text color are set
    inline per-cell via heatmapCellStyle_() in Common.html (darker for high values,
    near-white for low values, per explicit user instruction "heat map...high on
