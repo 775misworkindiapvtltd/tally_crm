@@ -193,7 +193,6 @@ function renderAgeing(kind){
         ${ageingKpiCard_('Avg Overdue Days',overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0,'','ageing','c-orange')}
       </div>
       <section class="recv-dashboard-table">
-        <div class="recv-dashboard-table-head"><div><h3>Receivables Details</h3><span>Search, filter, sort, resize, and manage visible columns</span></div></div>
         ${renderGrid('receivablesDashboard')}
       </section>`;
   }
