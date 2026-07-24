@@ -779,7 +779,11 @@ html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!importan
 .party-row.active{background:var(--accent-tint);border-left:3px solid var(--accent);}
 .party-row .pn{font-size:12.5px;font-weight:600;color:var(--ink);}
 .party-row .pg{font-size:10px;color:var(--muted);margin-top:2px;}
-.party-row .pb{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;margin-top:4px;}
+/* Balance sits inline on the SAME line as Group/Phone (joined by a " · " dot
+   separator) instead of its own third line, per explicit user instruction
+   ("current asset ke saath balance aa jaye phone ke baad mein aa jaye ek single
+   line mein"). */
+.party-row .pb-inline{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;}
 .ledger-detail{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;}
 .ledger-wrap{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
 .ledger-toolbar{padding:10px 16px;border-bottom:1px solid var(--line-light);display:flex;align-items:center;gap:10px;flex:none;}

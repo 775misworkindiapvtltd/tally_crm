@@ -22,12 +22,27 @@ function selectLedgerParty(name){
 function renderLedgerPage(){
   const q=(S.ledger.search||'').toLowerCase();
   const parties=S.balanceParties.filter(p=>!q||p.name.toLowerCase().includes(q));
+  // Sort: highest closing balance first (positive descending), then negatives
+  // (ascending, i.e. less-negative before more-negative), then zeros last — per
+  // explicit user instruction ("jiska amt max hai vo pehle aa jaye, jiska neg hai
+  // fr vo aa jaye, or jinka 0 hai fr vo aa jaye").
+  parties.sort((a,b)=>{
+    const av=Number(a.closingBalance)||0,bv=Number(b.closingBalance)||0;
+    const aGrp=av>0?0:av<0?1:2, bGrp=bv>0?0:bv<0?1:2;
+    if(aGrp!==bGrp)return aGrp-bGrp;
+    if(aGrp===0)return bv-av; // positive: highest first
+    if(aGrp===1)return bv-av; // negative: closest to zero first (-500 before -2000)
+    return a.name.localeCompare(b.name); // zeros: alphabetical
+  });
 
+  // Each party row is a SINGLE compact line: Name on the left, then Group/Phone +
+  // balance all together on a second subtitle line — per explicit user instruction
+  // ("current asset ke saath balance aa jaye phone ke baad mein aa jaye ek single
+  // line mein").
   const partyRows=parties.map(p=>`
     <div class="party-row ${S.ledger.selected===p.name?'active':''}" data-action="select-party" data-name="${esc(p.name)}">
       <div class="pn">${esc(p.name)}</div>
-      <div class="pg">${esc(p.group)}${p.mobile?' · '+esc(p.mobile):''}</div>
-      <div class="pb" style="color:${p.closingBalance<0?'var(--success)':'var(--ink)'};">${fmtINR(p.closingBalance)}</div>
+      <div class="pg">${esc(p.group)}${p.mobile?' · '+esc(p.mobile):''} · <span class="pb-inline" style="color:${(Number(p.closingBalance)||0)<0?'var(--success)':'var(--ink)'};">${fmtINR(p.closingBalance)}</span></div>
     </div>`).join('');
 
   let detailHtml;
