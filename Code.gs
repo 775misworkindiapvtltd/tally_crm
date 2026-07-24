@@ -601,6 +601,45 @@ function getLedgerPartyListFromRows_(rows) {
  * balanceLedgers map yet (e.g. a brand-new party added to the sheet after the
  * last "Sync with Tally"). Normal party switching no longer calls this — see
  * buildAllLedgers_() above, which precomputes every party's ledger in one pass.
+/**
+ * saveFollowUp(data) — persists a follow-up note (date + remarks + auto-timestamp)
+ * onto the SALES sheet in columns O (DATE), P (REMARKS), Q (TIMESTAMP).
+ * Finds ALL rows where the "Invoice To" / party-name column matches data.party
+ * (case-insensitive) and writes the same values into every matching row.
+ */
+function saveFollowUp(data) {
+  if (!data || !data.party) return {ok:false, error:'No party specified'};
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SHEETS.sales);
+  if (!sh) return {ok:false, error:'SALES sheet not found'};
+
+  var headerRow = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var partyColIdx = findColIndexByHeaderContains_(headerRow, ['INVOICE TO', 'CUSTOMER NAME', 'PARTY NAME', 'BUYER NAME']);
+  if (partyColIdx === -1) return {ok:false, error:'Party name column not found in SALES header'};
+
+  var dateCol = 15, remarksCol = 16, tsCol = 17;
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return {ok:true, updated:0};
+
+  var partyData = sh.getRange(2, partyColIdx + 1, lastRow - 1, 1).getValues();
+  var target = String(data.party).trim().toLowerCase();
+  var updated = 0;
+
+  for (var i = 0; i < partyData.length; i++) {
+    var cellVal = String(partyData[i][0] || '').trim().toLowerCase();
+    if (cellVal === target) {
+      var rowNum = i + 2;
+      sh.getRange(rowNum, dateCol).setValue(data.date || '');
+      sh.getRange(rowNum, remarksCol).setValue(data.remarks || '');
+      sh.getRange(rowNum, tsCol).setValue(data.timestamp || new Date());
+      updated++;
+    }
+  }
+  return {ok:true, updated:updated};
+}
+
+/**
+ * getLedgerForParty(name) — returns a single party's full ledger statement.
  * Returns { header:{...party info...}, opening:{date,particular,debit,credit,balance},
  *           entries:[{date,particular,vchType,vchNo,debit,credit,balance}],
  *           closing:{date,particular,debit,credit,balance} }

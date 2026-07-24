@@ -147,6 +147,7 @@ function runServer(fnName,arg){
       case 'getLoginData': call.getLoginData(); break;
       case 'getChunk': call.getChunk(arg); break;
       case 'getLedgerForParty': call.getLedgerForParty(arg); break;
+      case 'saveFollowUp': call.saveFollowUp(arg); break;
       default: reject(new Error('Unsupported server function: '+fnName));
     }
   });

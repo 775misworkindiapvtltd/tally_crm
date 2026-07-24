@@ -276,8 +276,8 @@ registerPage('collectionAnalysis',renderCollectionAnalysis);
 // all per explicit user instruction.
 function renderFollowUpPopup_(){
   const p=S.followUpPopup;if(!p||!p.open)return '';
-  return `<div class="modal-overlay" data-action="followup-close">
-    <div class="modal-card followup-modal" data-stop-close>
+  return `<div class="modal-overlay">
+    <div class="modal-card followup-modal">
       <div class="modal-head">
         <h3>Mark Follow Up — ${esc(p.party)}</h3>
         <span class="modal-x" data-action="followup-close">✕</span>
@@ -311,15 +311,20 @@ document.addEventListener('click',e=>{
       const dateVal=document.getElementById('followupDateInput')?document.getElementById('followupDateInput').value:p.date;
       const remarksVal=document.getElementById('followupRemarksInput')?document.getElementById('followupRemarksInput').value:p.remarks;
       const key=followUpDataKey_(p.party);
-      // Writing onto S.followUpData[key] (keyed by customer, not by bill) is what
-      // makes every row for this same company update together, per explicit user
-      // instruction ("agar company name 3 baar hai is table me teeno me ye update
-      // ho jaye").
-      S.followUpData[key]={date:dateVal,remarks:remarksVal};
-      // Highlight every row for this company — see GRID_DEFS.followUpList.highlightKey
-      // in Grids.html, which matches rows against this same key.
+      const now=new Date();
+      const timestamp=now.toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      // Save locally (client-side state) — keyed by customer name so all rows
+      // for the same company update together.
+      S.followUpData[key]={date:dateVal,remarks:remarksVal,timestamp};
+      // Highlight every row for this company
       tableState('followUpList').highlightedRowKey=key;
-      S.followUpPopup=null;render();return;
+      S.followUpPopup=null;render();
+      // Persist to Google Sheet (SALES columns O=DATE, P=REMARKS, Q=TIMESTAMP).
+      // Fire-and-forget: don't block the UI waiting for the server write.
+      runServer('saveFollowUp',{party:p.party,date:dateVal,remarks:remarksVal,timestamp}).catch(err=>{
+        showToast('Follow-up save error: '+err.message,true);
+      });
+      return;
     }
     if(a==='ageing-mode'){S.ageingMode=el.getAttribute('data-mode');tableState(S.page).page=1;render();return;}
   }

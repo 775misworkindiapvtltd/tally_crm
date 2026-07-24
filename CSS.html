@@ -325,10 +325,15 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    to the NEAREST scrolling ancestor). calc(100vh - 170px) leaves room for the topbar
    + toolbar row above, per explicit user instruction ("header freeze nahi hue hai
    niche ka table ho gya hai"). */
-.sales-cat-wrap .dt-scroll{max-height:calc(100vh - 170px);overflow:auto;}
-/* Override .dt-table-wrap's overflow:hidden on the sales-cat-wrap specifically —
-   sticky positioning inside the scroll container doesn't work if a parent clips. */
-.dt-table-wrap.sales-cat-wrap{overflow:visible;}
+/* The Duration pivot's .dt-scroll needs bounded height so position:sticky works,
+   but must NOT leave blank space below the data when rows don't fill the viewport.
+   flex:1 + min-height:0 + overflow:auto makes it fill available space only (no
+   forced height), while still providing the scroll context for sticky headers. The
+   parent .dt-table-wrap.sales-cat-wrap also gets flex:none so it doesn't stretch
+   beyond its content height, per explicit user instruction ("RED HIGHLIGHTED JO SPACE
+   HAI USKO REMOVE KARDO AND NICHE TUK AANE DO DATA KO SCROLL BAR WHA TUK AA JAEYGA"). */
+.sales-cat-wrap .dt-scroll{flex:1;min-height:0;overflow:auto;max-height:calc(100vh - 160px);}
+.dt-table-wrap.sales-cat-wrap{overflow:visible;flex:none;}
 /* box-sizing:border-box ensures that when the column resize handler reads
    getBoundingClientRect().width (which includes border+padding) and writes it back
    as style.width, the column stays at the exact same visual width instead of
@@ -936,6 +941,7 @@ table.ledger-table tbody tr:nth-child(even):not(.opening-row):not(.closing-row){
 .followup-note-cell{display:flex;flex-direction:column;gap:1px;min-width:0;}
 .followup-note-date{font-size:10px;font-weight:700;color:var(--accent-dark);font-family:'JetBrains Mono',monospace;}
 .followup-note-remarks{font-size:11px;color:var(--ink-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.followup-note-ts{font-size:9px;color:var(--muted);font-style:italic;}
 
 @media print{
   body *{visibility:hidden;}

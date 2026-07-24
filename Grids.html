@@ -51,25 +51,28 @@ const FOLLOWUP_COLS=[
   {key:'partyName',label:'Customer',width:210},{key:'billRefNo',label:'Bill Ref',width:140},{key:'phoneNo',label:'Phone',width:130},
   {key:'salesPerson',label:'Sales Person',width:140},{key:'dueDate',label:'Due Date',width:120,date:true},{key:'overdueDays',label:'Overdue Days',width:120,num:true},
   {key:'pendingAmount',label:'Amount',width:150,num:true},
-  // Mark Follow Up — opens a small popup (Date + Remarks). Saving it writes onto
-  // S.followUpData keyed by customer name, so every row for that same company
-  // (e.g. 3 overdue bills for "Pansari") shows/updates together, per explicit user
-  // instruction. The clicked row (and every sibling row sharing that company) stays
-  // highlighted afterwards — see highlightKey on GRID_DEFS.followUpList below.
+  // Plan Date — the follow-up date saved via the popup, shown as its own column so
+  // it's visible at a glance without opening the popup, per explicit user instruction
+  // ("plan date ka bhi col ayega jo nahi aa rha hai list mein").
+  {key:'planDate',label:'Plan Date',width:120,render:r=>{
+    const note=S.followUpData[followUpDataKey_(r.partyName)];
+    if(!note||!note.date)return muted_('—');
+    return esc(fmtDDMMMYYYY(fromISO(note.date)));
+  }},
+  // Mark Follow Up — opens a small popup (Date + Remarks). Saving persists to the
+  // SALES sheet (columns O=DATE, P=REMARKS, Q=TIMESTAMP) via runServer('saveFollowUp').
   {key:'action',label:'Follow Up',width:150,render:r=>{
     const note=S.followUpData[followUpDataKey_(r.partyName)];
     return `<button class="btn btn-ghost" style="padding:4px 10px;font-size:10.5px;" data-action="followup-open" data-party="${esc(r.partyName)}" data-rowkey="${esc(String(r.partyName)+'|'+String(r.billRefNo))}">${note?'Edit Follow Up':'Mark Follow Up'}</button>`;
   }},
-  // Follow-up Notes — shows the saved Date + Remarks for this row's customer, so
-  // the info is visible right in the table without reopening the popup, per
-  // explicit user instruction ("next column me ye data bhi visible ho jaaye").
-  // Hideable via the existing Columns ▾ menu ("with option that i can hide it") —
-  // that works for free since it's just a normal column in this array.
-  {key:'followUpNote',label:'Follow-up Notes',width:220,render:r=>{
+  // Follow-up Notes — shows Date + Remarks + Timestamp for this row's customer.
+  // Hideable via the existing Columns ▾ menu.
+  {key:'followUpNote',label:'Follow-up Notes',width:250,render:r=>{
     const note=S.followUpData[followUpDataKey_(r.partyName)];
     if(!note)return muted_('—');
     const dateLabel=note.date?fmtDDMMMYYYY(fromISO(note.date)):'';
-    return `<div class="followup-note-cell"><span class="followup-note-date">${esc(dateLabel)}</span><span class="followup-note-remarks" title="${esc(note.remarks||'')}">${esc(note.remarks||'')}</span></div>`;
+    const ts=note.timestamp?`<span class="followup-note-ts">${esc(note.timestamp)}</span>`:'';
+    return `<div class="followup-note-cell"><span class="followup-note-date">${esc(dateLabel)}</span><span class="followup-note-remarks" title="${esc(note.remarks||'')}">${esc(note.remarks||'')}</span>${ts}</div>`;
   }}
 ];
 const CREDIT_NOTE_COLS=[
