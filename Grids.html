@@ -130,12 +130,6 @@ const SALES_REPORT_COLS=[
   // Common.html for the actual color interpolation, applied generically to any
   // column flagged heatmap:true.
   {key:'amount',label:'Amount',headerSub:'With GST',width:160,num:true,filterType:'number-range',heatmap:true},
-  {key:'amountExclGst',label:'Amount',headerSub:'W/o GST',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)},
-  // Cumulative Amount — the SAME total shown on every row belonging to that
-  // customer: the sum of Amount (With GST) across every invoice this Invoice To
-  // has in the current financial-year selection, per explicit user instruction
-  // ("if client is pansari, to table me jitni baar bhi pansari hai sabka sum bhi
-  // dikhe"). Computed once in buildSalesReport() below and copied onto every row.
 ];
 // Detail sub-table — every individual SALES line belonging to one invoice. Category
 // here is the single raw value per line (never concatenated), so it keeps the plain
