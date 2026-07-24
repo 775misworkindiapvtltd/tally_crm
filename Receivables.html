@@ -47,11 +47,18 @@ function ageingPivotRows(kind){
 
 // Column widths trimmed down (was 110px per bucket / 240px name / 150px total,
 // ~1270px total) so the full pivot table — all 10 columns — fits on one screen
-// on a 13"-14" laptop without horizontal scroll, per explicit user instruction.
+// on a 13"-14" laptop without horizontal scroll. Party Name's own default was
+// widened afterwards (190 -> 260) per explicit user instruction ("party name ka
+// col thoda bada kar do"), and every column here can now be resized by dragging
+// its right edge — see the resize-handle in renderAgeingPivot() below, which
+// reuses the exact same generic drag-resize + persistGridPrefs_() mechanism as
+// every other grid in the app (mousedown/mousemove/mouseup in Common.html), so
+// the chosen width is remembered for next time too ("give me flexibility to do
+// that, and remember it next time").
 const AGEING_PIVOT_COLS=[
   {key:'od90',label:'90+ Days',side:'od',width:88},{key:'od6190',label:'61-90 Days',side:'od',width:88},
   {key:'od3160',label:'31-60 Days',side:'od',width:88},{key:'od030',label:'0-30 Days',side:'od',width:88},
-  {key:'partyName',label:'Party Name',side:'name',width:190},
+  {key:'partyName',label:'Party Name',side:'name',width:260},
   {key:'nd030',label:'0-30 Days',side:'nd',width:88},{key:'nd3160',label:'31-60 Days',side:'nd',width:88},
   {key:'nd6190',label:'61-90 Days',side:'nd',width:88},{key:'nd90',label:'90+ Days',side:'nd',width:88},
   {key:'total',label:'Total Amount',side:'total',width:120}
@@ -77,25 +84,36 @@ function renderAgeingPivot(kind){
     return ((Number(a[st.sort])||0)-(Number(b[st.sort])||0))*st.dir;
   });
   const totals={}; AGEING_PIVOT_COLS.forEach(c=>{ if(c.key!=='partyName') totals[c.key]=rows.reduce((s,r)=>s+(Number(r[c.key])||0),0); });
+  // Resolved width per column: user's own resized width (persisted via
+  // persistGridPrefs_(tableKey), same as every other grid) if they've dragged it,
+  // otherwise the column's own default above.
+  const colW=c=>st.widths[c.key]||c.width;
 
   const hdr=AGEING_PIVOT_COLS.map(c=>{
+    const w=colW(c);
     const active=st.sort===c.key; const arrow=active?(st.dir===1?'▲':'▼'):'';
-    return `<th class="apv-th apv-${c.side}${active?' apv-sorted':''}" style="width:${c.width}px;min-width:${c.width}px;max-width:${c.width}px;" data-action="sort" data-table="${tableKey}" data-col="${c.key}">
-      <div class="apv-th-inner"><span>${esc(c.label)}</span><span class="apv-sort-ic">${arrow}</span></div>
+    // resize-handle sits OUTSIDE apv-th-inner (as a direct child of <th>, which is
+    // the positioned ancestor via table.dt's own position:sticky) — same structure
+    // the generic grid engine uses in Common.html — so it stays absolutely pinned
+    // to the column's right edge instead of getting laid out as a 3rd flex item
+    // inside the centered label row.
+    return `<th class="apv-th apv-${c.side}${active?' apv-sorted':''}" style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
+      <div class="apv-th-inner" data-action="sort" data-table="${tableKey}" data-col="${c.key}"><span>${esc(c.label)}</span><span class="apv-sort-ic">${arrow}</span></div>
+      <div class="resize-handle" data-action="resize" data-table="${tableKey}" data-col="${c.key}"></div>
     </th>`;
   }).join('');
 
   const totalsRow=AGEING_PIVOT_COLS.map(c=>{
-    const w=`width:${c.width}px;min-width:${c.width}px;max-width:${c.width}px;`;
-    if(c.key==='partyName') return `<td class="apv-tot-name" style="${w}">PARTY NAME</td>`;
-    return `<td class="apv-tot apv-${c.side}" style="${w}">${fmtINR(totals[c.key]||0)}</td>`;
+    const w=colW(c);const style=`width:${w}px;min-width:${w}px;max-width:${w}px;`;
+    if(c.key==='partyName') return `<td class="apv-tot-name" style="${style}">PARTY NAME</td>`;
+    return `<td class="apv-tot apv-${c.side}" style="${style}">${fmtINR(totals[c.key]||0)}</td>`;
   }).join('');
 
   const body=rows.length?rows.map(r=>`<tr>${AGEING_PIVOT_COLS.map(c=>{
-      const w=`width:${c.width}px;min-width:${c.width}px;max-width:${c.width}px;`;
-      if(c.key==='partyName') return `<td class="apv-name" style="${w}">${esc(r.partyName)}</td>`;
+      const w=colW(c);const style=`width:${w}px;min-width:${w}px;max-width:${w}px;`;
+      if(c.key==='partyName') return `<td class="apv-name" style="${style}">${esc(r.partyName)}</td>`;
       const v=Number(r[c.key])||0;
-      return `<td class="apv-cell apv-${c.side}${v===0?' apv-zero':''}" style="${w}">${fmtINR(v)}</td>`;
+      return `<td class="apv-cell apv-${c.side}${v===0?' apv-zero':''}" style="${style}">${fmtINR(v)}</td>`;
     }).join('')}</tr>`).join(''):`<tr><td colspan="${AGEING_PIVOT_COLS.length}"><div class="empty-state"><div class="big">No matching parties</div></div></td></tr>`;
 
   return `

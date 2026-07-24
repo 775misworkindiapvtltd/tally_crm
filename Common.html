@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.13 (Receivables report switcher tabs)";
+const APP_BUILD = "2026-07-23.14 (Ageing pivot resizable Party Name col + sidebar scroll id fix)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -580,7 +580,7 @@ function renderShell(inner){
         </div>
         <button class="sidebar-close" data-action="close-sidebar">✕</button>
       </div>
-      <div class="nav">${navHtml}</div>
+      <div class="nav" id="sidebarNav">${navHtml}</div>
       <div class="sidebar-foot">
         <button class="btn sync-btn btn-ghost" data-action="syncnow" style="color:#AAB2C8;border-color:var(--sidebar-line);">${S.syncing?'⟳ Syncing…':'⟳ Sync with Tally'}</button>
         <div class="sync-status" aria-live="polite">
@@ -1026,15 +1026,20 @@ function render(){
   const savedContentScroll={left:content?content.scrollLeft:0,top:content?content.scrollTop:0};
   const dtScroll=document.querySelector('.dt-scroll');
   const savedDtScroll={left:dtScroll?dtScroll.scrollLeft:0,top:dtScroll?dtScroll.scrollTop:0};
-  // The sidebar's own nav list (`.nav`, which has its own overflow-y:auto scrollbar
-  // — see CSS.html) was NOT being preserved across render(), even though `.content`
-  // and `.dt-scroll` already were. Every click on a nav item rebuilds the whole
-  // sidebar from scratch, which reset this scroll position to the top — so if you'd
-  // scrolled down the sidebar and clicked something near the bottom, the sidebar
-  // visibly "jumped" back up on every single click. Per explicit user instruction
-  // ("jab main sidebar pe click karta hoon...upar shift ho jata hai...let it stay
-  // wherever u have clicked"), this is now saved/restored exactly like the other two.
-  const navScroll=document.querySelector('.nav');
+  // The sidebar's own nav list (originally selected via the CSS class `.nav`, which
+  // has its own overflow-y:auto scrollbar — see CSS.html) was NOT being preserved
+  // across render(), even though `.content` and `.dt-scroll` already were. Every
+  // click anywhere that calls render() rebuilds the whole sidebar from scratch,
+  // which reset this scroll position to the top.
+  // FOLLOW-UP FIX: selecting by the CSS class `.nav` was ambiguous — every grid's
+  // pagination footer ALSO uses a `<div class="nav">` for its Prev/Next controls
+  // (see .dt-pagination .nav in CSS.html), so document.querySelector('.nav') could
+  // silently grab the wrong element depending on what's rendered in `.content` that
+  // cycle. Fixed for real by giving the sidebar's nav list its own unique id
+  // (#sidebarNav, set in the markup below) and selecting by that instead, so this
+  // can never be confused with a pagination control again. Per explicit user
+  // instruction ("sidebar menu is still moving up, when I am clicking on anything").
+  const navScroll=document.getElementById('sidebarNav');
   const savedNavScroll={left:navScroll?navScroll.scrollLeft:0,top:navScroll?navScroll.scrollTop:0};
   let inner="";
   if(S.syncing && !hasAnyData()){
@@ -1063,7 +1068,7 @@ function render(){
     if(content2){content2.scrollLeft=savedContentScroll.left;content2.scrollTop=savedContentScroll.top;}
     const dtScroll2=document.querySelector('.dt-scroll');
     if(dtScroll2){dtScroll2.scrollLeft=savedDtScroll.left;dtScroll2.scrollTop=savedDtScroll.top;}
-    const navScroll2=document.querySelector('.nav');
+    const navScroll2=document.getElementById('sidebarNav');
     if(navScroll2){navScroll2.scrollLeft=savedNavScroll.left;navScroll2.scrollTop=savedNavScroll.top;}
   };
   restoreScroll();
