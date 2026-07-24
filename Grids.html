@@ -358,7 +358,7 @@ const GRID_DEFS={
   // ismi me right me adjust ho jaaye...ye ek line ka screen bacha lega"). Skipping
   // this grid's own toolbar row entirely avoids rendering Refresh/Columns twice.
   receivablesDashboard:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables'),showSortArrows:true,noToolbar:true},
-  payablesDashboard:{cols:PAYABLES_COLS,data:()=>dataForFY('payables'),showSortArrows:true},
+  payablesDashboard:{cols:PAYABLES_COLS,data:()=>dataForFY('payables'),showSortArrows:true,noToolbar:true},
   receipt:{cols:RECEIPT_COLS,data:()=>dataForFY('receipt'),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   payment:{cols:RECEIPT_COLS,data:()=>dataForFY('payment')},
   // reportTabs: lazily looked up the same way salesReport's toolbarExtra is (defined

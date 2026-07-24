@@ -189,12 +189,13 @@ function renderAgeing(kind){
   // Receivables that's the "Ageing Wise" tab only (since "All Data" now shows the
   // flat grid, which has its own per-column search built in); for Payables the
   // pivot is shown in BOTH tabs, so its search stays visible either way.
-  const pivotVisible=mode==='ageing'||!isRecv;
+  const pivotVisible=mode==='ageing';
   const searchBox=pivotVisible?`<div class="apv-searchbar">
       <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(pivotSt.filters.partyName||'')}">
       <span class="apv-count">${pivotCount} parties</span>
     </div>`:'';
-  const dashboardControls=(isRecv&&mode==='all')?`<div class="ageing-dash-controls">${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_('receivablesDashboard')}</div>`:'';
+  const dashGridKey=isRecv?'receivablesDashboard':'payablesDashboard';
+  const dashboardControls=(mode==='all')?`<div class="ageing-dash-controls">${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_(dashGridKey)}</div>`:'';
   const modeBar=`<div class="ageing-mode-bar">${modeTabs}${kindTabs}${searchBox}${dashboardControls}</div>`;
   const pageTabsBar=modeBar;
 
@@ -208,25 +209,21 @@ function renderAgeing(kind){
       ${renderAgeingPivot(kind)}`;
   }
 
-  // "All Data" — for Receivables specifically, this now shows what used to live on
-  // the separate standalone "Receivables Dashboard" page (removed per explicit user
-  // instruction): the 4 KPI cards + full flat searchable/filterable/sortable grid.
-  // Payables Ageing's "All Data" tab is untouched (still the plain pivot table) since
-  // only the Receivables Dashboard removal/merge was requested — Payables Dashboard
-  // stays a separate page, reachable from the sidebar as before.
-  if(isRecv){
-    return `${pageTabsBar}
-      <div class="dash-grid ageing-page-cards ageing-alldata-cards">
-        ${ageingKpiCard_('Total Outstanding',fmtINR(sumBy(rows,amtKey)),`${rows.length} open bills`,'in','c-blue')}
-        ${ageingKpiCard_('Overdue Bills',overdue.length,`${fmtINR(sumBy(overdue,amtKey))} was due but not received`,'clock','c-red')}
-        ${ageingKpiCard_('Not Yet Due',notYetDue.length,`${fmtINR(sumBy(notYetDue,amtKey))} still to come`,'in','c-green')}
-        ${ageingKpiCard_('Avg Overdue Days',overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0,'','ageing','c-orange')}
-      </div>
-      <section class="recv-dashboard-table">
-        ${renderGrid('receivablesDashboard')}
-      </section>`;
-  }
-  return `${pageTabsBar}${renderAgeingPivot(kind)}`;
+  // "All Data" — BOTH Receivables and Payables now show: 4 KPI summary cards on top
+  // + the full flat searchable/filterable/sortable grid below (receivablesDashboard
+  // or payablesDashboard). Previously Payables "All Data" incorrectly fell through
+  // to the ageing pivot — now both views are consistent, per explicit user
+  // instruction ("All Data click hai but ageing aa rahi hai — fix it").
+  return `${pageTabsBar}
+    <div class="dash-grid ageing-page-cards ageing-alldata-cards">
+      ${ageingKpiCard_('Total Outstanding',fmtINR(sumBy(rows,amtKey)),`${rows.length} open bills`,isRecv?'in':'out',isRecv?'c-blue':'c-orange')}
+      ${ageingKpiCard_('Overdue Bills',overdue.length,`${fmtINR(sumBy(overdue,amtKey))} was due but not ${isRecv?'received':'paid'}`,'clock','c-red')}
+      ${ageingKpiCard_('Not Yet Due',notYetDue.length,`${fmtINR(sumBy(notYetDue,amtKey))} still ${isRecv?'to come':'to pay'}`,isRecv?'in':'out','c-green')}
+      ${ageingKpiCard_('Avg Overdue Days',overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0,'','ageing','c-orange')}
+    </div>
+    <section class="recv-dashboard-table">
+      ${renderGrid(dashGridKey)}
+    </section>`;
 }
 registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=>renderAgeing('pay'));
 
