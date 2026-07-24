@@ -94,27 +94,26 @@ function renderSalesCategoryPivot(){
   // Per explicit user instruction: Monthly/Yearly/Custom Range must all render on
   // ONE row together with the row-count/Refresh/Sales-Duration toggle beneath it —
   // NOT split into separate stacked rows above/below each other.
-  // Custom Range: now uses the same Financial Year multi-select popover as the
-  // main dashboard filter (can select multiple FYs or single FY) instead of bare
-  // date input boxes, per explicit user instruction ("ismein financial summary wise
-  // aaye jaise dashboard mein aata hai same, can select multi can select single").
-  // The selected FYs are stored in S.salesCategoryCustomFYs (array of FY keys).
+  // FY multi-select — available for ALL modes (Monthly, Yearly, Custom Range), not
+  // just Custom Range, per explicit user instruction ("custom range not working with
+  // monthly pls see vo dono ke liye same hai"). Lets the user pick which financial
+  // years' data to display regardless of the time-bucketing mode.
   const customFYs=S.salesCategoryCustomFYs||[];
   const allFYs=availableFinancialYears();
   const customFYLabel=customFYs.length?customFYs.map(k=>{const f=financialYearFromKey(k);return f?`${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)}`:k;}).join(', '):'Select Financial Year(s)';
-  const customRangeBtn=mode==='custom'?`<div class="fy-multi sales-cat-range-multi">
+  const fyPickerBtn=`<div class="fy-multi sales-cat-range-multi">
       <button type="button" class="fy-multi-btn" data-action="sales-cat-range-open">${esc(customFYLabel)} <span>▾</span></button>
       ${S.salesCategoryRangeOpen?`<div class="fy-menu sales-cat-range-menu">
         <div class="fy-option fy-all"><label><input type="checkbox" data-action="sales-cat-fy-all" ${customFYs.length===allFYs.length?'checked':''}> <span>Select All</span></label></div>
         ${allFYs.map(f=>`<div class="fy-option"><label><input type="checkbox" data-action="sales-cat-fy-toggle" data-key="${esc(f.key)}" ${customFYs.includes(f.key)?'checked':''}> <span>${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)} (Apr ${f.start.getFullYear()} – Mar ${f.end.getFullYear()})</span></label></div>`).join('')}
       </div>`:''}
-    </div>`:'';
+    </div>`;
   const modeBar=`<div class="view-toggle sales-cat-mode-toggle">
       <button class="${mode==='month'?'active':''}" data-action="sales-cat-mode" data-mode="month">Monthly</button>
       <button class="${mode==='year'?'active':''}" data-action="sales-cat-mode" data-mode="year">Yearly</button>
       <button class="${mode==='custom'?'active':''}" data-action="sales-cat-mode" data-mode="custom">Custom Range</button>
     </div>
-    ${customRangeBtn}`;
+    ${fyPickerBtn}`;
 
   const totW=S.salesCategoryTotalWidth||130,pctW=S.salesCategoryPctWidth||90,catW=S.salesCategoryCatWidth||210,colW=S.salesCategoryColWidth||110;
   // Left-freeze positions computed from actual column widths (user can resize them,
