@@ -673,9 +673,12 @@ table.dt tbody td.heatmap-cell{transition:background .15s;border-right:1px solid
 /* Inline expand toggle sits directly to the LEFT of a cell's own value, on the SAME
    line (Sales Report's Invoice No column), instead of stacked above it or taking a
    separate dedicated "+" column — per explicit user instruction ("i want it to be
-   on left of invoice number, in small size"). The host <td> is a simple horizontal
-   flex row: tiny toggle chip, then the value, so no extra vertical space is used. */
-td.exp-toggle-host{display:flex!important;align-items:center;gap:5px;}
+   on left of invoice number, in small size"). The host <td> uses a simple inline-flex
+   wrapper inside (not display:flex on the <td> itself, which would break the cell's
+   vertical centering within tall multi-line rows), so the toggle chip and the value
+   sit side-by-side while the <td> still vertically centers within the <tr>. */
+td.exp-toggle-host{vertical-align:middle;}
+td.exp-toggle-host .exp-toggle-host-inner{display:inline-flex;align-items:center;gap:5px;}
 .exp-toggle-host-val{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 .exp-toggle-inline{flex:none;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;color:#fff;background:var(--accent);font-size:10px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 2px rgba(46,107,242,.35);transition:all .12s;}
 .exp-toggle-inline:hover{background:var(--accent-dark);}

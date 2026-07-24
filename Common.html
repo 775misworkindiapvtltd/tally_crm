@@ -873,7 +873,7 @@ function renderGrid(tableKey){
       // whole separate column — per explicit user instruction ("i want it to be on
       // left of invoice number, in small size").
       const toggleHtml=(expandToggleCol===c)?`<span class="exp-toggle-inline${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span>`:'';
-      const cellInner=(expandToggleCol===c)?`${toggleHtml}<span class="exp-toggle-host-val">${content}</span>`:content;
+      const cellInner=(expandToggleCol===c)?`<span class="exp-toggle-host-inner">${toggleHtml}<span class="exp-toggle-host-val">${content}</span></span>`:content;
       return `<td class="${cls}"${cellTitle}${cellStyle}>${cellInner}</td>`;
     }).join("");
     const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;padding-left:4px;padding-right:4px;">${si+idx+1}</td>`;
