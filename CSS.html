@@ -304,6 +304,17 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .sales-cat-toolbar .sales-cat-mode-toggle button{padding:5px 12px;font-size:11px;border-radius:5px;}
 .sales-cat-toolbar .sales-cat-range-multi{margin:0;flex:none;}
 .sales-cat-toolbar .sales-cat-range-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+/* Cross-filter dropdown (Category filter when Party Name is the dimension, and vice
+   versa) — searchable multi-select, same .fy-multi pattern as the FY picker, per
+   explicit user instruction ("dono dropdown multiselect wale chahiye AND type bhi
+   kar sake"). */
+.sales-cross-filter-multi{flex:none;min-width:160px;}
+.sales-cross-filter-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+.sales-cross-menu{min-width:260px;max-height:350px;overflow:auto;}
+.cross-filter-search{width:100%;padding:7px 10px;border:1.5px solid var(--line);border-radius:7px;background:var(--bg);font-size:11.5px;margin-bottom:6px;}
+.cross-filter-search:focus{outline:none;border-color:var(--accent);}
+.cross-filter-options{max-height:220px;overflow-y:auto;}
+.cross-filter-clear{padding-top:6px;border-top:1px solid var(--line-light);margin-top:6px;}
 /* Duration pivot's "Custom Range" control — an FY-style button + popover (reusing
    the app-wide .fy-multi/.fy-multi-btn/.fy-menu look from the main Financial Year
    filter) instead of two bare date inputs sitting directly in the toolbar, per

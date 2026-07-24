@@ -313,10 +313,17 @@ function salesDimensionRawValue_(row,dimension){
   if(dimension==='state')return row.state;
   return row.category;
 }
-function buildSalesDimensionPivot_(mode,dimension){
+function buildSalesDimensionPivot_(mode,dimension,crossFilterDim,crossFilterValues){
   const periods=salesCategoryPeriods_(mode);
+  const hasCross=crossFilterDim&&crossFilterValues&&crossFilterValues.length>0;
+  const crossSet=hasCross?new Set(crossFilterValues.map(v=>v.toLowerCase())):null;
   const byDim={};
   dataForFY('sales').forEach(r=>{
+    // Cross-filter: if active, skip rows that don't match the cross-filter values
+    if(hasCross){
+      const crossVal=String(salesDimensionRawValue_(r,crossFilterDim)||'').trim().toLowerCase();
+      if(!crossSet.has(crossVal))return;
+    }
     const dimVal=String(salesDimensionRawValue_(r,dimension)||'').trim()||'Uncategorized';
     if(!byDim[dimVal])byDim[dimVal]={dimVal,total:0,periods:{}};
     const amt=Number(r.amount)||0;
@@ -330,6 +337,15 @@ function buildSalesDimensionPivot_(mode,dimension){
     return c;
   });
   return {periods,rows};
+}
+// Helper: get all unique values for a dimension (for the cross-filter dropdown options)
+function salesDimensionValues_(dimension){
+  const vals=new Set();
+  dataForFY('sales').forEach(r=>{
+    const v=String(salesDimensionRawValue_(r,dimension)||'').trim();
+    if(v)vals.add(v);
+  });
+  return Array.from(vals).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 // Which SALES field the Duration pivot currently groups by — driven by the header
 // dropdown (see renderSalesCategoryPivot() in Finance.html). Label = shown in the

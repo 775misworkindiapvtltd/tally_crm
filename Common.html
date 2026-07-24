@@ -109,6 +109,9 @@ let S = {
   // explicit user instruction ("financial summary wise aaye jaise dashboard mein
   // aata hai...can select multi can select single").
   salesCategoryCustomFYs:[],
+  // Cross-filter for the Duration pivot: when Party Name is the dimension, this
+  // filters by Category (and vice versa). Multi-select array of values.
+  salesCrossFilter:[],salesCrossFilterOpen:false,salesCrossFilterSearch:'',
   salesCategorySort:'total', salesCategorySortDir:-1,
   salesCategoryColWidth:110, salesCategoryTotalWidth:130, salesCategoryCatWidth:210, salesCategoryPctWidth:90,
   // Which field the Duration pivot groups by — 'category' (default), 'partyName'

@@ -75,7 +75,17 @@ function renderSalesCategoryPivot(){
   const mode=S.salesCategoryMode||'month';
   const dimension=S.salesDimension||'category';
   const dimMeta=SALES_DIMENSION_META[dimension]||SALES_DIMENSION_META.category;
-  const {periods,rows}=buildSalesDimensionPivot_(mode,dimension);
+
+  // Cross-filter: the "other" dimension's multi-select dropdown. If dimension is
+  // 'partyName', show a Category filter above; if 'category', show Party Name; etc.
+  // Per explicit user instruction ("agar niche party name selected hai to upar ek
+  // or dropdown aa jaye category ka, aise hi agar niche category selected hai to
+  // upar party name ka dropdown aa jaye...dono dropdown multiselect wale chahiye
+  // AND type bhi kar sake").
+  const crossDim=dimension==='partyName'?'category':dimension==='category'?'partyName':'category';
+  const crossMeta=SALES_DIMENSION_META[crossDim]||SALES_DIMENSION_META.category;
+  const crossFilter=S.salesCrossFilter||[];
+  const {periods,rows}=buildSalesDimensionPivot_(mode,dimension,crossFilter.length?crossDim:null,crossFilter);
   const sortKey=S.salesCategorySort||'total',sortDir=S.salesCategorySortDir===1?1:-1;
   const sorted=rows.slice().sort((a,b)=>{
     if(sortKey==='dim'){
@@ -168,9 +178,25 @@ function renderSalesCategoryPivot(){
   // Row 1 (right): "15 Categories" count + ⟳ Refresh + Columns ▾
   // This swaps positions 1↔2 from the previous layout and keeps 3 directly after
   // the Sales/Duration toggle (all on one thin row, left to right).
+  // Cross-filter dropdown — searchable multi-select for the "other" dimension.
+  const crossAllValues=salesDimensionValues_(crossDim);
+  const crossSearch=(S.salesCrossFilterSearch||'').toLowerCase();
+  const crossFiltered=crossSearch?crossAllValues.filter(v=>v.toLowerCase().includes(crossSearch)):crossAllValues;
+  const crossLabel=crossFilter.length?`${crossMeta.label}: ${crossFilter.length} selected`:`Filter by ${crossMeta.label}`;
+  const crossDropdown=`<div class="fy-multi sales-cross-filter-multi">
+      <button type="button" class="fy-multi-btn" data-action="sales-cross-open">${esc(crossLabel)} <span>▾</span></button>
+      ${S.salesCrossFilterOpen?`<div class="fy-menu sales-cross-menu">
+        <input type="text" class="cross-filter-search" placeholder="Type to search ${crossMeta.label}…" data-action="sales-cross-search" value="${esc(S.salesCrossFilterSearch||'')}">
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="sales-cross-all" ${crossFilter.length===crossAllValues.length?'checked':''}> <span>Select All (${crossAllValues.length})</span></label></div>
+        <div class="cross-filter-options">${crossFiltered.map(v=>`<div class="fy-option"><label><input type="checkbox" data-action="sales-cross-toggle" data-val="${esc(v)}" ${crossFilter.includes(v)?'checked':''}> <span>${esc(v)}</span></label></div>`).join('')}</div>
+        ${crossFilter.length?`<div class="cross-filter-clear"><button class="btn btn-ghost" data-action="sales-cross-clear" style="padding:4px 10px;font-size:10px;width:100%;">Clear All</button></div>`:''} 
+      </div>`:''}
+    </div>`;
+
   const catToolbar=`<div class="dt-toolbar sales-cat-toolbar">
       ${renderSalesReportViewToggle_()}
       ${modeBar}
+      ${crossDropdown}
       <div class="report-switcher-right">
         <span class="count">${rows.length} ${esc(dimMeta.plural)}</span>
         <button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
@@ -208,6 +234,21 @@ document.addEventListener('click',e=>{
       if(idx===-1)S.salesCategoryCustomFYs.push(key);else S.salesCategoryCustomFYs.splice(idx,1);
       render();return;
     }
+    // Cross-filter dropdown handlers
+    if(a==='sales-cross-open'){S.salesCrossFilterOpen=!S.salesCrossFilterOpen;S.salesCrossFilterSearch='';render();return;}
+    if(a==='sales-cross-all'){
+      const crossDim=(S.salesDimension||'category')==='partyName'?'category':'partyName';
+      const allVals=salesDimensionValues_(crossDim);
+      S.salesCrossFilter=S.salesCrossFilter.length===allVals.length?[]:allVals.slice();
+      render();return;
+    }
+    if(a==='sales-cross-toggle'){
+      const val=el.getAttribute('data-val');
+      const idx=S.salesCrossFilter.indexOf(val);
+      if(idx===-1)S.salesCrossFilter.push(val);else S.salesCrossFilter.splice(idx,1);
+      render();return;
+    }
+    if(a==='sales-cross-clear'){S.salesCrossFilter=[];render();return;}
     if(a==='sales-cat-sort'){
       // Skip sort if a column resize just completed — the mouseup event from the
       // resize handle bubbles up as a click on the parent <th> which also has
@@ -219,9 +260,9 @@ document.addEventListener('click',e=>{
       render();return;
     }
   }
-  // Click-away close for the Custom Range popover — same pattern as the main FY
-  // filter's fy-multi popover in Filters.html.
+  // Click-away close for the Custom Range popover and Cross-filter dropdown.
   if(S.salesCategoryRangeOpen&&!e.target.closest('.sales-cat-range-multi')){S.salesCategoryRangeOpen=false;render();}
+  if(S.salesCrossFilterOpen&&!e.target.closest('.sales-cross-filter-multi')){S.salesCrossFilterOpen=false;S.salesCrossFilterSearch='';render();}
 });
 document.addEventListener('change',e=>{
   const el=e.target;
@@ -229,6 +270,7 @@ document.addEventListener('change',e=>{
     const v=el.value;
     if(SALES_DIMENSION_META[v]){
       S.salesDimension=v;
+      S.salesCrossFilter=[];S.salesCrossFilterOpen=false;S.salesCrossFilterSearch='';
       try{localStorage.setItem('tally_sales_dimension',v);}catch(ignore){}
       render();
     }
@@ -236,6 +278,8 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('input',e=>{
   const el=e.target,a=el.getAttribute('data-action');
+  // Cross-filter search — live-filter the dropdown options as the user types
+  if(a==='sales-cross-search'){S.salesCrossFilterSearch=el.value;render();return;}
   // (Old sales-cat-custom-from/to handlers removed — Custom Range now uses FY
   // multi-select checkboxes instead of date inputs, per explicit user instruction.)
 });
