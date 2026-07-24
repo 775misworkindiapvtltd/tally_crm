@@ -264,22 +264,22 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    sakte hai...so that it looks neat and professional looking dashboard"). */
 .ageing-mode-tabs{padding:3px;gap:2px;}
 .ageing-mode-tabs button{padding:6px 12px;font-size:11.5px;border-radius:5px;}
-.ageing-page-cards{margin-bottom:10px;}
+.ageing-page-cards{margin-bottom:6px;gap:8px;}
 /* Ageing KPI cards — a really thin single-row layout (icon on the left, label +
    value + sub packed tightly to its right on ONE line where it fits) instead of
    the taller icon-on-top/value-below stack every other .card uses — even thinner
    than the Main Dashboard's own kpi-strip cards, per explicit user instruction
    ("kpi kards...koi aur layout hoga to chalega, i want really thin layout for
    these...that will save my screen"). */
-.ageing-kpi-card{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:default;}
+.ageing-kpi-card{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:default;}
 .ageing-kpi-card:hover{box-shadow:0 1px 3px rgba(0,0,0,.03);transform:none;}
-.ageing-kpi-card .card-icon{width:28px;height:28px;border-radius:8px;flex:none;}
-.ageing-kpi-card .card-icon svg{width:14px;height:14px;}
+.ageing-kpi-card .card-icon{width:24px;height:24px;border-radius:6px;flex:none;}
+.ageing-kpi-card .card-icon svg{width:12px;height:12px;}
 .ageing-kpi-body{min-width:0;flex:1;}
-.ageing-kpi-card .card-label{font-size:8.5px;display:block;margin-bottom:2px;}
-.ageing-kpi-vs{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;}
-.ageing-kpi-card .card-value{font-size:14.5px;line-height:1;}
-.ageing-kpi-card .card-sub{font-size:9.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ageing-kpi-card .card-label{font-size:8px;display:block;margin-bottom:1px;}
+.ageing-kpi-vs{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+.ageing-kpi-card .card-value{font-size:13px;line-height:1;}
+.ageing-kpi-card .card-sub{font-size:9px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 /* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
 /* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line. The
@@ -630,7 +630,13 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
    It deliberately keeps its own vertical scroll area while retaining the shared
    flexible-grid controls: every header sorts/searches/filters, and Columns opens
    the persisted hide/show, reorder, and resize options. */
-.recv-dashboard-table{height:540px;min-height:0;display:flex;flex-direction:column;margin:0 0 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
+/* The receivablesDashboard table (embedded inside the Ageing Summary "All Data"
+   tab) uses flex:1 so it fills available content height when there are enough rows,
+   but does NOT force a fixed height that would leave visible blank space below
+   short page counts, per explicit user instruction ("niche blank aise achha nahi
+   lag rha hai"). max-height ensures a very long page doesn't push the table beyond
+   one viewport. */
+.recv-dashboard-table{min-height:0;display:flex;flex-direction:column;margin:0 0 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
 .recv-dashboard-table .dt-toolbar{margin:0 0 6px;gap:8px;}
 .recv-dashboard-table .dt-toolbar .count{font-size:11px;}
 .recv-dashboard-table .dt-toolbar .btn{padding:6px 11px!important;font-size:11px;}
