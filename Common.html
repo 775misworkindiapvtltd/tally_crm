@@ -9,15 +9,19 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.18 (ageing kind-switch moved in-page above mode tabs, KPI cards shrunk to kpi-strip size)";
+const APP_BUILD = "2026-07-23.20 (ageing page thin controls row + thin KPI cards, A++ removed, sales report toggle moved left of invoice no, sub-grid whitespace trimmed)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
 // (tables/panels) via CSS zoom — 100 ("A", normal website font) is the default the
 // FIRST time the app opens, since normal size reads best in dense tables per explicit
 // user instruction. The chosen size is remembered (localStorage) for every later visit.
-const FONT_SIZE_OPTIONS = [90,100,115,130];
-const FONT_SIZE_LABELS = {90:'A-',100:'A',115:'A+',130:'A++'};
+// A++ (130%) preset removed per explicit user instruction ("remove a++ font
+// size") — only three sizes remain now. Any browser that still has 130 saved in
+// localStorage from before simply falls through to the existing "unrecognised
+// preset -> fall back to A (100%)" guard below, so no separate migration is needed.
+const FONT_SIZE_OPTIONS = [90,100,115];
+const FONT_SIZE_LABELS = {90:'A-',100:'A',115:'A+'};
 
 /* ============================= STATE ============================= */
 function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50,expanded:new Set()};}
@@ -650,6 +654,29 @@ function navigateTo(pageKey){
 }
 
 /* ============================= GENERIC GRID ENGINE ============================= */
+// Shared "⟳ Refresh" / "Columns ▾" toolbar button builders — extracted out of
+// renderGrid() so both its own toolbar row AND callers that need to render these
+// controls somewhere else entirely (e.g. the Receivables Ageing Summary page,
+// which folds Refresh/Columns into its kind/mode-tabs row instead of a separate
+// toolbar — see renderAgeing() in Receivables.html) can reuse the exact same
+// markup/behavior instead of duplicating it.
+function renderRefreshBtnHtml_(){
+  return `<button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`;
+}
+// `overlay`=true renders a smaller variant meant to float in a corner (e.g. pinned
+// to the top-right of a sub-grid's table box) rather than sit inline in a toolbar
+// row — per explicit user instruction to stop the sub-table's own Columns control
+// from taking up a whole extra row of white space above the table.
+function renderColMenuBtnHtml_(tableKey,overlay){
+  const st=tableState(tableKey);
+  const baseKeys=(GRID_DEFS[tableKey]&&GRID_DEFS[tableKey].cols||[]).map(c=>c.key);
+  if(!st.order.length)st.order=baseKeys.slice();
+  const orderedCols=st.order.map(k=>(GRID_DEFS[tableKey].cols||[]).find(c=>c.key===k)).filter(Boolean);
+  return `<div class="dt-colmenu-wrap${overlay?' sub-grid-overlay':''}">
+        <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:${overlay?'3px 9px':'5px 12px'};font-size:${overlay?'10.5px':'11.5px'};">Columns ▾</button>
+        ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
+      </div>`;
+}
 // GRID_DEFS is populated in Grids.html: { key: {cols:[{key,label,width,pill,num,date}], data:()=>[...] } }
 function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
@@ -799,11 +826,13 @@ function renderGrid(tableKey){
       // party/category name always shows on hover, no matter where over the cell the
       // cursor lands — this is what fixes the "hover doesn't show full name" report.
       const cellTitle=(dashboardReport&&c.compactName)?` title="${esc(raw)}"`:'';
-      // The row's own "+"/"−" expand toggle is stacked directly above this cell's
-      // value (small, tucked in the corner) instead of taking a whole separate
-      // column — per explicit user instruction.
+      // The row's own "+"/"−" expand toggle sits directly to the LEFT of this cell's
+      // own value (small chip, same line) instead of stacked above it or taking a
+      // whole separate column — per explicit user instruction ("i want it to be on
+      // left of invoice number, in small size").
       const toggleHtml=(expandToggleCol===c)?`<span class="exp-toggle-inline${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span>`:'';
-      return `<td class="${cls}"${cellTitle}>${toggleHtml}${content}</td>`;
+      const cellInner=(expandToggleCol===c)?`${toggleHtml}<span class="exp-toggle-host-val">${content}</span>`:content;
+      return `<td class="${cls}"${cellTitle}>${cellInner}</td>`;
     }).join("");
     const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;padding-left:4px;padding-right:4px;">${si+idx+1}</td>`;
     let expCell='',detailRow='';
@@ -834,11 +863,8 @@ function renderGrid(tableKey){
   // line stays visible together inside its expanded card.
   const subGrid=!!def.subGrid;
 
-  const colMenuBtnHtml=`<div class="dt-colmenu-wrap">
-        <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:5px 12px;font-size:11.5px;">Columns ▾</button>
-        ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
-      </div>`;
-  const refreshBtnHtml=`<button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`;
+  const colMenuBtnHtml=renderColMenuBtnHtml_(tableKey);
+  const refreshBtnHtml=renderRefreshBtnHtml_();
 
   // Report-switcher grids (Customer List/Receipt List/Collection Analysis/Follow Up
   // List/Credit Notes — see def.reportTabs, wired in Grids.html) get a different
@@ -847,7 +873,20 @@ function renderGrid(tableKey){
   // Receivables reports come first (left side), and Refresh + Columns move together
   // to the right corner, after the tabs.
   const reportTabsHtml=def.reportTabs?def.reportTabs():'';
-  const toolbarHtml=reportTabsHtml?`
+  // `noToolbar` grids (e.g. receivablesDashboard, embedded inside the Receivables
+  // Ageing Summary "All Data" tab) render their own Refresh/Columns controls
+  // elsewhere — folded into the ageing kind/mode-tabs row above the KPI cards, per
+  // explicit user instruction ("refresh and column bhi ismi me right me adjust ho
+  // jaaye...ye ek line ka screen bacha lega") — so this grid's own toolbar row is
+  // skipped entirely here to avoid rendering Refresh/Columns twice.
+  // Sub-grids (the Sales Report expanded detail table) no longer get their own
+  // toolbar row at all — that whole row was pure top white space above an already
+  // small/compact card, per explicit user instruction ("sub table has lot of white
+  // space...on top due to column stuff...adjust column somewhere else"). The
+  // Columns ▾ control instead floats as a small overlay pinned to the table's own
+  // top-right corner (see .dt-table-wrap.sub-grid position:relative + .dt-colmenu-wrap.sub-grid-overlay
+  // in CSS.html), so it costs zero extra vertical space.
+  const toolbarHtml=(def.noToolbar||subGrid)?'':(reportTabsHtml?`
     <div class="dt-toolbar report-switcher-toolbar">
       ${reportTabsHtml}
       <div class="report-switcher-right">
@@ -855,17 +894,19 @@ function renderGrid(tableKey){
         ${colMenuBtnHtml}
       </div>
     </div>`:`
-    <div class="dt-toolbar${subGrid?' sub-grid':''} dt-toolbar-plain">
+    <div class="dt-toolbar dt-toolbar-plain">
       ${def.toolbarExtra?def.toolbarExtra():''}
       <div class="report-switcher-right">
-        ${subGrid?'':refreshBtnHtml}
+        ${refreshBtnHtml}
         ${colMenuBtnHtml}
       </div>
-    </div>`;
+    </div>`);
+  const subGridColMenuOverlay=subGrid?renderColMenuBtnHtml_(tableKey,true):'';
 
   return `
     ${toolbarHtml}
     <div class="dt-table-wrap${subGrid?' sub-grid':''}">
+      ${subGridColMenuOverlay}
       <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
     </div>
     <div class="mcard-list">${mcards}</div>

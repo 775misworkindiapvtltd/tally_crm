@@ -146,11 +146,17 @@ function renderAgeingPivot(kind){
 // (card-icon/card-top/card-label/card-value/card-sub), per explicit user
 // instruction to make these look consistent with the rest of the dashboard
 // instead of the plain text-only cards they had before.
+// Thin, single-row layout (icon on the left, label+value+sub stacked tight to its
+// right) — even thinner than the Main Dashboard's own kpi-strip cards, per
+// explicit user instruction ("Kpi kards...koi aur layout hoga to chalega, i want
+// really thin layout for these...that will save my screen").
 function ageingKpiCard_(label,value,sub,icon,cls){
   return `<div class="card ageing-kpi-card">
-    <div class="card-top"><span class="card-label">${esc(label)}</span><div class="card-icon ${cls}">${NAV_ICONS[icon]}</div></div>
-    <div class="card-value">${value}</div>
-    ${sub?`<div class="card-sub">${sub}</div>`:''}
+    <div class="card-icon ${cls}">${NAV_ICONS[icon]}</div>
+    <div class="ageing-kpi-body">
+      <div class="card-label">${esc(label)}</div>
+      <div class="ageing-kpi-vs"><span class="card-value">${value}</span>${sub?`<span class="card-sub">${sub}</span>`:''}</div>
+    </div>
   </div>`;
 }
 
@@ -189,8 +195,16 @@ function renderAgeing(kind){
       <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(pivotSt.filters.partyName||'')}">
       <span class="apv-count">${pivotCount} parties</span>
     </div>`:'';
-  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${searchBox}</div>`;
-  // Row 1 (kind switch) stacked directly above Row 2 (mode tabs + search).
+  // Receivables' "All Data" tab embeds the receivablesDashboard grid (noToolbar:true
+  // — see GRID_DEFS in Grids.html), which normally means Refresh/Columns have
+  // nowhere to render. They're folded into THIS row instead — right-aligned, small
+  // font — so the whole ageing page header (kind switch + mode tabs + search/
+  // Refresh/Columns) stays on just two thin lines instead of three, per explicit
+  // user instruction ("refresh and column bhi ismi me right me adjust ho
+  // jaaye...ye ek line ka screen bacha lega").
+  const dashboardControls=(isRecv&&mode==='all')?`<div class="ageing-dash-controls">${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_('receivablesDashboard')}</div>`:'';
+  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${searchBox}${dashboardControls}</div>`;
+  // Row 1 (kind switch) stacked directly above Row 2 (mode tabs + search/controls).
   const pageTabsBar=`${kindTabs}${modeBar}`;
 
   if(mode==='ageing'){

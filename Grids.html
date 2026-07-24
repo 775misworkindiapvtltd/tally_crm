@@ -298,7 +298,13 @@ function creditNoteRows(){return dataForFY('balanceVouchers').filter(v=>/credit\
 
 const GRID_DEFS={
   expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
-  receivablesDashboard:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables'),showSortArrows:true},
+  // noToolbar: this grid is only ever embedded inside the Receivables Ageing
+  // Summary "All Data" tab (see renderAgeing() in Receivables.html), which already
+  // folds its own Refresh + Columns controls into the kind/mode-tabs row directly
+  // above the KPI cards — per explicit user instruction ("refresh and column bhi
+  // ismi me right me adjust ho jaaye...ye ek line ka screen bacha lega"). Skipping
+  // this grid's own toolbar row entirely avoids rendering Refresh/Columns twice.
+  receivablesDashboard:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables'),showSortArrows:true,noToolbar:true},
   payablesDashboard:{cols:PAYABLES_COLS,data:()=>dataForFY('payables'),showSortArrows:true},
   receipt:{cols:RECEIPT_COLS,data:()=>dataForFY('receipt'),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   payment:{cols:RECEIPT_COLS,data:()=>dataForFY('payment')},

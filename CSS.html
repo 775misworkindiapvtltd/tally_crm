@@ -250,6 +250,13 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .ageing-kind-tabs button{padding:6px 14px;font-size:11.5px;border-radius:5px;}
 .ageing-mode-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
 .ageing-mode-bar .view-toggle{margin-bottom:0;}
+/* Refresh + Columns for the embedded receivablesDashboard grid (All Data tab) —
+   folded into this same row (right-aligned, small font) instead of that grid
+   rendering its own separate toolbar row underneath, per explicit user instruction
+   ("refresh and column bhi ismi me right me adjust ho jaaye...ye ek line ka screen
+   bacha lega"). */
+.ageing-dash-controls{display:flex;align-items:center;gap:8px;flex:none;}
+.ageing-dash-controls .btn{padding:5px 12px;font-size:11.5px;}
 /* All Data / Ageing Wise — shrunk to a smaller, denser pill than the default
    .view-toggle (used elsewhere for e.g. Sales/Duration) so it reads as a compact
    professional control that doesn't consume extra vertical space, per explicit
@@ -258,16 +265,21 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .ageing-mode-tabs{padding:3px;gap:2px;}
 .ageing-mode-tabs button{padding:6px 12px;font-size:11.5px;border-radius:5px;}
 .ageing-page-cards{margin-bottom:10px;}
-/* Ageing KPI cards — shrunk to match the Main Dashboard's kpi-strip card sizing
-   exactly (smaller icon, smaller value font, tighter padding) instead of the
-   larger base .card size, per explicit user instruction ("kpi kards ko resize
-   karke small kar do just like in dashboard tab...small neat and clean"). */
-.ageing-kpi-card{padding:12px 13px;}
-.ageing-kpi-card .card-top{margin-bottom:7px;}
-.ageing-kpi-card .card-icon{width:30px;height:30px;border-radius:8px;}
-.ageing-kpi-card .card-icon svg{width:15px;height:15px;}
-.ageing-kpi-card .card-label{font-size:9px;}
-.ageing-kpi-card .card-value{font-size:15.5px;}
+/* Ageing KPI cards — a really thin single-row layout (icon on the left, label +
+   value + sub packed tightly to its right on ONE line where it fits) instead of
+   the taller icon-on-top/value-below stack every other .card uses — even thinner
+   than the Main Dashboard's own kpi-strip cards, per explicit user instruction
+   ("kpi kards...koi aur layout hoga to chalega, i want really thin layout for
+   these...that will save my screen"). */
+.ageing-kpi-card{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:default;}
+.ageing-kpi-card:hover{box-shadow:0 1px 3px rgba(0,0,0,.03);transform:none;}
+.ageing-kpi-card .card-icon{width:28px;height:28px;border-radius:8px;flex:none;}
+.ageing-kpi-card .card-icon svg{width:14px;height:14px;}
+.ageing-kpi-body{min-width:0;flex:1;}
+.ageing-kpi-card .card-label{font-size:8.5px;display:block;margin-bottom:2px;}
+.ageing-kpi-vs{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;}
+.ageing-kpi-card .card-value{font-size:14.5px;line-height:1;}
+.ageing-kpi-card .card-sub{font-size:9.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 /* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
 /* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line. The
@@ -642,12 +654,14 @@ table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
 .exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;background:var(--accent);font-size:13px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(46,107,242,.35);transition:all .12s;}
 .exp-toggle:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 3px 8px rgba(46,107,242,.4);}
 .exp-toggle.open{background:var(--accent-dark);}
-/* Inline expand toggle stacked directly above a cell's own value (Sales Report's
-   Invoice No column) instead of a separate dedicated "+" column — per explicit user
-   instruction ("small plus invoice number ke upar he aa jaye"). The host <td> becomes
-   a small vertical stack: tiny toggle chip on top, the invoice number value below. */
-td.exp-toggle-host{position:relative;padding-top:20px!important;}
-.exp-toggle-inline{position:absolute;top:4px;left:8px;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;color:#fff;background:var(--accent);font-size:11px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 2px rgba(46,107,242,.35);transition:all .12s;}
+/* Inline expand toggle sits directly to the LEFT of a cell's own value, on the SAME
+   line (Sales Report's Invoice No column), instead of stacked above it or taking a
+   separate dedicated "+" column — per explicit user instruction ("i want it to be
+   on left of invoice number, in small size"). The host <td> is a simple horizontal
+   flex row: tiny toggle chip, then the value, so no extra vertical space is used. */
+td.exp-toggle-host{display:flex!important;align-items:center;gap:5px;}
+.exp-toggle-host-val{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.exp-toggle-inline{flex:none;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;color:#fff;background:var(--accent);font-size:10px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 2px rgba(46,107,242,.35);transition:all .12s;}
 .exp-toggle-inline:hover{background:var(--accent-dark);}
 .exp-toggle-inline.open{background:var(--accent-dark);}
 /* The master row that's currently expanded stays visually highlighted while its
@@ -659,31 +673,42 @@ html.dark table.dt tbody tr.exp-row-open{background:var(--accent-tint)!important
 /* The whole expanded strip gets soft padding + a subtle tinted backdrop behind the
    card so the card itself reads as "floating" above the row it belongs to — this is
    the "elegant box" look requested, as opposed to the plain nested table before. */
-.exp-detail-row td{background:var(--bg);padding:14px 16px 18px!important;border-bottom:2px solid var(--line);}
+.exp-detail-row td{background:var(--bg);padding:8px 16px 12px!important;border-bottom:2px solid var(--line);}
 .exp-detail-wrap{max-width:100%;}
 /* The "Line items for Invoice X..." label row was removed (see
    renderSalesReportDetail_ in Grids.html) — the highlighted parent row above now
    conveys which invoice this card belongs to, so the card's own top padding is
-   tightened since there's no label to give it breathing room from. */
-.sr-detail-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 18px rgba(20,30,60,.08);overflow:hidden;padding:10px 12px 12px;}
+   tightened since there's no label to give it breathing room from. Padding trimmed
+   further (was 10px 12px 12px) — with the sub-grid's own toolbar row also gone now
+   (see .dt-table-wrap.sub-grid above), this card should hug the line items tightly
+   instead of leaving a visible gap above the table, per explicit user instruction. */
+.sr-detail-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 18px rgba(20,30,60,.08);overflow:hidden;padding:4px 8px 8px;}
 .muted-cell{color:var(--muted);font-style:italic;}
 /* Sub-grid (the expanded detail table itself): light-blue header with dense,
    easy-to-scan line items. Amount GST context is intentionally demoted into a
    small light subtitle so it does not make the header row tall. */
-.dt-toolbar.sub-grid{margin-bottom:6px;gap:6px;}
-.dt-toolbar.sub-grid .count{font-size:10.5px;}
-/* Sub-table's own "Columns ▾" box (there's no Refresh button here since subGrid
-   skips it) — shrunk further than the main table's, so it doesn't eat into the
-   limited vertical space of an already-compact expanded card, per explicit user
-   instruction ("iske neeche wala jo row hai...usme col ka box hai usko aur small
-   kar do...space better utilize ho"). */
-.dt-toolbar.sub-grid .dt-colmenu-wrap .btn{padding:3px 9px!important;font-size:10.5px!important;}
-.dt-table-wrap.sub-grid{border-radius:9px;box-shadow:none;}
+/* Per explicit user instruction, the sub-grid no longer gets its OWN toolbar row at
+   all (see toolbarHtml in renderGrid() — subGrid always skips it now) — that whole
+   row was the main source of top white space above an already-compact card. The
+   "Columns ▾" control instead floats as a small overlay pinned to the table box's
+   own top-right corner (position:relative on .dt-table-wrap.sub-grid below), so it
+   costs zero extra vertical space instead of a full row. */
+.dt-table-wrap.sub-grid{position:relative;border-radius:9px;box-shadow:none;}
+.dt-colmenu-wrap.sub-grid-overlay{position:absolute;top:5px;right:6px;z-index:6;}
+.dt-colmenu-wrap.sub-grid-overlay .btn{background:var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.1);}
 .dt-table-wrap.sub-grid table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);}
-.dt-table-wrap.sub-grid table.dt thead th .th-inner{padding:4px 9px;gap:1px;min-height:30px;}
-.dt-table-wrap.sub-grid table.dt thead th .th-label{color:var(--accent-dark);font-size:9.5px;font-weight:700;line-height:1.15;letter-spacing:.04em;}
-.dt-table-wrap.sub-grid table.dt thead th .th-sub{display:block;margin-top:1px;color:#7894C8;font-size:8px;font-weight:700;line-height:1.1;letter-spacing:0;text-transform:none;}
-.dt-table-wrap.sub-grid table.dt thead th .th-total{display:block;margin-top:1px;color:#94A4C6;font-family:'JetBrains Mono',monospace;font-size:7.5px;font-weight:700;line-height:1.1;letter-spacing:0;text-transform:none;}
+/* Header row height + label size trimmed further (was min-height:30px, two lines of
+   text/subtitle) so the header takes up as little vertical space as possible above
+   the actual line items — per explicit user instruction ("sub table has lot of
+   white space...on top due to column stuff...isko kam kar do"). The Amount
+   With-GST/W-o-GST subtitle stays but tightened; the resize-handle/search-ic in the
+   far-right-most header (where the floating Columns ▾ overlay sits) gets a little
+   right padding so the overlay button doesn't visually collide with them. */
+.dt-table-wrap.sub-grid table.dt thead th .th-inner{padding:3px 8px;gap:0;min-height:24px;}
+.dt-table-wrap.sub-grid table.dt thead th .th-label{color:var(--accent-dark);font-size:9px;font-weight:700;line-height:1.1;letter-spacing:.03em;}
+.dt-table-wrap.sub-grid table.dt thead th .th-sub{display:block;margin-top:0;color:#7894C8;font-size:7.5px;font-weight:700;line-height:1;letter-spacing:0;text-transform:none;}
+.dt-table-wrap.sub-grid table.dt thead th .th-total{display:block;margin-top:0;color:#94A4C6;font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;line-height:1;letter-spacing:0;text-transform:none;}
+.dt-table-wrap.sub-grid table.dt thead th:last-child .th-row{padding-right:26px;}
 .dt-table-wrap.sub-grid table.dt thead th .sort-ic{color:var(--accent-dark);}
 .dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready{color:#6E93E8;}
 .dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready:hover{color:var(--accent-dark);}
