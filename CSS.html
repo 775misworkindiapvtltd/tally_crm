@@ -319,11 +319,28 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    drifting by the border/padding amount each time, per explicit user instruction
    ("col resize properly nahi ho rha hai...exact jagah pe fit nahi hota hai"). */
 table.scp-table th,table.scp-table td{box-sizing:border-box;}
+/* LEFT-FREEZE: S.No, Total, % Amt, and Category/Party Name columns stay pinned on
+   the left when scrolling horizontally through the month/year period columns, per
+   explicit user instruction ("ye right scroll mein hide na ho freeze ho jaye"). */
+table.scp-table .scp-sno{position:sticky;left:0;z-index:3;}
+table.scp-table .scp-total{position:sticky;left:52px;z-index:3;}
+table.scp-table .scp-pct{position:sticky;left:182px;z-index:3;}
+table.scp-table .scp-cat{position:sticky;left:272px;z-index:3;border-right:2px solid var(--line)!important;}
+/* Header row cells need higher z-index since they're BOTH sticky-top AND sticky-left */
+table.scp-table thead .scp-sno,table.scp-table thead .scp-total,table.scp-table thead .scp-pct,table.scp-table thead .scp-cat{z-index:6;}
+/* Body cells need a solid background so scrolled content doesn't show through */
+table.scp-table tbody td.scp-sno,table.scp-table tbody td.scp-total,table.scp-table tbody td.scp-pct,table.scp-table tbody td.scp-cat{background:var(--surface);}
+table.scp-table tbody tr:nth-child(even) td.scp-sno,table.scp-table tbody tr:nth-child(even) td.scp-total,table.scp-table tbody tr:nth-child(even) td.scp-pct,table.scp-table tbody tr:nth-child(even) td.scp-cat{background:#FAFBFD;}
+/* Totals row frozen cells */
+table.scp-table thead tr.scp-totals-row td.scp-sno,table.scp-table thead tr.scp-totals-row td.scp-total,table.scp-table thead tr.scp-totals-row td.scp-pct,table.scp-table thead tr.scp-totals-row td.scp-cat{z-index:7;}
 table.scp-table thead tr.scp-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Verdana,Geneva,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:11px;text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line-light);white-space:nowrap;}
 table.scp-table thead tr.scp-totals-row td.scp-cat{text-align:left;color:var(--muted);font-family:inherit;font-size:9.5px;letter-spacing:.06em;background:var(--surface);}
 table.scp-table thead tr.scp-totals-row td.scp-sno{background:var(--surface);}
 table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:37px;z-index:4;background:#1E4FC4;color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
 table.scp-table thead th.scp-cat,table.scp-table thead th.scp-sno{text-align:left;background:var(--surface);color:var(--ink);cursor:default;}
+/* Frozen header cells (both sticky-top + sticky-left) get a slightly different bg
+   so the overlap intersection stays visually correct */
+table.scp-table thead tr:not(.scp-totals-row) th.scp-total,table.scp-table thead tr:not(.scp-totals-row) th.scp-pct{background:#1E4FC4;}
 .scp-th-inner{display:flex;align-items:center;justify-content:flex-end;gap:5px;padding:9px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:normal;word-break:normal;overflow-wrap:break-word;line-height:1.2;position:relative;}
 table.scp-table th.scp-cat .scp-th-inner{justify-content:flex-start;}
 /* Dimension header dropdown (Category/Party Name/State) — sits inline with the
