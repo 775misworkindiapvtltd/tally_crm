@@ -398,7 +398,7 @@ function fmtINR(n){
   return (neg?'-':'')+'₹'+formatted;
 }
 function fmtINRCompact(n){ return fmtINR(n).replace(/\.00$/,''); }
-function fmtNum(n){ n=Number(n)||0; return n.toLocaleString('en-IN',{maximumFractionDigits:2}); }
+function fmtNum(n){ n=Number(n)||0; return n.toLocaleString('en-IN',{maximumFractionDigits:2}).replace(/\u00A0/g,''); }
 function fmtPct(n){ n=Number(n)||0; return (n>=0?'+':'')+n.toFixed(1)+'%'; }
 
 function parseDT(v){
