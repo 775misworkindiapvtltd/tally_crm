@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.15 (Sales Report toolbar layout + one-line Invoice No + smaller S.No col)";
+const APP_BUILD = "2026-07-23.16 (auto-refresh data every 10 min in background)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -335,16 +335,23 @@ async function loadHeavyData(skipInitialRender){
   render();
 }
 
-async function refreshData(chunkKeys){
+async function refreshData(chunkKeys,silent){
   S.syncing=true;S.diagBannerDismissed=false;render();
   const result=await loadChunks(chunkKeys);
   S.syncing=false;
   if(applyCompletedLiveSync_(result)){
     await writeCachedSnapshot_();
     Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].numFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
-    showToast((chunkKeys&&chunkKeys.length)?"Is report se related sheet se latest data mil gaya.":"Sheet se latest data mil gaya.",false);
+    // Auto-refresh ticks (silent=true) skip the toast — popping "Sheet se latest data
+    // mil gaya" every 10 minutes on its own would get noisy, and the topbar's own
+    // "Last Refreshed on ..." pill (see renderShell()) already reflects the update.
+    // A manual click (sidebar "Sync with Tally" or a page's own "Refresh" button)
+    // still shows its usual confirmation toast, unchanged.
+    if(!silent)showToast((chunkKeys&&chunkKeys.length)?"Is report se related sheet se latest data mil gaya.":"Sheet se latest data mil gaya.",false);
+    else render(); // still need a render to refresh the "Last Refreshed on ..." pill/table data on screen
   }else{
-    showToast("Live sync nahi hua — cached data hi dikh raha hai.",true);
+    if(!silent)showToast("Live sync nahi hua — cached data hi dikh raha hai.",true);
+    else render(); // clear the "syncing" state on screen even when the auto-refresh tick found nothing new
   }
 }
 // Refreshes only the current page's own sheet(s) when a page-scoped mapping exists
@@ -411,10 +418,28 @@ function forceNightLogout(){
 }
 
 /* ============================= LIVE CLOCK ============================= */
+// Background auto-refresh: pulls fresh data from the sheet every 10 minutes WITHOUT
+// the user having to click "Sync with Tally" or a page's own "Refresh" button, per
+// explicit user instruction ("data auto got refresh after 10 min even if user ne
+// app open kar rakhi hai, without pressing refresh button"). Reuses the exact same
+// refreshData() the sidebar "Sync with Tally" button calls — same full chunk fetch,
+// same cache write, same toast — just triggered by a timer instead of a click. Every
+// page's own scroll/table state is already preserved across this because render()
+// (called at the end of refreshData()) already saves/restores .content/.dt-scroll/
+// #sidebarNav scroll positions for every render, manual or automatic alike.
+const AUTO_REFRESH_INTERVAL_MS = 10*60*1000; // 10 minutes
+function startAutoRefreshTimer_(){
+  setInterval(()=>{
+    if(!S.user)return; // not logged in yet — nothing to refresh
+    if(S.syncing)return; // a refresh (manual or a previous tick) is already in flight — skip this tick rather than stacking calls
+    void refreshData(null,true); // full refresh, same scope as the sidebar "Sync with Tally" button, silent=true (no toast spam)
+  },AUTO_REFRESH_INTERVAL_MS);
+}
 function startClock(){
   setInterval(()=>{
     if(S.user && S.logoutAt && Date.now()>=S.logoutAt){ forceNightLogout(); return; }
   },1000);
+  startAutoRefreshTimer_();
 }
 
 /* ============================= LOGIN ============================= */
