@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.11 (fix: remove Receivables Details heading regression)";
+const APP_BUILD = "2026-07-23.12 (fix: sidebar nav scroll position reset on click)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -1006,6 +1006,16 @@ function render(){
   const savedContentScroll={left:content?content.scrollLeft:0,top:content?content.scrollTop:0};
   const dtScroll=document.querySelector('.dt-scroll');
   const savedDtScroll={left:dtScroll?dtScroll.scrollLeft:0,top:dtScroll?dtScroll.scrollTop:0};
+  // The sidebar's own nav list (`.nav`, which has its own overflow-y:auto scrollbar
+  // — see CSS.html) was NOT being preserved across render(), even though `.content`
+  // and `.dt-scroll` already were. Every click on a nav item rebuilds the whole
+  // sidebar from scratch, which reset this scroll position to the top — so if you'd
+  // scrolled down the sidebar and clicked something near the bottom, the sidebar
+  // visibly "jumped" back up on every single click. Per explicit user instruction
+  // ("jab main sidebar pe click karta hoon...upar shift ho jata hai...let it stay
+  // wherever u have clicked"), this is now saved/restored exactly like the other two.
+  const navScroll=document.querySelector('.nav');
+  const savedNavScroll={left:navScroll?navScroll.scrollLeft:0,top:navScroll?navScroll.scrollTop:0};
   let inner="";
   if(S.syncing && !hasAnyData()){
     inner=`<div class="empty-state" style="padding-top:80px;"><div class="spinner" style="margin:0 auto 16px;"></div><div class="big">Loading data…</div><div style="margin-top:6px;">Aapka data background mein load ho raha hai, kuch seconds lagenge.</div></div>`;
@@ -1033,6 +1043,8 @@ function render(){
     if(content2){content2.scrollLeft=savedContentScroll.left;content2.scrollTop=savedContentScroll.top;}
     const dtScroll2=document.querySelector('.dt-scroll');
     if(dtScroll2){dtScroll2.scrollLeft=savedDtScroll.left;dtScroll2.scrollTop=savedDtScroll.top;}
+    const navScroll2=document.querySelector('.nav');
+    if(navScroll2){navScroll2.scrollLeft=savedNavScroll.left;navScroll2.scrollTop=savedNavScroll.top;}
   };
   restoreScroll();
   setTimeout(()=>{paintCharts();if(S.page==='mapView'&&typeof paintIndiaMap==='function')paintIndiaMap();restoreScroll();},0);
