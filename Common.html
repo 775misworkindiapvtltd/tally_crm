@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.9 (Ageing UI polish + tighter grid toolbar spacing)";
+const APP_BUILD = "2026-07-23.10 (Sales Report inline expand toggle + amount header sub)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -688,7 +688,14 @@ function renderGrid(tableKey){
 
   const dashboardReport=!!def.dashboardReport;
   const expandable=!!def.expandable;
-  const expTh=expandable?`<th style="width:34px;min-width:34px;max-width:34px;"></th>`:'';
+  // Sales Report no longer gets its own dedicated "+" expand column — per explicit
+  // user instruction ("sales me alag se plus nahi chiaye column me...small plus
+  // invoice number ke upar he aa jaye") the toggle is now rendered INSIDE whichever
+  // column has `expandToggle:true` (Invoice No, for Sales Report), stacked directly
+  // above that cell's own value. Grids that don't mark any column this way keep the
+  // old separate expand column for backward compatibility.
+  const expandToggleCol=expandable?visCols.find(c=>c.expandToggle):null;
+  const expTh=(expandable&&!expandToggleCol)?`<th style="width:34px;min-width:34px;max-width:34px;"></th>`:'';
   const snoTh=`<th style="width:56px;min-width:56px;max-width:56px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
   let hdr=expTh+snoTh+visCols.map(c=>{
     const w=st.widths[c.key]||c.width||150;
@@ -759,29 +766,35 @@ function renderGrid(tableKey){
     return `<span class="dreport-money ${esc(c.reportTone||'')}">${esc(formattedValue)}</span>`;
   }
   const bod=pageRows.length?pageRows.map((r,idx)=>{
+    const rowKey=expandable?String(def.rowKey?def.rowKey(r):si+idx):null;
+    const isOpen=expandable&&st.expanded.has(rowKey);
     const reportCells=visCols.map(c=>{
-      const raw=r[c.key]==null?"":r[c.key],v=cellVal(r,c),cls=[c.num?'num':'',c.nowrap?'nowrap':'',dashboardReport?'dreport-cell':''].filter(Boolean).join(' ');
+      const raw=r[c.key]==null?"":r[c.key],v=cellVal(r,c),cls=[c.num?'num':'',c.nowrap?'nowrap':'',dashboardReport?'dreport-cell':'',(expandToggleCol===c)?'exp-toggle-host':''].filter(Boolean).join(' ');
       const content=dashboardReport?dashboardReportCell_(r,c,raw,v):c.render?c.render(r,v,si+idx):c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v);
       // Title also placed directly on the <td> (not just the inner span) so the full
       // party/category name always shows on hover, no matter where over the cell the
       // cursor lands — this is what fixes the "hover doesn't show full name" report.
       const cellTitle=(dashboardReport&&c.compactName)?` title="${esc(raw)}"`:'';
-      return `<td class="${cls}"${cellTitle}>${content}</td>`;
+      // The row's own "+"/"−" expand toggle is stacked directly above this cell's
+      // value (small, tucked in the corner) instead of taking a whole separate
+      // column — per explicit user instruction.
+      const toggleHtml=(expandToggleCol===c)?`<span class="exp-toggle-inline${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span>`:'';
+      return `<td class="${cls}"${cellTitle}>${toggleHtml}${content}</td>`;
     }).join("");
     const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;">${si+idx+1}</td>`;
     let expCell='',detailRow='';
-    if(expandable){
-      const rowKey=String(def.rowKey?def.rowKey(r):si+idx);
-      const isOpen=st.expanded.has(rowKey);
+    if(expandable&&!expandToggleCol){
       expCell=`<td class="exp-toggle-cell"><span class="exp-toggle${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span></td>`;
-      if(isOpen){
-        const detailHtml=def.renderDetail?def.renderDetail(r):'';
-        const colspan=1+visCols.length+1; // expand col + data cols + S.No col
-        detailRow=`<tr class="exp-detail-row"><td colspan="${colspan}"><div class="exp-detail-wrap">${detailHtml}</div></td></tr>`;
-      }
     }
-    return `<tr>${expCell}${sno}${reportCells}</tr>${detailRow}`;
-  }).join(""):`<tr><td colspan="${visCols.length+(dashboardReport?0:1)+(expandable?1:0)}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
+    if(expandable&&isOpen){
+      const detailHtml=def.renderDetail?def.renderDetail(r):'';
+      const colspan=(expandToggleCol?0:1)+visCols.length+1; // (expand col, only if separate) + data cols + S.No col
+      detailRow=`<tr class="exp-detail-row${isOpen?' exp-parent-open':''}"><td colspan="${colspan}"><div class="exp-detail-wrap">${detailHtml}</div></td></tr>`;
+    }
+    // The parent row that's currently expanded gets a highlighted background, per
+    // explicit user instruction ("jo row expand ke hai vo highlighted dikhe").
+    return `<tr${isOpen?' class="exp-row-open"':''}>${expCell}${sno}${reportCells}</tr>${detailRow}`;
+  }).join(""):`<tr><td colspan="${visCols.length+(dashboardReport?0:1)+(expandable&&!expandToggleCol?1:0)}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
   const rf=total===0?0:si+1;const rt=Math.min(si+ps,total);
 
   const mcards=pageRows.length?pageRows.map((r,idx)=>renderMobileCard(tableKey,r,si+idx+1)).join(''):`<div class="empty-state"><div class="big">No matching rows</div></div>`;
@@ -930,9 +943,15 @@ document.addEventListener('click',e=>{
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;persistGridPrefs_(t);render();return;}
   if(a==='togglerowexpand'){
+    // Only ONE row can be expanded at a time per table — clicking a second row's "+"
+    // auto-collapses whichever row was previously open, per explicit user
+    // instruction ("agar me second plus pe click karu to pehele wala auto collapse
+    // ho jaye"). Clicking the currently-open row's own toggle still closes it.
     const t=el.getAttribute('data-table'),k=el.getAttribute('data-rowkey'),st=tableState(t);
     if(!st.expanded)st.expanded=new Set();
-    if(st.expanded.has(k))st.expanded.delete(k);else st.expanded.add(k);
+    const wasOpen=st.expanded.has(k);
+    st.expanded.clear();
+    if(!wasOpen)st.expanded.add(k);
     render();return;
   }
   if(a==='pagefirst'){tableState(el.getAttribute('data-table')).page=1;render();return;}

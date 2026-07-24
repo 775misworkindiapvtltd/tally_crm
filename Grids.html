@@ -84,13 +84,18 @@ const SUBCATEGORY_COLS=[
 // Invoice No.
 function muted_(html){return `<span class="muted-cell">${html}</span>`;}
 function renderMoneyOrDash_(v){return v==null?muted_('—'):fmtNum(v);}
+// "Total Price (Incl. GST)" / "Amount (Excl. GST)" renamed to plain "Amount" with a
+// small grey subtitle line underneath ("With GST" / "W/o GST") — same headerSub
+// mechanism already used by the expanded detail sub-table's own Amount columns —
+// per explicit user instruction ("Total price ke jagah amount (with gst) ye uske
+// neeche wali line me ayeha, samll grey font").
 const SALES_REPORT_COLS=[
-  {key:'invoiceNo',label:'Invoice No',width:140},{key:'invoiceTo',label:'Invoice To',width:200},
+  {key:'invoiceNo',label:'Invoice No',width:140,expandToggle:true},{key:'invoiceTo',label:'Invoice To',width:200},
   {key:'address',label:'Address',width:240},{key:'state',label:'State',width:110},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
   {key:'phone',label:'Phone',width:150},{key:'email',label:'Email',width:210},
-  {key:'amount',label:'Total Price (Incl. GST)',width:160,num:true,filterType:'number-range'},
-  {key:'amountExclGst',label:'Amount (Excl. GST)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)},
+  {key:'amount',label:'Amount',headerSub:'With GST',width:160,num:true,filterType:'number-range'},
+  {key:'amountExclGst',label:'Amount',headerSub:'W/o GST',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)},
   {key:'recvPendingAmount',label:'Pending (Receivable)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.recvPendingAmount)},
   {key:'recvOverdueDays',label:'Overdue Days',width:120,num:true,render:(r)=>{
     if(r.recvOverdueDays==null)return muted_('—');
@@ -111,7 +116,7 @@ const SALES_REPORT_DETAIL_COLS=[
   {key:'description',label:'Description',width:240},
   {key:'category',label:'Category',width:190},
   {key:'amount',label:'Amount',headerSub:'With GST',headerTotal:true,width:150,num:true},
-  {key:'amountExclGst',label:'Amount',headerSub:'W/O GST',headerTotal:true,width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
+  {key:'amountExclGst',label:'Amount',headerSub:'W/o GST',headerTotal:true,width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)}
 ];
 
 function firstUseful(current,next){return current||next||'';}
@@ -191,10 +196,11 @@ function buildSalesReport(){
 function renderSalesReportDetail_(masterRow){
   const detailKey='salesReportDetail:'+String(masterRow.invoiceNo)+'|'+String(masterRow.invoiceTo);
   GRID_DEFS[detailKey]={cols:SALES_REPORT_DETAIL_COLS,data:()=>masterRow.lines||[],showSortArrows:true,subGrid:true,noPagination:true};
-  return `<div class="sr-detail-card">
-    <div class="sr-detail-label">Line items for Invoice <b>${esc(masterRow.invoiceNo)}</b> — ${esc(masterRow.invoiceTo)} · ${masterRow.lines.length} row(s)</div>
-    ${renderGrid(detailKey)}
-  </div>`;
+  // The "Line items for Invoice X — Party · N row(s)" label was removed per explicit
+  // user instruction — the parent row it belongs to is now highlighted instead (see
+  // .exp-row-open in CSS.html), which already makes clear which invoice/party this
+  // expanded card belongs to without repeating it in its own text line.
+  return `<div class="sr-detail-card">${renderGrid(detailKey)}</div>`;
 }
 // ============================= SALES REPORT — CATEGORY-WISE PIVOT =============================
 // Built per user's reference screenshot (their internal MIS sheet): rows = distinct
