@@ -280,7 +280,64 @@ function renderCollectionAnalysis(){
     <div class="dash-grid"><div class="card"><div class="card-label">DSO</div><div class="card-value">${dso.toFixed(1)} days</div></div><div class="card"><div class="card-label">Collection Efficiency</div><div class="card-value">${eff.toFixed(1)}%</div></div><div class="card"><div class="card-label">Collected</div><div class="card-value">${fmtINR(collections)}</div></div><div class="card"><div class="card-label">Sales</div><div class="card-value">${fmtINR(sales)}</div></div></div>`;
 }
 registerPage('collectionAnalysis',renderCollectionAnalysis);
-function renderFollowUpList(){return renderGrid('followUpList');}registerPage('followUpList',renderFollowUpList);
+// Follow Up List page itself, plus its "Mark/Edit Follow Up" popup rendered
+// on top of it (see S.followUpPopup) — a small modal with Date + Remarks inputs.
+// Saving writes onto S.followUpData keyed by customer name (followUpDataKey_() in
+// Grids.html), so every row sharing that company updates together, and that
+// company's rows all get highlighted via GRID_DEFS.followUpList.highlightKey —
+// all per explicit user instruction.
+function renderFollowUpPopup_(){
+  const p=S.followUpPopup;if(!p||!p.open)return '';
+  return `<div class="modal-overlay" data-action="followup-close">
+    <div class="modal-card followup-modal" data-stop-close>
+      <div class="modal-head">
+        <h3>Mark Follow Up — ${esc(p.party)}</h3>
+        <span class="modal-x" data-action="followup-close">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Follow-up Date</label><input type="date" id="followupDateInput" value="${esc(p.date||'')}"></div>
+        <div class="field"><label>Remarks</label><textarea id="followupRemarksInput" rows="4" placeholder="e.g. Customer said payment by Friday…">${esc(p.remarks||'')}</textarea></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-action="followup-close">Cancel</button>
+        <button class="btn btn-primary" data-action="followup-save">Save</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderFollowUpList(){return renderGrid('followUpList')+renderFollowUpPopup_();}registerPage('followUpList',renderFollowUpList);
 function renderCreditNotes(){return renderGrid('creditNotes');}registerPage('creditNotes',renderCreditNotes);
-document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(!el)return;const a=el.getAttribute('data-action');if(a==='followup-toggle'){const k=el.getAttribute('data-key');S.followUpDone[k]=!S.followUpDone[k];render();}if(a==='ageing-mode'){S.ageingMode=el.getAttribute('data-mode');tableState(S.page).page=1;render();}});
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='followup-open'){
+      const party=el.getAttribute('data-party'),rowKey=el.getAttribute('data-rowkey');
+      const existing=S.followUpData[followUpDataKey_(party)];
+      S.followUpPopup={open:true,party,rowKey,date:(existing&&existing.date)||toISO(new Date()),remarks:(existing&&existing.remarks)||''};
+      render();return;
+    }
+    if(a==='followup-close'){S.followUpPopup=null;render();return;}
+    if(a==='followup-save'){
+      const p=S.followUpPopup;if(!p){render();return;}
+      const dateVal=document.getElementById('followupDateInput')?document.getElementById('followupDateInput').value:p.date;
+      const remarksVal=document.getElementById('followupRemarksInput')?document.getElementById('followupRemarksInput').value:p.remarks;
+      const key=followUpDataKey_(p.party);
+      // Writing onto S.followUpData[key] (keyed by customer, not by bill) is what
+      // makes every row for this same company update together, per explicit user
+      // instruction ("agar company name 3 baar hai is table me teeno me ye update
+      // ho jaye").
+      S.followUpData[key]={date:dateVal,remarks:remarksVal};
+      // Highlight every row for this company — see GRID_DEFS.followUpList.highlightKey
+      // in Grids.html, which matches rows against this same key.
+      tableState('followUpList').highlightedRowKey=key;
+      S.followUpPopup=null;render();return;
+    }
+    if(a==='ageing-mode'){S.ageingMode=el.getAttribute('data-mode');tableState(S.page).page=1;render();return;}
+    return;
+  }
+  // Click on the dark overlay itself (not the card) closes the popup — same pattern
+  // as clicking away from any other dropdown/menu in this app.
+  if(S.followUpPopup&&S.followUpPopup.open&&e.target.classList&&e.target.classList.contains('modal-overlay')){S.followUpPopup=null;render();}
+});
 </script>

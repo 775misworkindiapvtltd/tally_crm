@@ -291,6 +291,14 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    (row count + Refresh on the left, the toggle on the right) unchanged. */
 .sales-cat-toolbar{flex-wrap:nowrap;}
 .sales-cat-toolbar .sales-report-view-toggle{margin:0 0 0 auto;flex:none;}
+/* Duration pivot's "Custom Range" control — an FY-style button + popover (reusing
+   the app-wide .fy-multi/.fy-multi-btn/.fy-menu look from the main Financial Year
+   filter) instead of two bare date inputs sitting directly in the toolbar, per
+   explicit user instruction ("Customer range financial year button chaiye rather
+   than input boxes"). */
+.sales-cat-range-multi{flex:0 1 240px;min-width:170px;margin-bottom:14px;}
+.sales-cat-range-menu{padding:12px;min-width:260px;}
+.sales-cat-range-menu .sales-cat-daterange{margin-bottom:0;}
 /* Removes the default .view-toggle margin-bottom so the Sales/Duration toggle sits
    flush within a single-line toolbar row instead of pushing extra space below it —
    same reasoning as .ageing-mode-bar .view-toggle{margin-bottom:0;} elsewhere. */
@@ -649,6 +657,14 @@ table.dt tbody td.nowrap{white-space:nowrap;word-break:normal;overflow:hidden;te
 table.dt tbody tr:nth-child(even){background:#FAFBFD;}
 table.dt tbody tr:hover{background:var(--accent-tint2);}
 table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
+/* Heatmap cell (e.g. Sales Report's Amount column) — background/text color are set
+   inline per-cell via heatmapCellStyle_() in Common.html (darker for high values,
+   near-white for low values, per explicit user instruction "heat map...high on
+   dark...then light light"). The <td>'s own inline background already paints over
+   its parent <tr>'s even-row/hover background, so no extra override is needed here
+   — this rule just adds a soft transition and a subtle border so adjacent heat
+   cells stay visually separated even when they're a similar shade. */
+table.dt tbody td.heatmap-cell{transition:background .15s;border-right:1px solid rgba(255,255,255,.4);}
 /* Sales Report expandable master/detail rows. */
 .exp-toggle-cell{text-align:center;padding:0!important;}
 .exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;background:var(--accent);font-size:13px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(46,107,242,.35);transition:all .12s;}
@@ -670,6 +686,15 @@ td.exp-toggle-host{display:flex!important;align-items:center;gap:5px;}
 table.dt tbody tr.exp-row-open{background:var(--accent-tint)!important;}
 table.dt tbody tr.exp-row-open td{border-bottom-color:var(--accent-tint);}
 html.dark table.dt tbody tr.exp-row-open{background:var(--accent-tint)!important;}
+/* Generic row highlight — independent of the expand/collapse feature above. Used
+   by Follow Up List: after saving the "Mark/Edit Follow Up" popup, every row for
+   that same company stays highlighted, per explicit user instruction ("jab click
+   karen to jo row click ke hai vo highlight ho jaye...teeno me ye update ho
+   jaye"). A slightly warmer tint than .exp-row-open so the two don't read as the
+   exact same state if a grid ever needed both. */
+table.dt tbody tr.row-highlighted{background:var(--gold-tint)!important;}
+table.dt tbody tr.row-highlighted td{border-bottom-color:var(--gold-tint);}
+html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!important;}
 /* The whole expanded strip gets soft padding + a subtle tinted backdrop behind the
    card so the card itself reads as "floating" above the row it belongs to — this is
    the "elegant box" look requested, as opposed to the plain nested table before. */
@@ -797,6 +822,28 @@ table.ledger-table tbody tr:nth-child(even):not(.opening-row):not(.closing-row){
 .toggle.on{background:var(--accent);}
 .toggle .knob{width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
 .toggle.on .knob{left:18px;}
+
+/* ---------- MODAL POPUP (Follow Up List's "Mark/Edit Follow Up" popup) ---------- */
+.modal-overlay{position:fixed;inset:0;background:rgba(10,14,26,.5);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal-card{background:var(--surface);border-radius:12px;box-shadow:0 30px 70px -20px rgba(0,0,0,.4);width:380px;max-width:100%;overflow:hidden;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line-light);}
+.modal-head h3{font-size:13.5px;font-weight:700;color:var(--ink);}
+.modal-x{cursor:pointer;color:var(--muted);font-weight:700;font-size:14px;padding:2px 4px;}
+.modal-x:hover{color:var(--ink);}
+.modal-body{padding:16px 18px;}
+.modal-body .field{margin-bottom:14px;}
+.modal-body .field:last-child{margin-bottom:0;}
+.modal-body textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;background:#FAFBFD;color:var(--ink);font-family:inherit;font-size:12.5px;resize:vertical;}
+.modal-body textarea:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-tint);}
+.modal-body input[type="date"]{width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;background:#FAFBFD;color:var(--ink);font-size:12.5px;}
+.modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line-light);}
+.modal-foot .btn{padding:8px 16px;font-size:12px;}
+/* Follow-up Notes column cell (Date + Remarks stacked tight) — a normal column, so
+   it's hideable via the existing Columns ▾ menu without any extra work, per
+   explicit user instruction ("with option that i can hide it"). */
+.followup-note-cell{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.followup-note-date{font-size:10px;font-weight:700;color:var(--accent-dark);font-family:'JetBrains Mono',monospace;}
+.followup-note-remarks{font-size:11px;color:var(--ink-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 @media print{
   body *{visibility:hidden;}

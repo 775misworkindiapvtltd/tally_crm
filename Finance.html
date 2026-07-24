@@ -94,15 +94,30 @@ function renderSalesCategoryPivot(){
   // Per explicit user instruction: Monthly/Yearly/Custom Range must all render on
   // ONE row together with the row-count/Refresh/Sales-Duration toggle beneath it —
   // NOT split into separate stacked rows above/below each other.
+  // Custom Range: a single FY-style button + popover (matching the app-wide
+  // .fy-multi/.fy-multi-btn/.fy-menu pattern used by the main Financial Year
+  // filter — see renderFilterBar() in Filters.html) instead of two bare
+  // <input type="date"> boxes sitting directly in the toolbar, per explicit user
+  // instruction ("Customer range financial year button chaiye rather than input
+  // boxes"). The two date inputs still exist (unchanged handlers/state), just
+  // moved inside this popover so they only take up space while it's open.
+  const customFrom=S.salesCategoryCustomFrom||'',customTo=S.salesCategoryCustomTo||'';
+  const customBtnLabel=(customFrom&&customTo)?`${fmtDDMMMYYYY(fromISO(customFrom))} – ${fmtDDMMMYYYY(fromISO(customTo))}`:'Select Range';
+  const customRangeBtn=mode==='custom'?`<div class="fy-multi sales-cat-range-multi">
+      <button type="button" class="fy-multi-btn" data-action="sales-cat-range-open">${esc(customBtnLabel)} <span>▾</span></button>
+      ${S.salesCategoryRangeOpen?`<div class="fy-menu sales-cat-range-menu">
+        <div class="fbar-daterange sales-cat-daterange">
+          <span>From</span><input type="date" data-action="sales-cat-custom-from" value="${esc(customFrom)}">
+          <span>To</span><input type="date" data-action="sales-cat-custom-to" value="${esc(customTo)}">
+        </div>
+      </div>`:''}
+    </div>`:'';
   const modeBar=`<div class="view-toggle sales-cat-mode-toggle">
       <button class="${mode==='month'?'active':''}" data-action="sales-cat-mode" data-mode="month">Monthly</button>
       <button class="${mode==='year'?'active':''}" data-action="sales-cat-mode" data-mode="year">Yearly</button>
       <button class="${mode==='custom'?'active':''}" data-action="sales-cat-mode" data-mode="custom">Custom Range</button>
     </div>
-    ${mode==='custom'?`<div class="fbar-daterange sales-cat-daterange">
-      <span>From</span><input type="date" data-action="sales-cat-custom-from" value="${esc(S.salesCategoryCustomFrom||'')}">
-      <span>To</span><input type="date" data-action="sales-cat-custom-to" value="${esc(S.salesCategoryCustomTo||'')}">
-    </div>`:''}`;
+    ${customRangeBtn}`;
 
   const totW=S.salesCategoryTotalWidth||130,pctW=S.salesCategoryPctWidth||90,catW=S.salesCategoryCatWidth||210,colW=S.salesCategoryColWidth||110;
   const sortArrow=k=>sortKey===k?(sortDir===1?'▲':'▼'):'↕';
@@ -180,15 +195,21 @@ function renderSalesCategoryPivot(){
     </div>`;
 }
 document.addEventListener('click',e=>{
-  const el=e.target.closest('[data-action]');if(!el)return;
-  const a=el.getAttribute('data-action');
-  if(a==='sales-report-view'){S.salesReportView=el.getAttribute('data-view');render();return;}
-  if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');render();return;}
-  if(a==='sales-cat-sort'){
-    const col=el.getAttribute('data-col');
-    if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='dim'?1:-1;}
-    render();return;
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='sales-report-view'){S.salesReportView=el.getAttribute('data-view');render();return;}
+    if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');render();return;}
+    if(a==='sales-cat-range-open'){S.salesCategoryRangeOpen=!S.salesCategoryRangeOpen;render();return;}
+    if(a==='sales-cat-sort'){
+      const col=el.getAttribute('data-col');
+      if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='dim'?1:-1;}
+      render();return;
+    }
   }
+  // Click-away close for the Custom Range popover — same pattern as the main FY
+  // filter's fy-multi popover in Filters.html.
+  if(S.salesCategoryRangeOpen&&!e.target.closest('.sales-cat-range-multi')){S.salesCategoryRangeOpen=false;render();}
 });
 document.addEventListener('change',e=>{
   const el=e.target;

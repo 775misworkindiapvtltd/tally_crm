@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.20 (ageing page thin controls row + thin KPI cards, A++ removed, sales report toggle moved left of invoice no, sub-grid whitespace trimmed)";
+const APP_BUILD = "2026-07-23.21 (sales report heatmap+wrap+cumulative amount+FY-style range button, follow up popup with cross-row sync+highlight)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -24,7 +24,11 @@ const FONT_SIZE_OPTIONS = [90,100,115];
 const FONT_SIZE_LABELS = {90:'A-',100:'A',115:'A+'};
 
 /* ============================= STATE ============================= */
-function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50,expanded:new Set()};}
+// highlightedRowKey: the single row (matched via def.rowKeyFn) that should stay
+// visually highlighted after the user interacts with it — e.g. Follow Up List's
+// "Mark Followed Up"/"Edit Follow Up" popup, per explicit user instruction ("jab
+// click karen to jo row click ke hai vo highlight ho jaye").
+function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50,expanded:new Set(),highlightedRowKey:null};}
 // Table state is created lazily per grid the first time it's viewed. Whenever a fresh
 // dtState() is created, immediately re-apply this user's remembered column
 // hide/order/width/sort/page-size (see GRID_PREFS below) so a page always opens
@@ -76,7 +80,15 @@ let S = {
   ledger:{ search:'', selected:null, detail:null, loading:false },
   darkMode:false, fontSize:100,
   filters:null,
-  followUpDone:{}, // client-side "marked as followed up" set (not persisted to sheet)
+  // Follow Up List: per-CUSTOMER (not per-bill) date+remarks note, keyed by
+  // partyName.trim().toLowerCase() — so if the same company appears on 3 rows
+  // (3 overdue bills), saving one popup updates the note shown on ALL 3 rows at
+  // once, per explicit user instruction ("agar company name 3 baar hai is table
+  // me teeno me ye update ho jaye"). Client-side only (not persisted to sheet),
+  // same as followUpDone above.
+  followUpData:{},
+  // The currently-open "Mark/Edit Follow Up" popup — {open,party,rowKey,date,remarks}.
+  followUpPopup:null,
   ageingOpen:false, ageingMode:'all',
   map:{selectedState:'',zoom:1},
   // Sales Report top toggle: 'sales' = existing invoice-wise master/detail grid
@@ -87,6 +99,12 @@ let S = {
   // the generic per-column-independent resize doesn't support — so it tracks its own
   // sort/resize/mode state here instead of reusing tableState().
   salesReportView:'sales', salesCategoryMode:'month', salesCategoryCustomFrom:'', salesCategoryCustomTo:'',
+  // Custom Range date pickers now live behind a single FY-style button + popover
+  // (see renderSalesCategoryPivot() in Finance.html) instead of bare <input
+  // type="date"> boxes sitting directly in the toolbar, per explicit user
+  // instruction ("Customer range financial year button chaiye rather than input
+  // boxes"). This just tracks whether that popover is currently open.
+  salesCategoryRangeOpen:false,
   salesCategorySort:'total', salesCategorySortDir:-1,
   salesCategoryColWidth:110, salesCategoryTotalWidth:130, salesCategoryCatWidth:210, salesCategoryPctWidth:90,
   // Which field the Duration pivot groups by — 'category' (default), 'partyName'
@@ -804,6 +822,30 @@ function renderGrid(tableKey){
     if(c.num)return fmtNum(v);
     return v;
   }
+  // Heatmap columns (c.heatmap:true — Sales Report's Amount) get a background tint
+  // scaled against the min/max of that SAME column across every row CURRENTLY on
+  // screen (this page's pageRows, not the whole dataset — so the shading always
+  // reflects what you're actually looking at) — darkest blue at the highest value,
+  // fading down to near-white at the lowest, per explicit user instruction ("heat
+  // map...sales report...high on dark...then light light"). Text color flips to
+  // white once the tint gets dark enough to need it for contrast.
+  const heatmapCol=visCols.find(c=>c.heatmap);
+  let heatmapMin=0,heatmapMax=0;
+  if(heatmapCol){
+    const vals=pageRows.map(r=>Number(r[heatmapCol.key])||0);
+    heatmapMin=vals.length?Math.min(...vals):0;
+    heatmapMax=vals.length?Math.max(...vals):0;
+  }
+  function heatmapCellStyle_(v){
+    const num=Number(v)||0;
+    const span=heatmapMax-heatmapMin;
+    const t=span>0?(num-heatmapMin)/span:(heatmapMax>0?1:0); // 0..1, share of the range
+    // Blue accent ramp: near-white (low) -> mid accent tint -> dark accent (high).
+    const r0=245,g0=248,b0=255, r1=30,g1=79,b1=196; // #F5F8FF -> #1E4FC4
+    const r=Math.round(r0+(r1-r0)*t),g=Math.round(g0+(g1-g0)*t),b=Math.round(b0+(b1-b0)*t);
+    const textColor=t>0.55?'#fff':'var(--ink)';
+    return `background:rgb(${r},${g},${b});color:${textColor};`;
+  }
   function dashboardReportCell_(r,c,rawValue,formattedValue){
     if(c.compactName){
       const marker=c.reportTone==='category'?`<span class="dreport-color-dot" style="background:${esc(r.color||'var(--accent)')};"></span>`:'';
@@ -820,19 +862,20 @@ function renderGrid(tableKey){
     const rowKey=expandable?String(def.rowKey?def.rowKey(r):si+idx):null;
     const isOpen=expandable&&st.expanded.has(rowKey);
     const reportCells=visCols.map(c=>{
-      const raw=r[c.key]==null?"":r[c.key],v=cellVal(r,c),cls=[c.num?'num':'',c.nowrap?'nowrap':'',dashboardReport?'dreport-cell':'',(expandToggleCol===c)?'exp-toggle-host':''].filter(Boolean).join(' ');
+      const raw=r[c.key]==null?"":r[c.key],v=cellVal(r,c),cls=[c.num?'num':'',c.nowrap?'nowrap':'',dashboardReport?'dreport-cell':'',(expandToggleCol===c)?'exp-toggle-host':'',(heatmapCol===c)?'heatmap-cell':''].filter(Boolean).join(' ');
       const content=dashboardReport?dashboardReportCell_(r,c,raw,v):c.render?c.render(r,v,si+idx):c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v);
       // Title also placed directly on the <td> (not just the inner span) so the full
       // party/category name always shows on hover, no matter where over the cell the
       // cursor lands — this is what fixes the "hover doesn't show full name" report.
       const cellTitle=(dashboardReport&&c.compactName)?` title="${esc(raw)}"`:'';
+      const cellStyle=(heatmapCol===c)?` style="${heatmapCellStyle_(raw)}"`:'';
       // The row's own "+"/"−" expand toggle sits directly to the LEFT of this cell's
       // own value (small chip, same line) instead of stacked above it or taking a
       // whole separate column — per explicit user instruction ("i want it to be on
       // left of invoice number, in small size").
       const toggleHtml=(expandToggleCol===c)?`<span class="exp-toggle-inline${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span>`:'';
       const cellInner=(expandToggleCol===c)?`${toggleHtml}<span class="exp-toggle-host-val">${content}</span>`:content;
-      return `<td class="${cls}"${cellTitle}>${cellInner}</td>`;
+      return `<td class="${cls}"${cellTitle}${cellStyle}>${cellInner}</td>`;
     }).join("");
     const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;padding-left:4px;padding-right:4px;">${si+idx+1}</td>`;
     let expCell='',detailRow='';
@@ -844,9 +887,15 @@ function renderGrid(tableKey){
       const colspan=(expandToggleCol?0:1)+visCols.length+1; // (expand col, only if separate) + data cols + S.No col
       detailRow=`<tr class="exp-detail-row${isOpen?' exp-parent-open':''}"><td colspan="${colspan}"><div class="exp-detail-wrap">${detailHtml}</div></td></tr>`;
     }
-    // The parent row that's currently expanded gets a highlighted background, per
-    // explicit user instruction ("jo row expand ke hai vo highlighted dikhe").
-    return `<tr${isOpen?' class="exp-row-open"':''}>${expCell}${sno}${reportCells}</tr>${detailRow}`;
+    // A row can also be highlighted independently of the expand/collapse feature —
+    // e.g. Follow Up List highlights whichever row's "Mark/Edit Follow Up" popup was
+    // just used, per explicit user instruction ("jab click karen to jo row click ke
+    // hai vo highlight ho jaye"). def.highlightKey(r) supplies the match key; when
+    // several rows share it (same company appearing on multiple bills), ALL of them
+    // get highlighted together, which is the desired behaviour here.
+    const isHighlighted=!!(def.highlightKey&&st.highlightedRowKey&&def.highlightKey(r)===st.highlightedRowKey);
+    const rowCls=[isOpen?'exp-row-open':'',isHighlighted?'row-highlighted':''].filter(Boolean).join(' ');
+    return `<tr${rowCls?` class="${rowCls}"`:''}>${expCell}${sno}${reportCells}</tr>${detailRow}`;
   }).join(""):`<tr><td colspan="${visCols.length+(dashboardReport?0:1)+(expandable&&!expandToggleCol?1:0)}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
   const rf=total===0?0:si+1;const rt=Math.min(si+ps,total);
 
@@ -957,6 +1006,12 @@ document.addEventListener('input',e=>{
     },350);
     return;
   }
+  // Keep the Follow Up popup's own state in sync with what's typed, WITHOUT
+  // calling render() on every keystroke (that would fight with typing in the date
+  // input) — this just protects against losing in-progress text if a background
+  // auto-refresh tick re-renders the page while the popup happens to be open.
+  if(el.id==='followupDateInput'&&S.followUpPopup){S.followUpPopup.date=el.value;return;}
+  if(el.id==='followupRemarksInput'&&S.followUpPopup){S.followUpPopup.remarks=el.value;return;}
   if(el.getAttribute('data-action')==='ledger-search'){
     S.ledger.search=el.value;
     clearTimeout(filterTimer);

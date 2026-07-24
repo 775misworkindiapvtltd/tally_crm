@@ -43,10 +43,34 @@ const VENDOR_COLS=[
   {key:'salesPerson',label:'Sales Person',width:150},{key:'bills',label:'Bills',width:90,num:true},{key:'maxOverdue',label:'Max Overdue Days',width:140,num:true},
   {key:'total',label:'Outstanding',width:150,num:true},{key:'status',label:'Status',width:110}
 ];
+// Follow-up notes are keyed per CUSTOMER (partyName, normalized), not per bill — see
+// followUpDataKey_()/S.followUpData in Common.html. That's what makes "same company
+// appears on 3 rows -> all 3 update together" work, per explicit user instruction.
+function followUpDataKey_(partyName){return String(partyName||'').trim().toLowerCase();}
 const FOLLOWUP_COLS=[
   {key:'partyName',label:'Customer',width:210},{key:'billRefNo',label:'Bill Ref',width:140},{key:'phoneNo',label:'Phone',width:130},
   {key:'salesPerson',label:'Sales Person',width:140},{key:'dueDate',label:'Due Date',width:120,date:true},{key:'overdueDays',label:'Overdue Days',width:120,num:true},
-  {key:'pendingAmount',label:'Amount',width:150,num:true},{key:'action',label:'Follow Up',width:150,render:r=>{const key=r.partyName+'|'+r.billRefNo,done=!!S.followUpDone[key];return `<button class="btn btn-ghost" style="padding:4px 10px;font-size:10.5px;" data-action="followup-toggle" data-key="${esc(key)}">${done?'Undo':'Mark Followed Up'}</button>`;}}
+  {key:'pendingAmount',label:'Amount',width:150,num:true},
+  // Mark Follow Up — opens a small popup (Date + Remarks). Saving it writes onto
+  // S.followUpData keyed by customer name, so every row for that same company
+  // (e.g. 3 overdue bills for "Pansari") shows/updates together, per explicit user
+  // instruction. The clicked row (and every sibling row sharing that company) stays
+  // highlighted afterwards — see highlightKey on GRID_DEFS.followUpList below.
+  {key:'action',label:'Follow Up',width:150,render:r=>{
+    const note=S.followUpData[followUpDataKey_(r.partyName)];
+    return `<button class="btn btn-ghost" style="padding:4px 10px;font-size:10.5px;" data-action="followup-open" data-party="${esc(r.partyName)}" data-rowkey="${esc(String(r.partyName)+'|'+String(r.billRefNo))}">${note?'Edit Follow Up':'Mark Follow Up'}</button>`;
+  }},
+  // Follow-up Notes — shows the saved Date + Remarks for this row's customer, so
+  // the info is visible right in the table without reopening the popup, per
+  // explicit user instruction ("next column me ye data bhi visible ho jaaye").
+  // Hideable via the existing Columns ▾ menu ("with option that i can hide it") —
+  // that works for free since it's just a normal column in this array.
+  {key:'followUpNote',label:'Follow-up Notes',width:220,render:r=>{
+    const note=S.followUpData[followUpDataKey_(r.partyName)];
+    if(!note)return muted_('—');
+    const dateLabel=note.date?fmtDDMMMYYYY(fromISO(note.date)):'';
+    return `<div class="followup-note-cell"><span class="followup-note-date">${esc(dateLabel)}</span><span class="followup-note-remarks" title="${esc(note.remarks||'')}">${esc(note.remarks||'')}</span></div>`;
+  }}
 ];
 const CREDIT_NOTE_COLS=[
   {key:'partyName',label:'Customer',width:220},{key:'date',label:'Date',width:120,date:true},{key:'voucherNo',label:'Voucher No',width:140},
@@ -90,15 +114,30 @@ function renderMoneyOrDash_(v){return v==null?muted_('—'):fmtNum(v);}
 // per explicit user instruction ("Total price ke jagah amount (with gst) ye uske
 // neeche wali line me ayeha, samll grey font").
 const SALES_REPORT_COLS=[
-  // nowrap:true + a slightly wider default (140 -> 150) so the invoice number value
-  // ("MIS-25-26-129" etc) always renders on ONE line instead of wrapping onto two —
-  // per explicit user instruction ("invoice number bhi ek he row me dikhe").
-  {key:'invoiceNo',label:'Invoice No',width:150,nowrap:true,expandToggle:true},{key:'invoiceTo',label:'Invoice To',width:200},
+  // nowrap:true removed per explicit user instruction ("warp text should be there
+  // if the column size is less") — the invoice number still renders on ONE line at
+  // its normal/default width (it comfortably fits), but now wraps onto a second
+  // line instead of getting clipped by an ellipsis if the column is resized
+  // narrower than the value. expandToggle host cell (Common.html/CSS.html) was
+  // updated the same way.
+  {key:'invoiceNo',label:'Invoice No',width:150,expandToggle:true},{key:'invoiceTo',label:'Invoice To',width:200},
   {key:'address',label:'Address',width:240},{key:'state',label:'State',width:110},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:170},
   {key:'phone',label:'Phone',width:150},{key:'email',label:'Email',width:210},
-  {key:'amount',label:'Amount',headerSub:'With GST',width:160,num:true,filterType:'number-range'},
+  // heatmap:true — Amount (With GST) cells get a background tint scaled by their
+  // value relative to every OTHER row currently on screen: darker blue for higher
+  // amounts, near-white for lower amounts, per explicit user instruction ("heat
+  // map...high on dark...then light light"). See heatmapCellStyle_() in
+  // Common.html for the actual color interpolation, applied generically to any
+  // column flagged heatmap:true.
+  {key:'amount',label:'Amount',headerSub:'With GST',width:160,num:true,filterType:'number-range',heatmap:true},
   {key:'amountExclGst',label:'Amount',headerSub:'W/o GST',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.amountExclGst)},
+  // Cumulative Amount — the SAME total shown on every row belonging to that
+  // customer: the sum of Amount (With GST) across every invoice this Invoice To
+  // has in the current financial-year selection, per explicit user instruction
+  // ("if client is pansari, to table me jitni baar bhi pansari hai sabka sum bhi
+  // dikhe"). Computed once in buildSalesReport() below and copied onto every row.
+  {key:'cumulativeAmount',label:'Cumulative Amount',width:170,num:true,filterType:'number-range'},
   {key:'recvPendingAmount',label:'Pending (Receivable)',width:150,num:true,render:(r)=>renderMoneyOrDash_(r.recvPendingAmount)},
   {key:'recvOverdueDays',label:'Overdue Days',width:120,num:true,render:(r)=>{
     if(r.recvOverdueDays==null)return muted_('—');
@@ -112,9 +151,10 @@ const SALES_REPORT_COLS=[
 // Invoice No is repeated on every line (per explicit user request — "invoice number
 // wapise se dikha sakte hai kyuki hum iske later kuh report le sakte hai") so this
 // sub-table's own rows are self-describing if later reused/exported on their own,
-// without needing to cross-reference the collapsed parent row.
+// without needing to cross-reference the collapsed parent row. nowrap:true removed
+// here too, same wrap-when-narrow reasoning as the master grid's Invoice No column.
 const SALES_REPORT_DETAIL_COLS=[
-  {key:'invoiceNo',label:'Invoice No',width:130,nowrap:true},
+  {key:'invoiceNo',label:'Invoice No',width:130},
   {key:'date',label:'Date',width:110,date:true},
   {key:'description',label:'Description',width:240},
   {key:'category',label:'Category',width:190},
@@ -174,13 +214,26 @@ function buildSalesReport(){
     const key=String(r.billRefNo||'').trim().toLowerCase();if(!key)return;
     if(!recvByInvoice[key])recvByInvoice[key]=r; // first match wins if duplicated
   });
+  // Cumulative Amount per customer (Invoice To) — sum of every invoice's Amount
+  // (With GST) for that same customer, across the whole currently-selected
+  // financial-year data. Computed once here so every master row belonging to that
+  // customer shows the identical total, per explicit user instruction ("if client
+  // is pansari, to table me jitni baar bhi pansari hai sabka sum bhi dikhe").
+  const cumulativeByCustomer={};
+  order.forEach(key=>{
+    const g=byInvoice[key];
+    const custKey=String(g.invoiceTo||'').trim().toLowerCase();
+    cumulativeByCustomer[custKey]=(cumulativeByCustomer[custKey]||0)+g.amount;
+  });
   return order.map(key=>{
     const g=byInvoice[key];
     const recv=recvByInvoice[String(g.invoiceNo).trim().toLowerCase()];
+    const custKey=String(g.invoiceTo||'').trim().toLowerCase();
     return {
       invoiceNo:g.invoiceNo,invoiceTo:g.invoiceTo,address:g.address,state:g.state,gstNo:g.gstNo,
       contactPerson:g.contactPerson,phone:g.phone,email:g.email,
       amount:g.amount,amountExclGst:g.hasAnyExclGst?Math.round(g.amountExclGst*100)/100:null,
+      cumulativeAmount:Math.round((cumulativeByCustomer[custKey]||0)*100)/100,
       lines:g.lines.slice().sort((a,b)=>(parseDT(a.date)||0)-(parseDT(b.date)||0)),
       recvPendingAmount:recv?Number(recv.pendingAmount)||0:null,
       recvOverdueDays:recv?Number(recv.overdueDays)||0:null
@@ -329,7 +382,11 @@ const GRID_DEFS={
     // together into the right corner.
     reportTabs:()=>(typeof renderSalesReportViewToggle_==='function'?renderSalesReportViewToggle_():'')},
   ageingRecv:{cols:AGEING_COLS,data:()=>ageingGridRows('recv')},ageingPay:{cols:AGEING_COLS,data:()=>ageingGridRows('pay')},
-  followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
+  // highlightKey: every row sharing the same customer name stays highlighted
+  // together after the Mark/Edit Follow Up popup is used on any one of them, per
+  // explicit user instruction ("agar company name 3 baar hai is table me teeno me
+  // ye update ho jaye...jo row click ke hai vo highlight ho jaye").
+  followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0),highlightKey:r=>followUpDataKey_(r.partyName),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows,reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,dashboardReport:true,reportType:'customers'},
   topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,dashboardReport:true,reportType:'vendors'},
