@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Add List/Report toggle to the Expense page and implement a Duration-style pivot table for Expense Report view, mirroring the Sales Report Duration pivot exactly but sourcing data from EXPENSE rows with Group/SubGroup as dimensions.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. In Common.html, add new state variables to the S object (after the salesDimension line, around line 102): expenseReportView:'list', expenseCategoryMode:'month', expenseCategoryCustomFYs:[], expenseCrossFilter:[], expenseCrossFilterOpen:false, expenseCrossFilterSearch:'', expenseCategorySort:'total', expenseCategorySortDir:-1, expenseCategoryColWidth:110, expenseCategoryTotalWidth:130, expenseCategoryCatWidth:210, expenseCategoryPctWidth:90, expenseDimension:'group', expenseCategoryRangeOpen:false",
     "2. In Grids.html, add EXPENSE_DIMENSION_META (similar to SALES_DIMENSION_META) with: group:{label:'Group',plural:'Groups'}, subGroup:{label:'Sub Group',plural:'Sub Groups'}",
@@ -34,5 +34,5 @@
     "Run CSS brace-matching check to confirm CSS.html is valid"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All changes pass JS parse check and CSS brace validation. Expense pivot follows exact same patterns as Sales Duration pivot. Event handlers use expense-specific data-action names to avoid conflicts. Column resize is scoped to .expense-cat-wrap selectors."
 }
