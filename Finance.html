@@ -166,30 +166,37 @@ function renderSalesCategoryPivot(){
     </tr>`;
 
   // Heatmap: compute max per period AND for the Total column, then shade each cell.
+  // Uses a professional multi-tone gradient: light mint → teal → deep blue for
+  // period cells; warm gold → deep indigo for the Total column — so the two read
+  // as distinct data dimensions at a glance while both clearly communicate
+  // magnitude via saturation/darkness.
   const maxTotal=Math.max(1,...sorted.map(r=>r.total));
   const periodMaxes={};periods.forEach(p=>{periodMaxes[p.key]=Math.max(1,...sorted.map(r=>r.periods[p.key]||0));});
-  function heatBg_(val,maxVal){
+  function heatPeriod_(val,maxVal){
     if(!val||!maxVal)return '';
-    const t=Math.min(1,val/maxVal); // 0..1
-    // Gradient: white (#FFFFFF) → light blue (#DBE9FE) → strong blue (#2563EB)
+    const t=Math.min(1,val/maxVal);
+    // Gradient: #F0FDF4 (mint) → #10B981 (emerald) → #064E3B (deep green)
     let r,g,b;
-    if(t<=0.5){
-      const s=t*2; // 0..1 within first half
-      r=Math.round(255+(219-255)*s); g=Math.round(255+(233-255)*s); b=Math.round(255+(254-255)*s);
-    } else {
-      const s=(t-0.5)*2; // 0..1 within second half
-      r=Math.round(219+(37-219)*s); g=Math.round(233+(99-233)*s); b=Math.round(254+(235-254)*s);
-    }
-    const textColor=t>0.65?'#fff':'var(--ink)';
-    return `background:rgb(${r},${g},${b});color:${textColor};`;
+    if(t<=0.5){const s=t*2;r=Math.round(240+(16-240)*s);g=Math.round(253+(185-253)*s);b=Math.round(244+(129-244)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(16+(6-16)*s);g=Math.round(185+(78-185)*s);b=Math.round(129+(59-129)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.55?'#fff':'#064E3B'};font-weight:700;`;
+  }
+  function heatTotal_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal);
+    // Gradient: #EFF6FF (ice blue) → #2563EB (vivid blue) → #1E3A5F (navy)
+    let r,g,b;
+    if(t<=0.5){const s=t*2;r=Math.round(239+(37-239)*s);g=Math.round(246+(99-246)*s);b=Math.round(255+(235-255)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(37+(30-37)*s);g=Math.round(99+(58-99)*s);b=Math.round(235+(95-235)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.45?'#fff':'#1E3A5F'};font-weight:700;`;
   }
 
   const body=sorted.length?sorted.map((r,idx)=>`<tr>
       <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
-      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatBg_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
+      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatTotal_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
       <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
       <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
-      ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatBg_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
+      ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatPeriod_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
     </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
 
   // Layout (per explicit user instruction — positions numbered per screenshot):
@@ -332,8 +339,26 @@ document.addEventListener('mousedown',e=>{
 document.addEventListener('mousemove',e=>{
   if(!salesCatResizeCtx)return;
   const nw=Math.max(70,Math.round(salesCatResizeCtx.startW+(e.clientX-salesCatResizeCtx.startX)));
-  const selector=salesCatResizeCtx.target==='total'?'.scp-total':salesCatResizeCtx.target==='pct'?'.scp-pct':salesCatResizeCtx.target==='category'?'.scp-cat':'.scp-period';
-  document.querySelectorAll('.scp-table '+selector).forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+  const target=salesCatResizeCtx.target;
+  if(target==='period'){
+    // All period columns resize together
+    document.querySelectorAll('.scp-table .scp-period').forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+  } else {
+    // Individual frozen column — resize only THAT column class
+    const selector=target==='total'?'.scp-total':target==='pct'?'.scp-pct':'.scp-cat';
+    document.querySelectorAll('.scp-table '+selector).forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+    // Recompute left positions for all frozen columns after the resized one
+    const snoW=52;
+    const totEl=document.querySelector('.scp-table th.scp-total');
+    const pctEl=document.querySelector('.scp-table th.scp-pct');
+    const catEl=document.querySelector('.scp-table th.scp-cat');
+    const curTotW=totEl?totEl.getBoundingClientRect().width:(S.salesCategoryTotalWidth||130);
+    const curPctW=pctEl?pctEl.getBoundingClientRect().width:(S.salesCategoryPctWidth||90);
+    const leftTotal=snoW,leftPct=snoW+curTotW,leftCat=snoW+curTotW+curPctW;
+    document.querySelectorAll('.scp-table .scp-total').forEach(cell=>{cell.style.left=leftTotal+'px';});
+    document.querySelectorAll('.scp-table .scp-pct').forEach(cell=>{cell.style.left=leftPct+'px';});
+    document.querySelectorAll('.scp-table .scp-cat').forEach(cell=>{cell.style.left=leftCat+'px';});
+  }
 });
 document.addEventListener('mouseup',()=>{
   if(!salesCatResizeCtx)return;
