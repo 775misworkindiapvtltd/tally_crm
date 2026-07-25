@@ -405,6 +405,15 @@ function expenseCategoryPeriods_(mode){
     const d=new Date(t);return d.getFullYear()===m.y&&d.getMonth()===m.m;
   }}));
 }
+// Expense amount with Dr/Cr sign: Dr = positive (expense), Cr = negative (refund/credit).
+// The EXPENSE sheet's col L (TYPE) contains "Dr" or "Cr" — amount in col K is always
+// stored positive, so we apply the sign here for correct summation and display.
+function signedExpenseAmt_(r){
+  const raw=Number(r.amount)||0;
+  const type=String(r.type||'').trim().toLowerCase();
+  return type==='cr'?-raw:raw;
+}
+
 function buildExpenseDimensionPivot_(mode,dimension,crossFilterDim,crossFilterValues){
   const periods=expenseCategoryPeriods_(mode);
   const hasCross=crossFilterDim&&crossFilterValues&&crossFilterValues.length>0;
@@ -417,7 +426,7 @@ function buildExpenseDimensionPivot_(mode,dimension,crossFilterDim,crossFilterVa
     }
     const dimVal=String(expenseDimensionRawValue_(r,dimension)||'').trim()||'Uncategorized';
     if(!byDim[dimVal])byDim[dimVal]={dimVal,total:0,periods:{}};
-    const amt=Number(r.amount)||0;
+    const amt=signedExpenseAmt_(r);
     for(let i=0;i<periods.length;i++){
       if(periods[i].test(r)){ byDim[dimVal].periods[periods[i].key]=(byDim[dimVal].periods[periods[i].key]||0)+amt; break; }
     }
@@ -444,7 +453,7 @@ function ageingGridRows(kind){
 function creditNoteRows(){return dataForFY('balanceVouchers').filter(v=>/credit\s*note/i.test(v.voucherType||'')).map(v=>Object.assign({},v,{amount:Number(v.debit||v.credit)||0}));}
 
 const GRID_DEFS={
-  expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense'),reportTabs:()=>(typeof renderExpenseReportViewToggle_==='function'?renderExpenseReportViewToggle_():'')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
+  expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense').map(r=>Object.assign({},r,{amount:signedExpenseAmt_(r)})),reportTabs:()=>(typeof renderExpenseReportViewToggle_==='function'?renderExpenseReportViewToggle_():'')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
   // noToolbar: this grid is only ever embedded inside the Receivables Ageing
   // Summary "All Data" tab (see renderAgeing() in Receivables.html), which already
   // folds its own Refresh + Columns controls into the kind/mode-tabs row directly
