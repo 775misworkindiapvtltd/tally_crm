@@ -197,11 +197,12 @@ function renderAgeing(kind){
     </div>`:'';
   const dashGridKey=isRecv?'receivablesDashboard':'payablesDashboard';
   const dashboardControls=(mode==='all')?`<div class="ageing-dash-controls">${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_(dashGridKey)}</div>`:'';
-  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${searchBox}${dashboardControls}</div>`;
-  // Row 1 = kind switch (Receivable/Payable), Row 2 = mode tabs (All Data/Ageing
-  // Wise) + search/controls — two visually distinct rows so the two-level
-  // selection (which report, then which view) reads clearly to the user.
-  const pageTabsBar=`${kindTabs}${modeBar}`;
+  // All controls on ONE single row: Kind tabs (Receivable/Payable) → Mode tabs
+  // (All Data/Ageing Wise) → Search → Dashboard controls — saves a full row of
+  // vertical space so more data rows are visible, per explicit user instruction.
+  const pageTabsBar=`<div class="ageing-single-bar">
+    ${kindTabs}${modeTabs}${searchBox}${dashboardControls}
+  </div>`;
 
   if(mode==='ageing'){
     return `${pageTabsBar}

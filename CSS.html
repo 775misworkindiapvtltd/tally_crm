@@ -221,10 +221,10 @@ input,select,button{font-family:inherit;font-size:13px;}
    in one screen of my mac and other laptops too"). New total ≈1050px. */
 table.apv-table{table-layout:fixed;}
 table.apv-table thead tr.apv-totals-row th{display:none;} /* keep header cell semantics but hide duplicate; totals rendered as td row */
-table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:center;padding:6px 5px;border-bottom:1px solid var(--line);letter-spacing:-0.5px;}
+table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:center;padding:5px 5px;border-bottom:1px solid var(--line);letter-spacing:-0.5px;}
 table.apv-table thead .apv-totals-row td.apv-name{background:var(--surface);}
 table.apv-table thead .apv-totals-row td.apv-tot-name{background:var(--surface);color:var(--muted);font-family:inherit;font-size:9px;letter-spacing:.06em;}
-table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:31px;z-index:4;background:#1E4FC4;color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:31px;z-index:6;background:#1E4FC4;color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
 table.apv-table thead tr:not(.apv-totals-row) th.apv-name{background:var(--surface);color:var(--ink);}
 /* Header label stays CENTER-aligned (per explicit user instruction: "header center
    align he rehne dena") — only the body cells below change alignment. */
@@ -254,10 +254,13 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    button se pehel aa jaye...basically in second line"). Kept compact/small like
    the mode tabs below it, not the larger default .view-toggle size, so this extra
    row stays neat and doesn't eat vertical space. */
-.ageing-kind-tabs{padding:3px;gap:2px;margin-bottom:8px;}
-.ageing-kind-tabs button{padding:6px 14px;font-size:11.5px;border-radius:5px;}
-.ageing-mode-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
-.ageing-mode-bar .view-toggle{margin-bottom:0;}
+.ageing-kind-tabs{padding:3px;gap:2px;margin-bottom:0;}
+.ageing-kind-tabs button{padding:5px 12px;font-size:11px;border-radius:5px;}
+/* Single combined bar for Receivable/Payable + All Data/Ageing Wise + Search —
+   everything on ONE row to maximise visible data rows. */
+.ageing-single-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.ageing-single-bar .view-toggle{margin-bottom:0;}
+.ageing-single-bar .apv-searchbar{margin-left:auto;}
 /* Refresh + Columns for the embedded receivablesDashboard grid (All Data tab) —
    folded into this same row (right-aligned, small font) instead of that grid
    rendering its own separate toolbar row underneath, per explicit user instruction
@@ -265,13 +268,8 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
    bacha lega"). */
 .ageing-dash-controls{display:flex;align-items:center;gap:8px;flex:none;}
 .ageing-dash-controls .btn{padding:5px 12px;font-size:11.5px;}
-/* All Data / Ageing Wise — shrunk to a smaller, denser pill than the default
-   .view-toggle (used elsewhere for e.g. Sales/Duration) so it reads as a compact
-   professional control that doesn't consume extra vertical space, per explicit
-   user instruction ("All data, aging ka button size and text ko small kar
-   sakte hai...so that it looks neat and professional looking dashboard"). */
 .ageing-mode-tabs{padding:3px;gap:2px;}
-.ageing-mode-tabs button{padding:6px 12px;font-size:11.5px;border-radius:5px;}
+.ageing-mode-tabs button{padding:5px 10px;font-size:11px;border-radius:5px;}
 .ageing-page-cards{margin-bottom:6px;gap:8px;}
 /* Ageing KPI cards — a really thin single-row layout (icon on the left, label +
    value + sub packed tightly to its right on ONE line where it fits) instead of
