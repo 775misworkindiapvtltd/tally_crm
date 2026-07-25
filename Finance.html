@@ -572,7 +572,7 @@ function renderExpenseReportViewToggle_(){
 function renderExpenseReport(){
   const view=S.expenseReportView||'list';
   if(view==='report') return renderExpenseCategoryPivot();
-  return `<div class="dt-toolbar expense-cat-toolbar">${renderExpenseReportViewToggle_()}<div class="report-switcher-right"><button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button></div></div>${renderGrid('expense')}`;
+  return renderGrid('expense');
 }
 registerPage('expense',renderExpenseReport);
 

@@ -310,13 +310,14 @@ function geometryCentroidLonLat_(geometry){
 }
 
 // Evenly spaced grid of points inside a screen-space box — used to place city pins
-// for the selected state, since the SALES sheet has no per-city lat/lon (only
-// state-level shapes exist). This keeps pins spread out and non-overlapping.
+// for the selected state. Uses heavy inward padding (30%) so pins stay well within
+// the visible state shape rather than landing in the bounding box corners that may
+// fall outside the actual irregular state boundary.
 function gridPositions_(n,x0,y0,x1,y1){
   if(n<=0)return [];
   const cols=Math.max(1,Math.ceil(Math.sqrt(n)));
   const rows=Math.max(1,Math.ceil(n/cols));
-  const padX=(x1-x0)*0.14, padY=(y1-y0)*0.14;
+  const padX=(x1-x0)*0.28, padY=(y1-y0)*0.28;
   const gx0=x0+padX, gx1=x1-padX, gy0=y0+padY, gy1=y1-padY;
   const stepX=cols>1?(gx1-gx0)/(cols-1):0, stepY=rows>1?(gy1-gy0)/(rows-1):0;
   const pts=[];
@@ -418,7 +419,7 @@ function drawIndiaMap_(gj){
   }else{
     const selData=byState[selState];
     const cityRows=selData?cityRowsForState_(selData):[];
-    const shown=cityRows.slice(0,12); // rest remain visible in the side list
+    const shown=cityRows.slice(0,8); // top 8 by amount; rest visible in side table
     if(shown.length){
       const topLeft=project(vb.minX,vb.maxY), bottomRight=project(vb.maxX,vb.minY);
       const pts=gridPositions_(shown.length,topLeft[0],topLeft[1],bottomRight[0],bottomRight[1]);
@@ -426,12 +427,35 @@ function drawIndiaMap_(gj){
     }
   }
 
-  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="india-map-svg" style="transform:scale(${S.map.zoom||1});transform-origin:center;">${paths}${markers}</svg>`;
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="india-map-svg" style="transform:scale(${S.map.zoom||1}) translate(${S.map.panX||0}px,${S.map.panY||0}px);transform-origin:center;">${paths}${markers}</svg>`;
 
   wrap.querySelectorAll('.map-state-path').forEach(p=>{
     p.addEventListener('mouseenter',()=>p.classList.add('hover'));
     p.addEventListener('mouseleave',()=>p.classList.remove('hover'));
   });
+
+  // Pan/drag: hold mouse button and drag to move the map around
+  const svg=wrap.querySelector('.india-map-svg');
+  if(svg){
+    let dragging=false,startX=0,startY=0,startPanX=0,startPanY=0;
+    svg.addEventListener('mousedown',ev=>{
+      if(ev.target.closest('[data-action]'))return; // don't interfere with state clicks
+      dragging=true;startX=ev.clientX;startY=ev.clientY;
+      startPanX=S.map.panX||0;startPanY=S.map.panY||0;
+      svg.style.cursor='grabbing';ev.preventDefault();
+    });
+    svg.addEventListener('mousemove',ev=>{
+      if(!dragging)return;
+      const dx=ev.clientX-startX,dy=ev.clientY-startY;
+      const zoom=S.map.zoom||1;
+      S.map.panX=startPanX+dx/zoom;S.map.panY=startPanY+dy/zoom;
+      svg.style.transform=`scale(${zoom}) translate(${S.map.panX}px,${S.map.panY}px)`;
+    });
+    const stopDrag=()=>{if(dragging){dragging=false;svg.style.cursor='grab';}};
+    svg.addEventListener('mouseup',stopDrag);
+    svg.addEventListener('mouseleave',stopDrag);
+    svg.style.cursor='grab';
+  }
 }
 
 document.addEventListener('click',e=>{
@@ -440,7 +464,7 @@ document.addEventListener('click',e=>{
   if(a==='map-select-state'){
     S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;S.map.citySortCol='amount';S.map.citySortDir=-1;render();return;
   }
-  if(a==='map-back'){ S.map.selectedState='';S.map.zoom=1;render();return; }
+  if(a==='map-back'){ S.map.selectedState='';S.map.zoom=1;S.map.panX=0;S.map.panY=0;render();return; }
   if(a==='map-retry'){ retryIndiaMap();return; }
   if(a==='map-city-sort'){
     const col=el.getAttribute('data-col');
@@ -452,9 +476,9 @@ document.addEventListener('click',e=>{
     const dir=el.getAttribute('data-dir');
     if(dir==='in')S.map.zoom=Math.min(3,(S.map.zoom||1)+0.25);
     else if(dir==='out')S.map.zoom=Math.max(0.5,(S.map.zoom||1)-0.25);
-    else S.map.zoom=1;
+    else {S.map.zoom=1;S.map.panX=0;S.map.panY=0;}
     const svg=document.querySelector('.india-map-svg');
-    if(svg){ svg.style.transform=`scale(${S.map.zoom})`; return; }
+    if(svg){ svg.style.transform=`scale(${S.map.zoom}) translate(${S.map.panX||0}px,${S.map.panY||0}px)`; return; }
     render();
   }
 });

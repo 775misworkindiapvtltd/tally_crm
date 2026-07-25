@@ -158,7 +158,9 @@ input,select,button{font-family:inherit;font-size:13px;}
    this level via .content-zoom overflow:auto. */
 .content.page-ageingRecv .content-zoom,
 .content.page-ageingPay .content-zoom,
-.content.page-receipt .content-zoom{overflow:hidden;flex:1;}
+.content.page-receipt .content-zoom,
+.content.page-salesReport .content-zoom,
+.content.page-expense .content-zoom{overflow:hidden;flex:1;}
 /* .content-zoom is now a simple flex column that fills .content. No CSS `zoom` or
    size compensation is applied — A-/A/A+ only scale table body cells via
    --data-scale. This eliminates the grey gap permanently because .content itself
@@ -367,7 +369,7 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 /* The Duration pivot inherits the global .dt-table-wrap flex:none + .dt-scroll
    max-height rules above. overflow:visible is still needed specifically here so
    position:sticky on cells works (the generic overflow:hidden would clip them). */
-.dt-table-wrap.sales-cat-wrap{overflow:visible;}
+.dt-table-wrap.sales-cat-wrap{overflow:visible;flex:1;}
 /* box-sizing:border-box ensures that when the column resize handler reads
    getBoundingClientRect().width (which includes border+padding) and writes it back
    as style.width, the column stays at the exact same visual width instead of
@@ -395,7 +397,7 @@ table.scp-table thead tr.scp-totals-row td.scp-sno,table.scp-table thead tr.scp-
 table.scp-table thead tr.scp-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);border-right:1px solid var(--line-light);white-space:nowrap;letter-spacing:-0.5px;}
 table.scp-table thead tr.scp-totals-row td.scp-cat{text-align:left;color:var(--muted);font-family:inherit;font-size:9.5px;letter-spacing:.06em;background:var(--surface);}
 table.scp-table thead tr.scp-totals-row td.scp-sno{background:var(--surface);}
-table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:29px;z-index:6;background:#1E4FC4;color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:22px;z-index:6;background:#1E4FC4;color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
 table.scp-table thead th.scp-cat,table.scp-table thead th.scp-sno{text-align:left;background:var(--surface);color:var(--ink);cursor:default;}
 /* Frozen header cells (both sticky-top + sticky-left) need higher z-index so they
    layer above BOTH the body cells AND the non-frozen header cells when scrolling
