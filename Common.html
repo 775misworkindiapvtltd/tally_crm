@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-23.21 (sales report heatmap+wrap+cumulative amount+FY-style range button, follow up popup with cross-row sync+highlight)";
+const APP_BUILD = "2026-07-24.1 (zoom grey-gap fix, pagination always at bottom, ageing tab order, ledger PDF freeze fix)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
@@ -623,6 +623,20 @@ function renderShell(inner){
 
   const title=PAGE_TITLES[S.page]||{t:'Dashboard',s:''};
   const alerts=alertCount();
+  // Text-size zoom compensation: CSS `zoom` scales BOTH the rendering AND the box
+  // model of an element, but its FLEX PARENT (.content, sized correctly via
+  // flex:1 to fill the viewport) does not know that — so zooming OUT (A-, 90%)
+  // visibly shrinks the content while .content's own allocated space stays the
+  // same, leaving a grey gap below the table; zooming IN (A+, 115%) can overflow
+  // instead. Fix: give the actual zoomed element (.content-zoom, a child of the
+  // correctly-sized .content) a width/height of (100/zoomFactor)% of its parent —
+  // once the browser applies the zoom scale on TOP of that, the rendered size
+  // works out to exactly 100% again, so .content-zoom always visually fills the
+  // full available area at every zoom level, per explicit user instruction
+  // ("A- neeche grey screen aa rahi hai...dont show me that...adapt the screen
+  // size...so that extra white space is not visible").
+  const zoomVal=(S.fontSize||100)/100;
+  const zoomCompPct=(100/zoomVal).toFixed(4);
 
   return `
   <div class="shell">
@@ -662,7 +676,9 @@ function renderShell(inner){
           <div class="avatar">${initials}</div>
         </div>
       </div>
-      <div class="content" style="zoom:${(S.fontSize||100)/100};">${inner}</div>
+      <div class="content">
+        <div class="content-zoom" style="zoom:${zoomVal};width:${zoomCompPct}%;height:${zoomCompPct}%;">${inner}</div>
+      </div>
     </div>
     ${bottomNav}
   </div>
@@ -1075,8 +1091,16 @@ document.addEventListener('click',e=>{
     if(FONT_SIZE_OPTIONS.indexOf(size)!==-1){
       S.fontSize=size;
       try{localStorage.setItem('tally_font_size',String(size));}catch(e){}
-      const contentEl=document.querySelector('.content');
-      if(contentEl)contentEl.style.zoom=size/100;
+      // Update BOTH the zoom AND its width/height compensation directly on the
+      // existing DOM (no render()) — same reasoning as toggle-theme above. Without
+      // the compensation, switching to A- would immediately show a grey gap below
+      // the content until the next full re-render; keeping it in sync here means
+      // it never appears even for a single frame.
+      const zoomEl=document.querySelector('.content-zoom');
+      if(zoomEl){
+        const zoomVal=size/100,pct=(100/zoomVal).toFixed(4);
+        zoomEl.style.zoom=zoomVal;zoomEl.style.width=pct+'%';zoomEl.style.height=pct+'%';
+      }
       const group=el.closest('.topbar-fontsize');
       if(group)group.querySelectorAll('button').forEach(b=>b.classList.toggle('active',parseInt(b.getAttribute('data-size'),10)===size));
     }

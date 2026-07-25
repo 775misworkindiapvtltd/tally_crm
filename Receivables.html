@@ -170,20 +170,21 @@ function renderAgeing(kind){
   const pivotAll=ageingPivotRows(kind);
   const pivotCount=pivotQ?pivotAll.filter(r=>r.partyName.toLowerCase().includes(pivotQ)).length:pivotAll.length;
 
-  // "All Data"/"Ageing Wise" tabs — per explicit user instruction, these now appear
-  // BEFORE the Receivable/Payable kind-switch (row ordering: mode tabs first, then
-  // kind switch on the same line or below). Shrunk to a smaller, denser pill (see
-  // .ageing-mode-tabs in CSS.html) so they read as a compact professional control.
-  const modeTabs=`<div class="view-toggle ageing-mode-tabs">
-      <button class="${mode==='all'?'active':''}" data-action="ageing-mode" data-mode="all">All Data</button>
-      <button class="${mode==='ageing'?'active':''}" data-action="ageing-mode" data-mode="ageing">Ageing Wise</button>
-    </div>`;
-  // Receivable Ageing / Payable Ageing kind switch — now appears AFTER the All Data/
-  // Ageing Wise tabs, per explicit user instruction ("All Data, Ageing Wise merko
-  // Receivable n Payable button se pehle de do").
+  // Receivable Ageing / Payable Ageing kind switch — now the FIRST row, above the
+  // All Data/Ageing Wise mode tabs, per explicit user instruction ("isme receivable
+  // and payable summary tab pehle kar do, all data and ageing wise baad me...there
+  // are two selection ye user ko clear rahe" — the two-level selection needs to be
+  // unambiguous: pick the report kind first, THEN pick the view mode for it).
   const kindTabs=`<div class="view-toggle ageing-kind-tabs">
       <button class="${isRecv?'active':''}" data-action="nav" data-page="ageingRecv" title="Receivable Ageing Summary">Receivable Ageing Summary</button>
       <button class="${!isRecv?'active':''}" data-action="nav" data-page="ageingPay" title="Payable Ageing Summary">Payable Ageing Summary</button>
+    </div>`;
+  // "All Data"/"Ageing Wise" tabs — now the SECOND row, below the kind switch above.
+  // Shrunk to a smaller, denser pill (see .ageing-mode-tabs in CSS.html) so they
+  // read as a compact professional control.
+  const modeTabs=`<div class="view-toggle ageing-mode-tabs">
+      <button class="${mode==='all'?'active':''}" data-action="ageing-mode" data-mode="all">All Data</button>
+      <button class="${mode==='ageing'?'active':''}" data-action="ageing-mode" data-mode="ageing">Ageing Wise</button>
     </div>`;
   // Party-name search only makes sense while the pivot table is on screen: for
   // Receivables that's the "Ageing Wise" tab only (since "All Data" now shows the
@@ -196,8 +197,11 @@ function renderAgeing(kind){
     </div>`:'';
   const dashGridKey=isRecv?'receivablesDashboard':'payablesDashboard';
   const dashboardControls=(mode==='all')?`<div class="ageing-dash-controls">${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_(dashGridKey)}</div>`:'';
-  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${kindTabs}${searchBox}${dashboardControls}</div>`;
-  const pageTabsBar=modeBar;
+  const modeBar=`<div class="ageing-mode-bar">${modeTabs}${searchBox}${dashboardControls}</div>`;
+  // Row 1 = kind switch (Receivable/Payable), Row 2 = mode tabs (All Data/Ageing
+  // Wise) + search/controls — two visually distinct rows so the two-level
+  // selection (which report, then which view) reads clearly to the user.
+  const pageTabsBar=`${kindTabs}${modeBar}`;
 
   if(mode==='ageing'){
     return `${pageTabsBar}

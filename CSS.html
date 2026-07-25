@@ -151,6 +151,14 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
 .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4C5FE0);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
 .content{padding:6px 8px 12px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto;overscroll-behavior-x:none;}
+/* .content-zoom: the actual zoomed element, sized to compensate for CSS `zoom`
+   (see renderShell() in Common.html) so it always visually fills the whole of
+   .content regardless of the A-/A/A+ text-size level — this is what removes the
+   grey gap that used to show up below the table whenever a non-100% size was
+   selected. It's also a flex column itself so a page's own pagination footer
+   (see .dt-pagination margin-top:auto below) can anchor to ITS bottom edge, which
+   after this compensation is always the true bottom of the visible screen. */
+.content-zoom{display:flex;flex-direction:column;min-height:0;}
 /* Text size control (A- / A / A+ / A++) — sits top-right in the topbar, next to the
    dark/light toggle. "A" (100%, normal website font) is the default the first time
    the app opens since it reads best in dense tables, per explicit user instruction;
@@ -831,7 +839,19 @@ html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!importan
 .pill-success{color:var(--success);background:var(--success-tint);}
 .empty-state{padding:60px 20px;text-align:center;color:var(--muted);}
 .empty-state .big{font-family:'Space Grotesk',sans-serif;font-size:15px;color:var(--ink-secondary);margin-bottom:6px;font-weight:600;}
-.dt-pagination{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:none;background:var(--surface);border-top:1px solid var(--line);padding:7px 14px;font-size:11.5px;color:var(--muted);font-weight:500;}
+/* margin-top:auto is the standard flexbox "sticky footer" trick: inside a flex
+   COLUMN parent (.content-zoom, or a page-section like .recv-dashboard-table that
+   is itself display:flex;flex-direction:column), this pushes the pagination bar
+   — and only the pagination bar — down to consume every bit of extra vertical
+   space above it, so it always sits flush against the bottom of the visible
+   screen/section on ANY screen size (a 14" laptop or a 30" monitor), instead of
+   floating right below a short table with a visible empty gap underneath it. If
+   the page's content is tall enough to need scrolling, this has no visible effect
+   (there's no extra space left to absorb) and the pagination simply appears right
+   after the table as before. Per explicit user instruction ("pagenations always
+   at the bottom no matter what the screen size is, screen karta hua nahi hona
+   chahiye"). */
+.dt-pagination{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:none;margin-top:auto;background:var(--surface);border-top:1px solid var(--line);padding:7px 14px;font-size:11.5px;color:var(--muted);font-weight:500;}
 .dt-pagination .pp{display:flex;align-items:center;gap:8px;}
 .dt-pagination select{padding:5px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;}
 .dt-pagination .nav{display:flex;align-items:center;gap:4px;margin-left:auto;}
@@ -890,19 +910,16 @@ table.ledger-table tbody td{padding:7px 10px;border-bottom:1px solid var(--line-
 table.ledger-table tbody td.num{text-align:right;font-family:'JetBrains Mono',monospace;}
 table.ledger-table tbody tr.opening-row{background:var(--accent-tint2);font-weight:600;}
 table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
-.ledger-co-head .co-name{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;}
-.ledger-co-head .co-sub{font-size:11px;color:var(--muted);margin-top:2px;}
-.ledger-title-bar{text-align:center;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;padding:8px 0;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);margin-bottom:14px;}
-.ledger-party-info{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:11.5px;margin-bottom:16px;}
-.ledger-party-info .lbl{color:var(--muted);font-weight:600;}
-table.ledger-table{width:100%;border-collapse:collapse;font-size:11.5px;}
-table.ledger-table thead th{background:#111729;color:#D7DCEA;padding:7px 9px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
-table.ledger-table thead th.num{text-align:right;}
-table.ledger-table tbody td{padding:6px 9px;border-bottom:1px solid var(--line-light);}
-table.ledger-table tbody td.num{text-align:right;font-family:'JetBrains Mono',monospace;}
-table.ledger-table tbody tr.opening-row{background:var(--accent-tint2);font-weight:700;}
-table.ledger-table tbody tr.closing-row{background:var(--accent-tint2);font-weight:700;border-top:2px solid var(--ink);}
-table.ledger-table tbody tr:nth-child(even):not(.opening-row):not(.closing-row){background:#FAFBFD;}
+/* NOTE: this used to have a SECOND, duplicate `table.ledger-table{...}` rule block
+   right here (with border-collapse:collapse, a plain non-sticky thead/tbody, and
+   dead classes .ledger-co-head/.ledger-title-bar/.ledger-party-info that no longer
+   exist anywhere in Ledger.html's markup). Being LATER in the file, that dead block
+   was silently overriding the real, correct rules above it — border-collapse:
+   collapse in particular breaks position:sticky on <thead>/<tfoot> entirely, which
+   is exactly why the header/footer kept scrolling with the rows instead of staying
+   frozen. Removed here, per explicit user instruction ("party ledger me pdf table
+   me header and footer should freeze...currently when i am scrolling they are
+   also gets scrolled. freeze it."). */
 .ledger-empty{padding:70px 20px;text-align:center;color:var(--muted);}
 
 /* ---------- PLACEHOLDER / SIMPLE PAGES ---------- */
@@ -949,11 +966,21 @@ table.ledger-table tbody tr:nth-child(even):not(.opening-row):not(.closing-row){
 .followup-note-remarks{font-size:11px;color:var(--ink-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .followup-note-ts{font-size:9px;color:var(--muted);font-style:italic;}
 
+/* Print/PDF view — .ledger-print-area was a wrapper div that no longer exists in
+   Ledger.html's current markup (the ledger detail's own header/company info now
+   lives inline in .ledger-toolbar-info, and the table sits directly in
+   .ledger-scroll) — updated to the CURRENT class names so "Print / Download PDF"
+   actually shows the statement. `.shell` itself must stay display:block (it can't
+   be display:none AND have a visibility:visible descendant show through — display:
+   none removes an element and everything inside it from the render tree entirely,
+   which is a separate, stronger hide than visibility) — only the sidebar/topbar/
+   toolbar CONTROLS are display:none'd individually below. */
 @media print{
   body *{visibility:hidden;}
-  .ledger-print-area,.ledger-print-area *{visibility:visible;}
-  .ledger-print-area{position:absolute;left:0;top:0;width:100%;padding:0;}
-  .shell,.topbar,.dt-pagination,.ledger-toolbar,.ledger-party-list,.fbar{display:none !important;}
+  .ledger-scroll,.ledger-scroll *,.ledger-toolbar-info,.ledger-toolbar-info *{visibility:visible;}
+  .ledger-scroll{position:absolute;left:0;top:0;width:100%;padding:0;overflow:visible;max-height:none;}
+  table.ledger-table thead th,table.ledger-table tfoot td{position:static;}
+  .sidebar,.topbar,.dt-pagination,.ledger-party-list,.fbar,.bottom-nav,.ledger-toolbar .btn,.ledger-toolbar .spacer{display:none !important;}
 }
 
 /* =============================================================
