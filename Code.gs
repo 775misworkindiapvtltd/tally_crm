@@ -109,6 +109,78 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+/* ============================= MAP BOUNDARY FALLBACK =============================
+ * Browser CORS/firewall rules can block direct GeoJSON downloads inside the Apps
+ * Script iframe. This allow-listed server proxy is a reliable fallback. Geometry
+ * is compacted before returning so even Uttar Pradesh stays below the practical
+ * google.script.run response limit while preserving every district boundary.
+ */
+var DISTRICT_MAP_FILES_ = {
+  'Andaman & Nicobar Island':'andaman-and-nicobar-islands','Andhra Pradesh':'andhra-pradesh',
+  'Arunanchal Pradesh':'arunachal-pradesh','Assam':'assam','Bihar':'bihar','Chandigarh':'chandigarh',
+  'Chhattisgarh':'chhattisgarh','Dadara & Nagar Havelli':'dnh-and-dd','Daman & Diu':'dnh-and-dd',
+  'Dadra & Nagar Haveli and Daman & Diu':'dnh-and-dd','NCT of Delhi':'delhi','Goa':'goa',
+  'Gujarat':'gujarat','Haryana':'haryana','Himachal Pradesh':'himachal-pradesh',
+  'Jammu & Kashmir':'jammu-and-kashmir','Ladakh':'ladakh','Jharkhand':'jharkhand',
+  'Karnataka':'karnataka','Kerala':'kerala','Lakshadweep':'lakshadweep','Madhya Pradesh':'madhya-pradesh',
+  'Maharashtra':'maharashtra','Manipur':'manipur','Meghalaya':'meghalaya','Mizoram':'mizoram',
+  'Nagaland':'nagaland','Odisha':'odisha','Puducherry':'puducherry','Punjab':'punjab',
+  'Rajasthan':'rajasthan','Sikkim':'sikkim','Tamil Nadu':'tamil-nadu','Telangana':'telangana',
+  'Tripura':'tripura','Uttar Pradesh':'uttar-pradesh','Uttarakhand':'uttarakhand','West Bengal':'west-bengal'
+};
+function compactMapRing_(ring, maxPoints) {
+  if (!Array.isArray(ring) || !ring.length) return [];
+  var count = Math.min(ring.length, maxPoints);
+  var out = [];
+  for (var i = 0; i < count; i++) {
+    var sourceIndex = count === ring.length ? i : Math.round(i * (ring.length - 1) / (count - 1));
+    var point = ring[sourceIndex] || [0, 0];
+    out.push([Math.round(Number(point[0]) * 10000) / 10000, Math.round(Number(point[1]) * 10000) / 10000]);
+  }
+  return out;
+}
+function compactMapGeometry_(geometry) {
+  if (!geometry) return null;
+  if (geometry.type === 'Polygon') {
+    return { type: 'Polygon', coordinates: geometry.coordinates.map(function (ring) { return compactMapRing_(ring, 65); }) };
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return { type: 'MultiPolygon', coordinates: geometry.coordinates.map(function (poly) {
+      return poly.map(function (ring) { return compactMapRing_(ring, 65); });
+    }) };
+  }
+  return null;
+}
+function getDistrictGeoJson(stateName) {
+  var file = DISTRICT_MAP_FILES_[String(stateName || '').trim()];
+  if (!file) throw new Error('District boundary file is not available for ' + stateName);
+  var path = 'geojson/states/' + file + '.geojson';
+  var urls = [
+    'https://cdn.jsdelivr.net/gh/udit-001/india-maps-data@2884453/' + path,
+    'https://raw.githubusercontent.com/udit-001/india-maps-data/2884453/' + path
+  ];
+  var lastError = 'Unable to fetch district boundaries';
+  for (var i = 0; i < urls.length; i++) {
+    try {
+      var response = UrlFetchApp.fetch(urls[i], { muteHttpExceptions: true, followRedirects: true });
+      if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+        lastError = 'HTTP ' + response.getResponseCode();
+        continue;
+      }
+      var source = JSON.parse(response.getContentText());
+      if (!source || !Array.isArray(source.features) || !source.features.length) throw new Error('Invalid GeoJSON');
+      return {
+        type: 'FeatureCollection',
+        features: source.features.map(function (feature) {
+          var props = feature.properties || {};
+          return { type: 'Feature', properties: { district: props.district || '', st_nm: props.st_nm || stateName }, geometry: compactMapGeometry_(feature.geometry) };
+        }).filter(function (feature) { return feature.geometry; })
+      };
+    } catch (err) { lastError = err && err.message ? err.message : String(err); }
+  }
+  throw new Error(lastError);
+}
+
 /* ============================= GENERIC SHEET READ ============================= */
 function sheetToObjects_(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();

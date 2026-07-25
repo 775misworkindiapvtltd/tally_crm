@@ -188,6 +188,7 @@ function runServer(fnName,arg){
     switch(fnName){
       case 'getLoginData': call.getLoginData(); break;
       case 'getChunk': call.getChunk(arg); break;
+      case 'getDistrictGeoJson': call.getDistrictGeoJson(arg); break;
       case 'getLedgerForParty': call.getLedgerForParty(arg); break;
       case 'saveFollowUp': call.saveFollowUp(arg); break;
       default: reject(new Error('Unsupported server function: '+fnName));

@@ -115,7 +115,17 @@ function ensureDistrictGeoJson(stateName){
     'https://raw.githubusercontent.com/'+base+'/2884453/'+path,
     'https://cdn.jsdelivr.net/gh/'+base+'/'+path
   ];
-  districtGeoLoadPromises[file]=fetchFeatureCollection_(urls).then(gj=>(DISTRICT_GEOJSON_CACHE[file]=gj)).catch(err=>{delete districtGeoLoadPromises[file];DISTRICT_GEOJSON_ERRORS[file]=err;throw err;});
+  districtGeoLoadPromises[file]=(async()=>{
+    try{return await fetchFeatureCollection_(urls);}
+    catch(browserErr){
+      // Apps Script iframe deployments can block CDN/raw GitHub CORS. Route the
+      // same allow-listed map through Code.gs as a compact server-side fallback.
+      if(typeof runServer!=='function')throw browserErr;
+      const serverGj=await runServer('getDistrictGeoJson',stateName);
+      if(!serverGj||!Array.isArray(serverGj.features)||!serverGj.features.length)throw browserErr;
+      return serverGj;
+    }
+  })().then(gj=>(DISTRICT_GEOJSON_CACHE[file]=gj)).catch(err=>{delete districtGeoLoadPromises[file];DISTRICT_GEOJSON_ERRORS[file]=err;throw err;});
   return districtGeoLoadPromises[file];
 }
 function retryIndiaMap(){
@@ -501,7 +511,7 @@ function interiorPositions_(n,geometry,project){
 function approximateCityMarkerSvg_(x,y,amount,cityName){
   const label=fmtCompactINR_(amount),short=String(cityName||'').length>19?cityName.slice(0,17)+'…':cityName;
   const w=Math.max(70,short.length*5.6+16);
-  return `<g class="map-marker map-city-marker">
+  return `<g class="map-marker map-city-marker map-fixed-overlay" data-map-fixed-x="${x}" data-map-fixed-y="${y}">
     <line x1="${x}" y1="${y}" x2="${x}" y2="${y-17}" stroke="#047857" stroke-width="1.5"></line>
     <circle cx="${x}" cy="${y}" r="6.5" fill="#10B981" stroke="#fff" stroke-width="2.5"></circle>
     <rect x="${x-w/2}" y="${y-48}" width="${w}" height="28" rx="7" class="map-label-card"></rect>
@@ -534,9 +544,11 @@ function districtLabelSvg_(item){
   const cityText=cityNames.length?cityNames.join(', '):d.district;
   const cityShort=cityText.length>24?cityText.slice(0,22)+'…':cityText;
   const moved=Math.hypot(item.x-item.ax,item.y-item.ay)>8;
-  return `<g class="map-district-label">
+  return `<g class="map-district-connector">
     ${moved?`<path d="M${item.ax.toFixed(1)},${item.ay.toFixed(1)} L${item.x.toFixed(1)},${item.y.toFixed(1)}" class="map-label-leader"></path>`:''}
     <circle cx="${item.ax.toFixed(1)}" cy="${item.ay.toFixed(1)}" r="3" class="map-label-anchor"></circle>
+  </g>
+  <g class="map-district-label map-fixed-overlay" data-map-fixed-x="${item.x.toFixed(1)}" data-map-fixed-y="${item.y.toFixed(1)}">
     <rect x="${(item.x-55).toFixed(1)}" y="${(item.y-20).toFixed(1)}" width="110" height="40" rx="7" class="map-label-card"></rect>
     <text x="${item.x.toFixed(1)}" y="${(item.y-8).toFixed(1)}" text-anchor="middle" class="map-label-name">${esc(district)}</text>
     <text x="${item.x.toFixed(1)}" y="${(item.y+3).toFixed(1)}" text-anchor="middle" class="map-label-city">${esc(cityShort)}</text>
@@ -555,7 +567,7 @@ function markerSvg_(x,y,amount,name,clickable,colorHex){
   // Compact state name (max 12 chars) shown below the pin
   const shortName=String(name||'').length>12?name.slice(0,10)+'…':name;
   const nameW=Math.max(36,shortName.length*5.2+10);
-  return `<g class="map-marker" ${clickAttr} style="cursor:${clickable?'pointer':'default'};">
+  return `<g class="map-marker map-fixed-overlay" data-map-fixed-x="${x}" data-map-fixed-y="${y}" ${clickAttr} style="cursor:${clickable?'pointer':'default'};">
     <rect x="${(x-labelW/2).toFixed(1)}" y="${(y-r-labelH-3).toFixed(1)}" width="${labelW.toFixed(1)}" height="${labelH}" rx="5" fill="#111729" opacity="0.92"></rect>
     <text x="${x.toFixed(1)}" y="${(y-r-labelH-3+labelH/2+3.4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ffffff" font-family="'JetBrains Mono',monospace">${esc(label)}</text>
     <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${colorHex}" stroke="#ffffff" stroke-width="2"></circle>
@@ -626,12 +638,23 @@ function clampMapPan_(panX,panY,zoom){
   const minY=minVisible-zoom*b.maxY,maxY=rt.H-minVisible-zoom*b.minY;
   return {x:Math.max(Math.min(minX,maxX),Math.min(Math.max(minX,maxX),panX)),y:Math.max(Math.min(minY,maxY),Math.min(Math.max(minY,maxY),panY))};
 }
+function updateMapFixedOverlays_(zoom){
+  if(!MAP_RUNTIME||!MAP_RUNTIME.group||!MAP_RUNTIME.group.querySelectorAll)return;
+  const inverse=1/(zoom||1);
+  MAP_RUNTIME.group.querySelectorAll('.map-fixed-overlay').forEach(el=>{
+    const x=Number(el.getAttribute('data-map-fixed-x'))||0,y=Number(el.getAttribute('data-map-fixed-y'))||0;
+    // Parent moves the anchor with the map; this inverse child scale keeps the
+    // badge/name/amount at a constant readable size at every zoom level.
+    el.setAttribute('transform',`translate(${x} ${y}) scale(${inverse}) translate(${-x} ${-y})`);
+  });
+}
 function applyMapViewport_(){
   if(!MAP_RUNTIME)return;
   const zoom=Math.max(1,Math.min(5,Number(S.map.zoom)||1));
   const p=clampMapPan_(Number(S.map.panX)||0,Number(S.map.panY)||0,zoom);
   S.map.zoom=zoom;S.map.panX=p.x;S.map.panY=p.y;
   MAP_RUNTIME.group.setAttribute('transform',`matrix(${zoom} 0 0 ${zoom} ${p.x} ${p.y})`);
+  updateMapFixedOverlays_(zoom);
   const indicator=document.getElementById('mapZoomIndicator');if(indicator)indicator.textContent=Math.round(zoom*100)+'%';
 }
 function setMapZoom_(nextZoom,anchorX,anchorY){
@@ -658,13 +681,16 @@ function bindMapInteractions_(svg){
     if(ev.button!==0)return;
     active=true;moved=false;pointerId=ev.pointerId;startPoint=clientToMapPoint_(svg,ev.clientX,ev.clientY);
     startPanX=Number(S.map.panX)||0;startPanY=Number(S.map.panY)||0;
-    svg.setPointerCapture(pointerId);svg.classList.add('is-grabbing');
+    // Do NOT capture here. Capturing on pointerdown retargets the browser's click
+    // from the state path to the root SVG, so state selection never fires.
+    // Capture only after the movement threshold proves this is a pan gesture.
   });
   svg.addEventListener('pointermove',ev=>{
     if(!active||ev.pointerId!==pointerId)return;
     const point=clientToMapPoint_(svg,ev.clientX,ev.clientY),dx=point.x-startPoint.x,dy=point.y-startPoint.y;
     if(!moved&&Math.hypot(dx,dy)<5)return;
-    moved=true;S.map.panX=startPanX+dx;S.map.panY=startPanY+dy;
+    if(!moved){moved=true;svg.setPointerCapture(pointerId);svg.classList.add('is-grabbing');}
+    S.map.panX=startPanX+dx;S.map.panY=startPanY+dy;
     applyMapViewport_();ev.preventDefault();
   });
   const stop=ev=>{
