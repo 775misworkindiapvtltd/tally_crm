@@ -152,6 +152,13 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
 .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4C5FE0);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
 .content{padding:6px 8px 0;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;overscroll-behavior-x:none;}
+/* Pages with embedded grids that need sticky headers + bottom pagination visible:
+   .content-zoom stays a non-scrolling flex column so the grid's own .dt-scroll is
+   the ONLY vertical scroll area. Other pages (dashboard, ledger) still scroll at
+   this level via .content-zoom overflow:auto. */
+.content.page-ageingRecv .content-zoom,
+.content.page-ageingPay .content-zoom,
+.content.page-receipt .content-zoom{overflow:hidden;flex:1;}
 /* .content-zoom is now a simple flex column that fills .content. No CSS `zoom` or
    size compensation is applied — A-/A/A+ only scale table body cells via
    --data-scale. This eliminates the grey gap permanently because .content itself
@@ -690,12 +697,13 @@ table.scp-table tbody tr:hover td{filter:brightness(0.95);}
    short page counts, per explicit user instruction ("niche blank aise achha nahi
    lag rha hai"). max-height ensures a very long page doesn't push the table beyond
    one viewport. */
-.recv-dashboard-table{min-height:0;display:flex;flex-direction:column;margin:0 0 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
-.recv-dashboard-table .dt-toolbar{margin:0 0 6px;gap:8px;}
+.recv-dashboard-table{flex:1;min-height:0;display:flex;flex-direction:column;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
+.recv-dashboard-table .dt-toolbar{margin:0 0 6px;gap:8px;flex:none;}
 .recv-dashboard-table .dt-toolbar .count{font-size:11px;}
 .recv-dashboard-table .dt-toolbar .btn{padding:6px 11px!important;font-size:11px;}
-.recv-dashboard-table .dt-table-wrap{flex:none;min-height:0;}
-.recv-dashboard-table .dt-scroll{overflow:auto;}
+.recv-dashboard-table .dt-table-wrap{flex:1;min-height:0;}
+.recv-dashboard-table .dt-scroll{overflow:auto;max-height:none;}
+.recv-dashboard-table .dt-pagination{flex:none;}
 .recv-dashboard-table table.dt thead th .th-inner{padding:6px 10px;gap:3px;min-height:31px;}
 .recv-dashboard-table table.dt thead th .th-label{font-size:9px;line-height:1.15;letter-spacing:.05em;}
 .recv-dashboard-table table.dt thead th .sort-ic{font-size:8px;}
