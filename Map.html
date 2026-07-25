@@ -114,11 +114,35 @@ function salesByState_(){
     if(!map[canon])map[canon]={state:canon,amount:0,invoices:0,cities:{}};
     map[canon].amount+=Number(r.amount)||0; map[canon].invoices++;
     // City: use dedicated city field first; fallback to extracting from address
-    const city=(String(r.city||'').trim()||extractCityFromAddress_(r.address))||'Unspecified';
-    if(!map[canon].cities[city])map[canon].cities[city]={city,amount:0,invoices:0};
-    map[canon].cities[city].amount+=Number(r.amount)||0; map[canon].cities[city].invoices++;
+    let city=(String(r.city||'').trim()||extractCityFromAddress_(r.address))||'Unspecified';
+    // Normalize city: clean up garbage values that are actually state names,
+    // pincodes, institutional addresses, or too-short tokens.
+    city=normalizeCityName_(city,canon);
+    const cityKey=city.toLowerCase();
+    if(!map[canon].cities[cityKey])map[canon].cities[cityKey]={city,amount:0,invoices:0};
+    map[canon].cities[cityKey].amount+=Number(r.amount)||0; map[canon].cities[cityKey].invoices++;
   });
   return map;
+}
+
+// Clean up messy city values extracted from address fields or poorly entered data.
+function normalizeCityName_(rawCity,stateName){
+  let c=String(rawCity||'').trim();
+  if(!c||c.length<2)return 'Unspecified';
+  // Remove trailing pincodes/dashes
+  c=c.replace(/[-\s]*\d{5,6}\s*$/,'').trim();
+  // Remove parenthetical suffixes like "(INDIA)" or "(UP)"
+  c=c.replace(/\s*\([^)]*\)\s*$/,'').trim();
+  // If what remains is the state name itself, it's not a city
+  const cUp=c.toUpperCase().replace(/\s+/g,'');
+  const stateUp=(stateName||'').toUpperCase().replace(/\s+/g,'');
+  if(cUp===stateUp||cUp==='UP'||cUp==='MP'||cUp==='HP'||cUp==='TN'||cUp==='WB'||cUp==='AP')return 'Unspecified';
+  // Skip obvious non-city tokens
+  if(/^pin\s*code|^plot\s|^flat\s|^floor\s|^sector\s\d|^unit\s|^block\s|^house\s|^industrial\s*area/i.test(c))return 'Unspecified';
+  if(c.length>30)c=c.slice(0,28).trim();
+  // Title-case normalize for cleaner display
+  c=c.split(/\s+/).map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+  return c||'Unspecified';
 }
 function cityRowsForState_(stateData){
   if(!stateData)return [];
