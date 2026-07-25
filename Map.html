@@ -1,26 +1,32 @@
 <script>
 /* ============================= INDIA SALES MAP =============================
- * State-wise sales built from the SALES sheet's "state" column (see Code.gs
- * mapSalesRows_). Click a state to zoom in and see its city-wise breakdown
- * (SALES sheet's "city"/"district"/"place" column). Falls back to a plain
- * ranked list (no map shape) if the GeoJSON can't be fetched — e.g. no
- * internet in the browser viewing the /exec URL — so the feature still works.
+ * Sales-only map. The country view uses state boundaries; a selected state uses
+ * genuine administrative DISTRICT boundaries from india-maps-data. CITY values
+ * are mapped to districts only when the match is explicit (sheet DISTRICT, exact
+ * name, or a maintained alias). Unmatched cities stay in the table and are never
+ * painted as a fake geographic region.
  */
 let INDIA_GEOJSON=null, indiaGeoLoadPromise=null, mapLoadError='';
+const DISTRICT_GEOJSON_CACHE={}, districtGeoLoadPromises={}, DISTRICT_GEOJSON_ERRORS={};
+let mapDistrictLoadError='';
+let MAP_RUNTIME=null, MAP_SUPPRESS_CLICK_UNTIL=0;
 
-// Maps free-text state values from the sheet to the exact "st_nm" property used
-// by the GeoJSON, so typos/short forms/alternate spellings still match a shape.
+// Maps free-text state values from the sheet to the state names used by the
+// existing state GeoJSON. State-specific district filenames are mapped below.
 const STATE_NAME_ALIASES={
   'ANDAMAN AND NICOBAR ISLANDS':'Andaman & Nicobar Island','ANDAMAN & NICOBAR ISLANDS':'Andaman & Nicobar Island',
   'ANDHRA PRADESH':'Andhra Pradesh','AP':'Andhra Pradesh',
   'ARUNACHAL PRADESH':'Arunanchal Pradesh','ARUNANCHAL PRADESH':'Arunanchal Pradesh',
   'ASSAM':'Assam','BIHAR':'Bihar','CHANDIGARH':'Chandigarh',
   'CHHATTISGARH':'Chhattisgarh','CHATTISGARH':'Chhattisgarh',
-  'DADRA AND NAGAR HAVELI':'Dadara & Nagar Havelli','DAMAN AND DIU':'Daman & Diu',
+  'DADRA AND NAGAR HAVELI':'Dadara & Nagar Havelli','DADRA & NAGAR HAVELI':'Dadara & Nagar Havelli',
+  'DAMAN AND DIU':'Daman & Diu','DAMAN & DIU':'Daman & Diu',
+  'DADRA AND NAGAR HAVELI AND DAMAN AND DIU':'Dadra & Nagar Haveli and Daman & Diu',
+  'DADRA & NAGAR HAVELI AND DAMAN & DIU':'Dadra & Nagar Haveli and Daman & Diu',
   'GOA':'Goa','GUJARAT':'Gujarat','HARYANA':'Haryana',
   'HIMACHAL PRADESH':'Himachal Pradesh','HP':'Himachal Pradesh',
   'JAMMU AND KASHMIR':'Jammu & Kashmir','JAMMU & KASHMIR':'Jammu & Kashmir','J&K':'Jammu & Kashmir',
-  'JHARKHAND':'Jharkhand','KARNATAKA':'Karnataka','KERALA':'Kerala','LAKSHADWEEP':'Lakshadweep',
+  'LADAKH':'Ladakh','JHARKHAND':'Jharkhand','KARNATAKA':'Karnataka','KERALA':'Kerala','LAKSHADWEEP':'Lakshadweep',
   'MADHYA PRADESH':'Madhya Pradesh','MP':'Madhya Pradesh',
   'MAHARASHTRA':'Maharashtra','MANIPUR':'Manipur','MEGHALAYA':'Meghalaya','MIZORAM':'Mizoram',
   'NAGALAND':'Nagaland','DELHI':'NCT of Delhi','NEW DELHI':'NCT of Delhi','NCT OF DELHI':'NCT of Delhi',
@@ -28,82 +34,126 @@ const STATE_NAME_ALIASES={
   'PUNJAB':'Punjab','RAJASTHAN':'Rajasthan','SIKKIM':'Sikkim',
   'TAMIL NADU':'Tamil Nadu','TAMILNADU':'Tamil Nadu','TN':'Tamil Nadu',
   'TELANGANA':'Telangana','TRIPURA':'Tripura',
-  'UTTAR PRADESH':'Uttar Pradesh','UP':'Uttar Pradesh',
+  'UTTAR PRADESH':'Uttar Pradesh','UTTARPRADESH':'Uttar Pradesh','UP':'Uttar Pradesh',
   'UTTARAKHAND':'Uttarakhand','UTTRANCHAL':'Uttarakhand',
   'WEST BENGAL':'West Bengal','WB':'West Bengal'
 };
 function normalizeStateName_(raw){
-  const key=String(raw||'').trim().toUpperCase().replace(/\s+/g,' ');
+  const key=String(raw||'').trim().toUpperCase().replace(/[^A-Z& ]/g,' ').replace(/\s+/g,' ').trim();
   if(!key)return '';
   if(STATE_NAME_ALIASES[key])return STATE_NAME_ALIASES[key];
-  // fall back to a loose contains-match against known canonical names
   const canon=Object.values(STATE_NAME_ALIASES);
   const found=canon.find(c=>c.toUpperCase()===key);
-  return found||raw;
+  return found||String(raw||'').trim();
+}
+function stateNameFromFeature_(feature){
+  const p=(feature&&feature.properties)||{};
+  return p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'';
 }
 
-// Multiple mirrors, tried in order — the first one that returns a valid
-// FeatureCollection wins. Any single source going down (404/CORS/etc, exactly
-// what happened with the old single hardcoded URL) no longer breaks the map.
 const INDIA_GEOJSON_SOURCES=[
   'https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson',
-  'https://cdn.jsdelivr.net/gh/udit-001/india-maps-data/geojson/india.geojson',
   'https://cdn.jsdelivr.net/gh/adarshbiradar/maps-geojson/geojson/india.geojson'
 ];
+const DISTRICT_FILE_BY_STATE={
+  'Andaman & Nicobar Island':'andaman-and-nicobar-islands','Andhra Pradesh':'andhra-pradesh',
+  'Arunanchal Pradesh':'arunachal-pradesh','Assam':'assam','Bihar':'bihar','Chandigarh':'chandigarh',
+  'Chhattisgarh':'chhattisgarh','Dadara & Nagar Havelli':'dnh-and-dd','Daman & Diu':'dnh-and-dd',
+  'Dadra & Nagar Haveli and Daman & Diu':'dnh-and-dd',
+  'NCT of Delhi':'delhi','Goa':'goa','Gujarat':'gujarat','Haryana':'haryana',
+  'Himachal Pradesh':'himachal-pradesh','Jammu & Kashmir':'jammu-and-kashmir','Ladakh':'ladakh',
+  'Jharkhand':'jharkhand','Karnataka':'karnataka','Kerala':'kerala','Lakshadweep':'lakshadweep',
+  'Madhya Pradesh':'madhya-pradesh','Maharashtra':'maharashtra','Manipur':'manipur','Meghalaya':'meghalaya',
+  'Mizoram':'mizoram','Nagaland':'nagaland','Odisha':'odisha','Puducherry':'puducherry','Punjab':'punjab',
+  'Rajasthan':'rajasthan','Sikkim':'sikkim','Tamil Nadu':'tamil-nadu','Telangana':'telangana',
+  'Tripura':'tripura','Uttar Pradesh':'uttar-pradesh','Uttarakhand':'uttarakhand','West Bengal':'west-bengal'
+};
+async function fetchFeatureCollection_(urls){
+  let lastErr=new Error('No map sources configured');
+  for(const url of urls){
+    try{
+      const r=await fetch(url);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const gj=await r.json();
+      if(!gj||!Array.isArray(gj.features)||!gj.features.length)throw new Error('Invalid GeoJSON');
+      return gj;
+    }catch(err){lastErr=err;}
+  }
+  throw lastErr;
+}
+function isStateFeatureCollection_(gj){
+  if(!gj||!Array.isArray(gj.features)||gj.features.length<10||gj.features.length>60)return false;
+  const names=gj.features.map(stateNameFromFeature_).filter(Boolean).map(normalizeGeoKey_);
+  return new Set(names).size>=Math.max(10,Math.floor(gj.features.length*.75));
+}
 function ensureIndiaGeoJson(){
   if(INDIA_GEOJSON)return Promise.resolve(INDIA_GEOJSON);
   if(indiaGeoLoadPromise)return indiaGeoLoadPromise;
   indiaGeoLoadPromise=(async()=>{
-    let lastErr=new Error('No map sources configured');
+    let lastErr=new Error('No valid state boundary source');
     for(const url of INDIA_GEOJSON_SOURCES){
       try{
-        const r=await fetch(url);
-        if(!r.ok) throw new Error('HTTP '+r.status+' from '+url);
-        const gj=await r.json();
-        if(!gj||!Array.isArray(gj.features)||!gj.features.length) throw new Error('Empty/invalid GeoJSON from '+url);
-        INDIA_GEOJSON=gj;
-        return gj;
-      }catch(err){ lastErr=err; }
+        const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status);
+        const gj=await r.json();if(!isStateFeatureCollection_(gj))throw new Error('Source is not a state-level GeoJSON');
+        INDIA_GEOJSON=gj;return gj;
+      }catch(err){lastErr=err;}
     }
-    mapLoadError=lastErr.message;
     throw lastErr;
-  })();
+  })().catch(err=>{indiaGeoLoadPromise=null;mapLoadError=err.message;throw err;});
   return indiaGeoLoadPromise;
 }
-// Lets the user retry after every source failed (e.g. temporary network issue),
-// instead of being stuck with the first failed attempt for the rest of the session.
-function retryIndiaMap(){ INDIA_GEOJSON=null;indiaGeoLoadPromise=null;mapLoadError='';paintIndiaMap(); }
+function ensureDistrictGeoJson(stateName){
+  const file=DISTRICT_FILE_BY_STATE[stateName];
+  if(!file)return Promise.reject(new Error('District boundary file is not available for '+stateName));
+  if(DISTRICT_GEOJSON_CACHE[file])return Promise.resolve(DISTRICT_GEOJSON_CACHE[file]);
+  if(DISTRICT_GEOJSON_ERRORS[file])return Promise.reject(DISTRICT_GEOJSON_ERRORS[file]);
+  if(districtGeoLoadPromises[file])return districtGeoLoadPromises[file];
+  const base='udit-001/india-maps-data';
+  const path='geojson/states/'+file+'.geojson';
+  const urls=[
+    'https://cdn.jsdelivr.net/gh/'+base+'@2884453/'+path,
+    'https://raw.githubusercontent.com/'+base+'/2884453/'+path,
+    'https://cdn.jsdelivr.net/gh/'+base+'/'+path
+  ];
+  districtGeoLoadPromises[file]=fetchFeatureCollection_(urls).then(gj=>(DISTRICT_GEOJSON_CACHE[file]=gj)).catch(err=>{delete districtGeoLoadPromises[file];DISTRICT_GEOJSON_ERRORS[file]=err;throw err;});
+  return districtGeoLoadPromises[file];
+}
+function retryIndiaMap(){
+  INDIA_GEOJSON=null;indiaGeoLoadPromise=null;mapLoadError='';mapDistrictLoadError='';
+  if(S.map.selectedState){const file=DISTRICT_FILE_BY_STATE[S.map.selectedState];if(file){delete DISTRICT_GEOJSON_CACHE[file];delete districtGeoLoadPromises[file];delete DISTRICT_GEOJSON_ERRORS[file];}}
+  paintIndiaMap();
+}
 
 /* ============================= DATA AGGREGATION ============================= */
-// Extract city name from an address string when no dedicated CITY column exists.
-// Indian addresses typically end with: "..., City Name, State - Pincode" or
-// "..., City Name - Pincode" or "..., City Name, Pincode". We grab the most
-// likely city token: the part just before the pincode or state suffix.
-function extractCityFromAddress_(address){
+// Conservative fallback when no CITY column exists. Prefer comma-separated
+// locality/city tokens; then use a small set of unambiguous metro/locality hints.
+// A dedicated CITY and DISTRICT column remains the most reliable input.
+const ADDRESS_CITY_HINTS=[
+  [/\bGREATER\s+NOIDA\b/i,'Greater Noida'],[/\bNOIDA\b/i,'Noida'],
+  [/\bSAHIBABAD\b/i,'Ghaziabad'],[/\bGHAZIABAD\b/i,'Ghaziabad'],[/\bBADLI\b/i,'New Delhi'],
+  [/\bNEW\s+DELHI\b/i,'New Delhi'],[/\bDELHI\b/i,'New Delhi'],[/\bGURUGRAM\b|\bGURGAON\b/i,'Gurugram'],
+  [/\bBENGALURU\b|\bBANGALORE\b/i,'Bengaluru'],[/\bMUMBAI\b/i,'Mumbai'],
+  [/\bKOLKATA\b|\bCALCUTTA\b/i,'Kolkata'],[/\bCHENNAI\b|\bMADRAS\b/i,'Chennai'],
+  [/\bHYDERABAD\b|\bSECUNDERABAD\b/i,'Hyderabad'],[/\bPUNE\b/i,'Pune'],
+  [/\bLUCKNOW\b/i,'Lucknow'],[/\bKANPUR\b/i,'Kanpur'],[/\bPRAYAGRAJ\b|\bALLAHABAD\b/i,'Prayagraj']
+];
+function extractCityFromAddress_(address,stateName){
   if(!address)return '';
-  let s=String(address).trim();
-  // Remove trailing pincode (6 digits, optional dash/space prefix)
-  s=s.replace(/[-\s]*\d{6}\s*$/,'').trim();
-  // Remove trailing state name (if it matches known states)
-  const stateNames=Object.values(STATE_NAME_ALIASES);
-  const upper=s.toUpperCase();
-  for(const st of stateNames){
-    const stUp=st.toUpperCase();
-    if(upper.endsWith(stUp)||upper.endsWith(', '+stUp)){
-      s=s.slice(0,-(st.length)).replace(/,\s*$/,'').trim();
-      break;
-    }
+  let s=String(address).replace(/[-\s]*\d{6}\s*$/,'').replace(/[\s,-]+$/,'').trim();
+  let parts=s.split(/[,\n]+/).map(p=>p.trim()).filter(Boolean);
+  while(parts.length){
+    const last=parts[parts.length-1].replace(/[\s-]+$/,'').trim();
+    const normalized=normalizeStateName_(last);
+    if(normalized===stateName||Object.values(STATE_NAME_ALIASES).indexOf(normalized)!==-1){parts.pop();continue;}
+    if(/^\d{5,6}$/.test(last)){parts.pop();continue;}
+    break;
   }
-  // The last comma-separated segment is likely the city
-  const parts=s.split(/[,\n]+/).map(p=>p.trim()).filter(Boolean);
-  if(parts.length>=2){
-    const last=parts[parts.length-1];
-    // Skip if it's a PO Box/Plot/Floor/Sector kind of token
-    if(!/^\d|^plot|^floor|^sector|^unit|^flat|^block|^house/i.test(last)&&last.length>2){
-      return last.replace(/\s+/g,' ');
-    }
+  for(let i=parts.length-1;i>=0;i--){
+    const token=parts[i].replace(/[\s-]+$/,'').trim();
+    if(token.length>2&&!/^\d|^plot\b|^floor\b|^sector\b|^unit\b|^flat\b|^block\b|^house\b|^industrial\s+area\b/i.test(token))return token.replace(/\s+/g,' ');
   }
-  return parts.length?parts[parts.length-1].replace(/\s+/g,' '):'';
+  const hint=ADDRESS_CITY_HINTS.find(([re])=>re.test(s));
+  return hint?hint[1]:'';
 }
 
 function salesByState_(){
@@ -114,7 +164,7 @@ function salesByState_(){
     if(!map[canon])map[canon]={state:canon,amount:0,invoices:0,cities:{}};
     map[canon].amount+=Number(r.amount)||0; map[canon].invoices++;
     // City: use dedicated city field first; fallback to extracting from address
-    let city=(String(r.city||'').trim()||extractCityFromAddress_(r.address))||'Unspecified';
+    let city=(String(r.city||'').trim()||extractCityFromAddress_(r.address,canon))||'Unspecified';
     // Normalize city: clean up garbage values that are actually state names,
     // pincodes, institutional addresses, or too-short tokens.
     city=normalizeCityName_(city,canon);
@@ -143,6 +193,75 @@ function normalizeCityName_(rawCity,stateName){
   // Title-case normalize for cleaner display
   c=c.split(/\s+/).map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
   return c||'Unspecified';
+}
+
+function normalizeGeoKey_(raw){
+  return String(raw||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase()
+    .replace(/\bDISTRICT\b/g,'').replace(/&/g,' AND ').replace(/[^A-Z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function districtNameFromFeature_(feature){
+  const p=(feature&&feature.properties)||{};
+  return p.district||p.DISTRICT||p.dt_name||p.DT_NAME||p.NAME_2||p.name||'';
+}
+// These aliases map a city/locality to the ADMINISTRATIVE DISTRICT containing it.
+// They never create a geometry. Exact district names always take priority.
+const CITY_DISTRICT_ALIASES={
+  'Uttar Pradesh':{
+    'NOIDA':'Gautam Buddha Nagar','GREATER NOIDA':'Gautam Buddha Nagar','GAUTAM BUDH NAGAR':'Gautam Buddha Nagar',
+    'DADRI':'Gautam Buddha Nagar','JEWAR':'Gautam Buddha Nagar','SAHIBABAD':'Ghaziabad','LONI':'Ghaziabad',
+    'INDIRAPURAM':'Ghaziabad','KANPUR':'Kanpur Nagar','ALLAHABAD':'Prayagraj','FAIZABAD':'Ayodhya'
+  },
+  'NCT of Delhi':{'DELHI':'Delhi','NEW DELHI':'Delhi','CENTRAL DELHI':'Delhi','SOUTH DELHI':'Delhi','NORTH DELHI':'Delhi','EAST DELHI':'Delhi','WEST DELHI':'Delhi','DWARKA':'Delhi','ROHINI':'Delhi','BADLI':'Delhi','NARELA':'Delhi','OKHLA':'Delhi','SHAHDARA':'Delhi'},
+  'Karnataka':{'BANGALORE':'Bengaluru Urban','BENGALURU':'Bengaluru Urban','BANGALORE URBAN':'Bengaluru Urban','MYSORE':'Mysuru','MANGALORE':'Dakshina Kannada','HUBLI':'Dharwad','HUBBALLI':'Dharwad','BELGAUM':'Belagavi','GULBARGA':'Kalaburagi'},
+  'Haryana':{'GURGAON':'Gurugram','GURUGRAM':'Gurugram','MEWAT':'Nuh'},
+  'Kerala':{'COCHIN':'Ernakulam','KOCHI':'Ernakulam','TRIVANDRUM':'Thiruvananthapuram','CALICUT':'Kozhikode','ALLEPPEY':'Alappuzha'},
+  'Punjab':{'MOHALI':'S.A.S. Nagar','SAS NAGAR':'S.A.S. Nagar','SHAHEED BHAGAT SINGH NAGAR':'Shahid Bhagat Singh Nagar'},
+  'Odisha':{'BHUBANESWAR':'Khordha','ORISSA CAPITAL':'Khordha'},
+  'West Bengal':{'CALCUTTA':'Kolkata','SILIGURI':'Darjeeling'},
+  'Telangana':{'SECUNDERABAD':'Hyderabad','CYBERABAD':'Ranga Reddy'},
+  'Tamil Nadu':{'MADRAS':'Chennai','TUTICORIN':'Thoothukkudi','TRICHY':'Tiruchirappalli'},
+  'Maharashtra':{'BOMBAY':'Mumbai'},
+  'Gujarat':{'BARODA':'Vadodara','KACHCHH':'Kutch'},
+  'Andhra Pradesh':{'VIZAG':'Visakhapatnam'},
+  'Rajasthan':{'AJMER CITY':'Ajmer'},
+  'Uttarakhand':{'DEHRADUN CITY':'Dehradun'}
+};
+function findDistrictName_(stateName,districtValue,cityValue,districtIndex){
+  const aliases=CITY_DISTRICT_ALIASES[stateName]||{};
+  const candidates=[districtValue,cityValue];
+  for(const raw of candidates){
+    const key=normalizeGeoKey_(raw);
+    if(!key||key==='UNSPECIFIED')continue;
+    if(districtIndex[key])return districtIndex[key];
+    const alias=aliases[key];
+    if(alias&&districtIndex[normalizeGeoKey_(alias)])return districtIndex[normalizeGeoKey_(alias)];
+  }
+  return '';
+}
+function districtSalesForState_(stateName,features){
+  const districtIndex={};
+  (features||[]).forEach(f=>{const name=districtNameFromFeature_(f);if(name)districtIndex[normalizeGeoKey_(name)]=name;});
+  const byName={},unmappedByCity={};
+  let matchedAmount=0,unmappedAmount=0,matchedInvoices=0,unmappedInvoices=0;
+  dataForFY('sales').forEach(r=>{
+    if(normalizeStateName_(r.state)!==stateName)return;
+    const city=normalizeCityName_(String(r.city||'').trim()||extractCityFromAddress_(r.address,stateName),stateName);
+    const district=findDistrictName_(stateName,r.district,city,districtIndex);
+    const amount=Number(r.amount)||0;
+    if(district){
+      if(!byName[district])byName[district]={district,amount:0,invoices:0,cities:{}};
+      byName[district].amount+=amount;byName[district].invoices++;matchedAmount+=amount;matchedInvoices++;
+      if(city!=='Unspecified')byName[district].cities[city]=(byName[district].cities[city]||0)+amount;
+    }else{
+      unmappedAmount+=amount;unmappedInvoices++;
+      const key=city||'Unspecified';unmappedByCity[key]=(unmappedByCity[key]||0)+amount;
+    }
+  });
+  return {
+    byName,rows:Object.values(byName).sort((a,b)=>b.amount-a.amount),matchedAmount,unmappedAmount,
+    matchedInvoices,unmappedInvoices,
+    unmappedCities:Object.entries(unmappedByCity).sort((a,b)=>b[1]-a[1]).map(([city,amount])=>({city,amount}))
+  };
 }
 function cityRowsForState_(stateData){
   if(!stateData)return [];
@@ -244,25 +363,26 @@ function renderMapView(){
   <div class="map-shell">
     <div class="map-panel">
       <div class="map-toolbar">
-        <div class="map-title">${selState?esc(selState):'India Sales Map'}</div>
+        <div class="map-heading"><div class="map-title">${selState?esc(selState):'India Sales Map'}</div><div class="map-subtitle">${selState?'Administrative district boundaries • city sales mapped to districts':'Sales by state • select a state for district drill-down'}</div></div>
         ${renderMapSearchBox_()}
         <div class="map-zoom-controls">
-          ${selState?`<button class="btn btn-ghost" data-action="map-back">\u2190 All India</button>`:''}
-          <button class="btn btn-ghost" data-action="map-zoom" data-dir="in" title="Zoom in">+</button>
-          <button class="btn btn-ghost" data-action="map-zoom" data-dir="out" title="Zoom out">\u2212</button>
-          <button class="btn btn-ghost" data-action="map-zoom" data-dir="reset" title="Reset zoom">\u2934</button>
+          ${selState?`<button class="btn btn-ghost" data-action="map-back">← All India</button>`:''}
+          <button class="btn btn-ghost map-zoom-btn" data-action="map-zoom" data-dir="in" title="Zoom in">+</button>
+          <button class="btn btn-ghost map-zoom-btn" data-action="map-zoom" data-dir="out" title="Zoom out">−</button>
+          <button class="btn btn-ghost map-reset-btn" data-action="map-zoom" data-dir="reset" title="Fit map">Fit</button>
         </div>
       </div>
       <div class="map-canvas-wrap" id="mapCanvasWrap">
-        <div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map\u2026</div></div>
+        <div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map…</div></div>
       </div>
       <div class="map-legend">
-        <span>Low</span><div class="map-legend-bar"></div><span>High</span>
-        <span style="margin-left:auto;color:var(--muted);">Click a state to see city-wise sales</span>
+        <span>Lower sales</span><div class="map-legend-bar"></div><span>Higher sales</span>
+        <span id="mapBoundaryNote" class="map-boundary-note">${selState?'Loading district boundaries…':'Click a state to see city/district sales'}</span>
       </div>
     </div>
     <div class="map-side">
-      <div class="panel-title" style="background:transparent;border:0;padding:0 0 10px;">${selState?`Cities in ${esc(selState)}`:'Top States by Sales'}</div>
+      <div class="panel-title map-side-title" style="background:transparent;border:0;padding:0 0 10px;">${selState?`City Sales in ${esc(selState)}`:'Top States by Sales'}</div>
+      ${selState?`<div class="map-data-note"><strong>Map accuracy:</strong> coloured lines are real district boundaries. A city is coloured only when its district can be matched; unmatched city sales remain visible in this table.</div>`:''}
       <div class="map-list">
         ${selState?
           (cityRows.length?renderCityTable_(cityRows, selData.amount):`<div class="empty-state"><div class="big">No city data</div>Is state ke liye SALES sheet mein city/district column nahi mila.</div>`)
@@ -333,40 +453,95 @@ function geometryCentroidLonLat_(geometry){
   return [0,0];
 }
 
-// Evenly spaced grid of points inside a screen-space box — used to place city pins
-// for the selected state. Uses heavy inward padding (30%) so pins stay well within
-// the visible state shape rather than landing in the bounding box corners that may
-// fall outside the actual irregular state boundary.
-function gridPositions_(n,x0,y0,x1,y1){
-  if(n<=0)return [];
-  const cols=Math.max(1,Math.ceil(Math.sqrt(n)));
-  const rows=Math.max(1,Math.ceil(n/cols));
-  const padX=(x1-x0)*0.35, padY=(y1-y0)*0.35;
-  const gx0=x0+padX, gx1=x1-padX, gy0=y0+padY, gy1=y1-padY;
-  const stepX=cols>1?(gx1-gx0)/(cols-1):0, stepY=rows>1?(gy1-gy0)/(rows-1):0;
-  const pts=[];
-  for(let i=0;i<n;i++){
-    const r=Math.floor(i/cols), c=i%cols;
-    pts.push([cols>1?gx0+c*stepX:(gx0+gx1)/2, rows>1?gy0+r*stepY:(gy0+gy1)/2]);
+// Geometry containment is used for the fallback city pins. Unlike the old
+// bounding-box grid, every generated anchor is tested against the actual state
+// polygon (including holes), and the whole overlay is clipped to the state path.
+function pointInRing_(point,ring){
+  const x=point[0],y=point[1];let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/((yj-yi)||1e-12)+xi))inside=!inside;
   }
-  return pts;
+  return inside;
 }
-
-// City marker (state drill-down) — shows amount badge on top, city name below
-// the pin in a readable label. More visually attractive than the state marker.
-function cityMarkerSvg_(x,y,amount,cityName){
-  const label=fmtCompactINR_(amount);
-  const labelW=Math.max(42,label.length*6.6+16), labelH=18, r=7;
-  const nameLabel=String(cityName||'').length>18?cityName.slice(0,16)+'…':cityName;
-  const nameW=Math.max(40,nameLabel.length*5.5+12);
+function polygonContainsLonLat_(point,poly){
+  if(!poly||!poly.length||!pointInRing_(point,poly[0]))return false;
+  for(let i=1;i<poly.length;i++)if(pointInRing_(point,poly[i]))return false;
+  return true;
+}
+function geometryContainsLonLat_(geometry,point){
+  if(!geometry)return false;
+  if(geometry.type==='Polygon')return polygonContainsLonLat_(point,geometry.coordinates);
+  if(geometry.type==='MultiPolygon')return geometry.coordinates.some(poly=>polygonContainsLonLat_(point,poly));
+  return false;
+}
+function interiorPositions_(n,geometry,project){
+  if(n<=0||!geometry)return [];
+  const b=geometryBounds_(geometry),candidates=[];
+  const grid=Math.max(16,Math.ceil(Math.sqrt(n*90)));
+  for(let row=1;row<grid;row++)for(let col=1;col<grid;col++){
+    const lon=b.minX+(b.maxX-b.minX)*col/grid,lat=b.minY+(b.maxY-b.minY)*row/grid;
+    if(geometryContainsLonLat_(geometry,[lon,lat]))candidates.push(project(lon,lat));
+  }
+  if(!candidates.length){const c=geometryCentroidLonLat_(geometry);return Array.from({length:n},()=>project(c[0],c[1]));}
+  const chosen=[];
+  const center=project(...geometryCentroidLonLat_(geometry));
+  while(chosen.length<n&&candidates.length){
+    let best=0,bestScore=-Infinity;
+    candidates.forEach((p,i)=>{
+      const edge=Math.min(p[0],p[1],920-p[0],920-p[1]);
+      const spread=chosen.length?Math.min(...chosen.map(q=>Math.hypot(p[0]-q[0],p[1]-q[1]))):-Math.hypot(p[0]-center[0],p[1]-center[1]);
+      const score=spread+Math.max(0,edge)*0.08;
+      if(score>bestScore){bestScore=score;best=i;}
+    });
+    chosen.push(candidates.splice(best,1)[0]);
+  }
+  return chosen;
+}
+function approximateCityMarkerSvg_(x,y,amount,cityName){
+  const label=fmtCompactINR_(amount),short=String(cityName||'').length>19?cityName.slice(0,17)+'…':cityName;
+  const w=Math.max(70,short.length*5.6+16);
   return `<g class="map-marker map-city-marker">
-    <rect x="${(x-labelW/2).toFixed(1)}" y="${(y-r-labelH-4).toFixed(1)}" width="${labelW.toFixed(1)}" height="${labelH}" rx="6" fill="#065F46" opacity="0.94"></rect>
-    <text x="${x.toFixed(1)}" y="${(y-r-labelH-4+labelH/2+3.8).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ffffff" font-family="'JetBrains Mono',monospace">${esc(label)}</text>
-    <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="#10B981" stroke="#ffffff" stroke-width="2.5"></circle>
-    <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#ffffff"></circle>
-    <rect x="${(x-nameW/2).toFixed(1)}" y="${(y+r+3).toFixed(1)}" width="${nameW.toFixed(1)}" height="14" rx="4" fill="#ffffff" stroke="#D1D5DB" stroke-width="0.5" opacity="0.95"></rect>
-    <text x="${x.toFixed(1)}" y="${(y+r+3+10.5).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="#065F46" font-family="'Inter',sans-serif">${esc(nameLabel)}</text>
-    <title>${esc(cityName)}: ${fmtINR(amount)}</title>
+    <line x1="${x}" y1="${y}" x2="${x}" y2="${y-17}" stroke="#047857" stroke-width="1.5"></line>
+    <circle cx="${x}" cy="${y}" r="6.5" fill="#10B981" stroke="#fff" stroke-width="2.5"></circle>
+    <rect x="${x-w/2}" y="${y-48}" width="${w}" height="28" rx="7" class="map-label-card"></rect>
+    <text x="${x}" y="${y-37}" text-anchor="middle" class="map-label-name">${esc(short)}</text>
+    <text x="${x}" y="${y-26}" text-anchor="middle" class="map-label-amount">${esc(label)}</text>
+    <title>${esc(cityName)}: ${fmtINR(amount)} • approximate marker (district boundary unavailable)</title>
+  </g>`;
+}
+function resolveDistrictLabels_(items,W,H,canPlace){
+  const placed=[],resolved=[];
+  const offsets=[[0,0],[72,0],[-72,0],[0,42],[0,-42],[72,42],[-72,42],[72,-42],[-72,-42],[126,0],[-126,0],[0,82],[0,-82]];
+  items.forEach(item=>{
+    let picked=null;
+    for(const off of offsets){
+      const x=Math.max(58,Math.min(W-58,item.ax+off[0])),y=Math.max(24,Math.min(H-24,item.ay+off[1]));
+      const collides=placed.some(p=>Math.abs(p.x-x)<112&&Math.abs(p.y-y)<42);
+      if(collides||(canPlace&&!canPlace(x,y)))continue;
+      picked={x,y};break;
+    }
+    // Lower-value labels are deliberately omitted if no non-overlapping,
+    // in-state card position exists; the district tooltip remains available.
+    if(picked){item.x=picked.x;item.y=picked.y;placed.push(picked);resolved.push(item);}
+  });
+  return resolved;
+}
+function districtLabelSvg_(item){
+  const d=item.data;
+  const cityNames=Object.entries(d.cities||{}).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]);
+  const district=String(d.district||'').length>20?d.district.slice(0,18)+'…':d.district;
+  const cityText=cityNames.length?cityNames.join(', '):d.district;
+  const cityShort=cityText.length>24?cityText.slice(0,22)+'…':cityText;
+  const moved=Math.hypot(item.x-item.ax,item.y-item.ay)>8;
+  return `<g class="map-district-label">
+    ${moved?`<path d="M${item.ax.toFixed(1)},${item.ay.toFixed(1)} L${item.x.toFixed(1)},${item.y.toFixed(1)}" class="map-label-leader"></path>`:''}
+    <circle cx="${item.ax.toFixed(1)}" cy="${item.ay.toFixed(1)}" r="3" class="map-label-anchor"></circle>
+    <rect x="${(item.x-55).toFixed(1)}" y="${(item.y-20).toFixed(1)}" width="110" height="40" rx="7" class="map-label-card"></rect>
+    <text x="${item.x.toFixed(1)}" y="${(item.y-8).toFixed(1)}" text-anchor="middle" class="map-label-name">${esc(district)}</text>
+    <text x="${item.x.toFixed(1)}" y="${(item.y+3).toFixed(1)}" text-anchor="middle" class="map-label-city">${esc(cityShort)}</text>
+    <text x="${item.x.toFixed(1)}" y="${(item.y+15).toFixed(1)}" text-anchor="middle" class="map-label-amount">${esc(fmtCompactINR_(d.amount))}</text>
+    <title>${esc(d.district)} • ${esc(cityText)} • ${fmtINR(d.amount)} • ${d.invoices} invoices</title>
   </g>`;
 }
 
@@ -392,128 +567,212 @@ function markerSvg_(x,y,amount,name,clickable,colorHex){
 }
 
 function paintIndiaMap(){
-  const wrap=document.getElementById('mapCanvasWrap'); if(!wrap)return;
-  wrap.innerHTML=`<div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map…</div></div>`;
-  ensureIndiaGeoJson().then(gj=>drawIndiaMap_(gj)).catch(()=>{
-    wrap.innerHTML=`<div class="empty-state"><div class="big">Map shapes unavailable</div>${esc(mapLoadError||'Internet se GeoJSON load nahi ho paya.')}<br>State list side mein still available hai — wahan se bhi city-wise data dekh sakte hain.<br><button class="btn btn-ghost" style="margin-top:12px;" data-action="map-retry">⟳ Retry loading map</button></div>`;
+  const wrap=document.getElementById('mapCanvasWrap');if(!wrap)return;
+  const token=(paintIndiaMap._token||0)+1;paintIndiaMap._token=token;
+  const requestedState=S.map.selectedState;
+  MAP_RUNTIME=null;
+  wrap.innerHTML=`<div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">${requestedState?'Loading district boundaries…':'Loading India map…'}</div></div>`;
+  ensureIndiaGeoJson().then(gj=>{
+    if(paintIndiaMap._token!==token||S.map.selectedState!==requestedState)return;
+    if(!requestedState){drawIndiaMap_(gj,null);return;}
+    const districtFile=DISTRICT_FILE_BY_STATE[requestedState];
+    if(districtFile&&DISTRICT_GEOJSON_ERRORS[districtFile]){
+      mapDistrictLoadError=DISTRICT_GEOJSON_ERRORS[districtFile].message||'District boundaries unavailable';
+      drawIndiaMap_(gj,null);return;
+    }
+    ensureDistrictGeoJson(requestedState).then(districtGj=>{
+      if(paintIndiaMap._token===token&&S.map.selectedState===requestedState)drawIndiaMap_(gj,districtGj);
+    }).catch(err=>{
+      mapDistrictLoadError=err.message||'District boundaries unavailable';
+      if(paintIndiaMap._token===token&&S.map.selectedState===requestedState)drawIndiaMap_(gj,null);
+    });
+  }).catch(()=>{
+    if(paintIndiaMap._token!==token)return;
+    wrap.innerHTML=`<div class="empty-state"><div class="big">Map shapes unavailable</div>${esc(mapLoadError||'GeoJSON could not be loaded.')}<br>The sales list remains available on the right.<br><button class="btn btn-ghost" style="margin-top:12px;" data-action="map-retry">⟳ Retry map</button></div>`;
   });
 }
-
-function drawIndiaMap_(gj){
-  const wrap=document.getElementById('mapCanvasWrap'); if(!wrap)return;
-  const byState=salesByState_();
-  const amounts=Object.values(byState).map(s=>s.amount);
-  const maxAmt=Math.max(1,...amounts);
-  const W=920,H=920; // bigger canvas — more room for the map + pin markers
-
-  // Whole-country bounds across every feature, used for the default (non-zoomed) view.
-  let bounds={minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity};
-  gj.features.forEach(f=>{
+function featureMatchesState_(feature,stateName){
+  const raw=stateNameFromFeature_(feature);
+  return raw===stateName||normalizeStateName_(raw)===stateName||normalizeGeoKey_(raw)===normalizeGeoKey_(stateName);
+}
+function combinedGeometryBounds_(features){
+  const out={minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity};
+  (features||[]).forEach(f=>{
     const b=geometryBounds_(f.geometry);
-    bounds.minX=Math.min(bounds.minX,b.minX);bounds.minY=Math.min(bounds.minY,b.minY);
-    bounds.maxX=Math.max(bounds.maxX,b.maxX);bounds.maxY=Math.max(bounds.maxY,b.maxY);
+    out.minX=Math.min(out.minX,b.minX);out.minY=Math.min(out.minY,b.minY);
+    out.maxX=Math.max(out.maxX,b.maxX);out.maxY=Math.max(out.maxY,b.maxY);
   });
-
-  const selState=S.map.selectedState;
-  let viewBounds=bounds;
-  if(selState){
-    const feat=gj.features.find(f=>{const p=f.properties||{};return (p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'')===selState;});
-    if(feat) viewBounds=geometryBounds_(feat.geometry);
+  return out;
+}
+function geometryFromFeatures_(features){
+  const polygons=[];
+  (features||[]).forEach(f=>{
+    const g=f&&f.geometry;if(!g)return;
+    if(g.type==='Polygon')polygons.push(g.coordinates);
+    else if(g.type==='MultiPolygon')g.coordinates.forEach(poly=>polygons.push(poly));
+  });
+  return polygons.length?{type:'MultiPolygon',coordinates:polygons}:null;
+}
+function mapColor_(amount,maxAmount,empty){
+  if(!amount)return empty||'#EEF2F7';
+  const t=Math.max(0.12,Math.sqrt(Math.max(0,amount)/(maxAmount||1)));
+  const a=[219,234,254],b=[15,118,110];
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`;
+}
+function clampMapPan_(panX,panY,zoom){
+  const rt=MAP_RUNTIME;if(!rt)return {x:panX,y:panY};
+  const b=rt.contentBounds,minVisible=90;
+  const minX=minVisible-zoom*b.maxX,maxX=rt.W-minVisible-zoom*b.minX;
+  const minY=minVisible-zoom*b.maxY,maxY=rt.H-minVisible-zoom*b.minY;
+  return {x:Math.max(Math.min(minX,maxX),Math.min(Math.max(minX,maxX),panX)),y:Math.max(Math.min(minY,maxY),Math.min(Math.max(minY,maxY),panY))};
+}
+function applyMapViewport_(){
+  if(!MAP_RUNTIME)return;
+  const zoom=Math.max(1,Math.min(5,Number(S.map.zoom)||1));
+  const p=clampMapPan_(Number(S.map.panX)||0,Number(S.map.panY)||0,zoom);
+  S.map.zoom=zoom;S.map.panX=p.x;S.map.panY=p.y;
+  MAP_RUNTIME.group.setAttribute('transform',`matrix(${zoom} 0 0 ${zoom} ${p.x} ${p.y})`);
+  const indicator=document.getElementById('mapZoomIndicator');if(indicator)indicator.textContent=Math.round(zoom*100)+'%';
+}
+function setMapZoom_(nextZoom,anchorX,anchorY){
+  if(!MAP_RUNTIME)return;
+  const oldZoom=Number(S.map.zoom)||1,newZoom=Math.max(1,Math.min(5,nextZoom));
+  const oldX=Number(S.map.panX)||0,oldY=Number(S.map.panY)||0;
+  const ax=anchorX==null?MAP_RUNTIME.W/2:anchorX,ay=anchorY==null?MAP_RUNTIME.H/2:anchorY;
+  S.map.panX=ax-(ax-oldX)*newZoom/oldZoom;S.map.panY=ay-(ay-oldY)*newZoom/oldZoom;S.map.zoom=newZoom;
+  applyMapViewport_();
+}
+function clientToMapPoint_(svg,clientX,clientY){
+  if(svg.createSVGPoint&&svg.getScreenCTM){
+    const ctm=svg.getScreenCTM();
+    if(ctm){const p=svg.createSVGPoint();p.x=clientX;p.y=clientY;const local=p.matrixTransform(ctm.inverse());return {x:local.x,y:local.y};}
   }
-  const pad=(viewBounds.maxX-viewBounds.minX)*0.06||0.3;
-  const vb={minX:viewBounds.minX-pad,minY:viewBounds.minY-pad,maxX:viewBounds.maxX+pad,maxY:viewBounds.maxY+pad};
-  const spanX=vb.maxX-vb.minX||1, spanY=vb.maxY-vb.minY||1;
-  const scale=Math.min(W/spanX,H/spanY);
-  const project=(lon,lat)=>[ (lon-vb.minX)*scale, H-(lat-vb.minY)*scale ]; // flip Y (lat increases northward)
-
-  const colorFor=amt=>{
-    if(!amt) return '#E7EAF2';
-    const t=Math.sqrt(amt/maxAmt); // sqrt so mid-range states aren't washed out
-    const r=Math.round(233-(233-30)*t), g=Math.round(240-(240-90)*t), b=Math.round(254-(254-220)*t);
-    return `rgb(${r},${g},${b})`;
+  // Standards-correct fallback for the default preserveAspectRatio="xMidYMid meet".
+  const rect=svg.getBoundingClientRect(),scale=Math.min(rect.width/MAP_RUNTIME.W,rect.height/MAP_RUNTIME.H)||1;
+  const left=rect.left+(rect.width-MAP_RUNTIME.W*scale)/2,top=rect.top+(rect.height-MAP_RUNTIME.H*scale)/2;
+  return {x:(clientX-left)/scale,y:(clientY-top)/scale};
+}
+function bindMapInteractions_(svg){
+  let active=false,moved=false,pointerId=null,startPoint=null,startPanX=0,startPanY=0;
+  svg.addEventListener('pointerdown',ev=>{
+    if(ev.button!==0)return;
+    active=true;moved=false;pointerId=ev.pointerId;startPoint=clientToMapPoint_(svg,ev.clientX,ev.clientY);
+    startPanX=Number(S.map.panX)||0;startPanY=Number(S.map.panY)||0;
+    svg.setPointerCapture(pointerId);svg.classList.add('is-grabbing');
+  });
+  svg.addEventListener('pointermove',ev=>{
+    if(!active||ev.pointerId!==pointerId)return;
+    const point=clientToMapPoint_(svg,ev.clientX,ev.clientY),dx=point.x-startPoint.x,dy=point.y-startPoint.y;
+    if(!moved&&Math.hypot(dx,dy)<5)return;
+    moved=true;S.map.panX=startPanX+dx;S.map.panY=startPanY+dy;
+    applyMapViewport_();ev.preventDefault();
+  });
+  const stop=ev=>{
+    if(!active||ev.pointerId!==pointerId)return;
+    if(moved)MAP_SUPPRESS_CLICK_UNTIL=Date.now()+250;
+    active=false;svg.classList.remove('is-grabbing');
+    if(svg.hasPointerCapture(pointerId))svg.releasePointerCapture(pointerId);
   };
+  svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
+  svg.addEventListener('wheel',ev=>{
+    ev.preventDefault();const point=clientToMapPoint_(svg,ev.clientX,ev.clientY);
+    const factor=ev.deltaY<0?1.16:1/1.16;setMapZoom_((Number(S.map.zoom)||1)*factor,point.x,point.y);
+  },{passive:false});
+}
 
-  const paths=gj.features.map(f=>{
-    // Different mirrors use different property casing for the state name
-    // (st_nm / ST_NM / NAME_1 / name) — check all of them so any source works.
-    const p=f.properties||{};
-    const name=p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'';
-    const data=byState[name];
-    const d=geoPathD_(f.geometry,project);
-    const isSel=name===selState;
-    const searchQ=(S.map.searchQuery||'').toLowerCase();
-    const isSearchMatch=searchQ&&name.toLowerCase().includes(searchQ);
-    const strokeColor=isSel?'#111729':isSearchMatch?'#F08A1D':'#ffffff';
-    const strokeW=isSel?2:isSearchMatch?2.5:1;
-    return `<path d="${d}" fill="${colorFor(data?data.amount:0)}" stroke="${strokeColor}" stroke-width="${strokeW}" data-action="map-select-state" data-state="${esc(name)}" class="map-state-path${isSearchMatch?' map-search-highlight':''}"><title>${esc(name)}${data?': '+fmtINR(data.amount):': No sales data'}</title></path>`;
-  }).join('');
+function drawIndiaMap_(gj,districtGj){
+  const wrap=document.getElementById('mapCanvasWrap');if(!wrap)return;
+  const byState=salesByState_(),selState=S.map.selectedState;
+  const W=920,H=760;
+  const selectedFeature=selState?gj.features.find(f=>featureMatchesState_(f,selState)):null;
+  const districtFeatures=selState&&districtGj&&districtGj.features?districtGj.features:[];
+  const selectedGeometry=districtFeatures.length?geometryFromFeatures_(districtFeatures):(selectedFeature?selectedFeature.geometry:null);
+  const sourceFeatures=selState?(districtFeatures.length?districtFeatures:(selectedFeature?[selectedFeature]:[])):gj.features;
+  const viewBounds=combinedGeometryBounds_(sourceFeatures);
+  if(!Number.isFinite(viewBounds.minX)){wrap.innerHTML='<div class="empty-state"><div class="big">State shape not found</div>Please use a standard State name in SALES.</div>';return;}
+  const spanX=viewBounds.maxX-viewBounds.minX||1,spanY=viewBounds.maxY-viewBounds.minY||1;
+  const geoPad=Math.max(spanX,spanY)*0.055;
+  const vb={minX:viewBounds.minX-geoPad,minY:viewBounds.minY-geoPad,maxX:viewBounds.maxX+geoPad,maxY:viewBounds.maxY+geoPad};
+  const paddedX=vb.maxX-vb.minX,paddedY=vb.maxY-vb.minY;
+  const scale=Math.min(W/paddedX,H/paddedY),drawW=paddedX*scale,drawH=paddedY*scale;
+  const ox=(W-drawW)/2,oy=(H-drawH)/2;
+  const project=(lon,lat)=>[ox+(lon-vb.minX)*scale,oy+(vb.maxY-lat)*scale];
+  const unproject=(x,y)=>[vb.minX+(x-ox)/scale,vb.maxY-(y-oy)/scale];
+  const contentTL=project(viewBounds.minX,viewBounds.maxY),contentBR=project(viewBounds.maxX,viewBounds.minY);
+  let mapShapes='',labels='',markers='',overlay='',boundaryText='';
+  const defs=[`<pattern id="mapDotGrid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#CBD5E1" opacity=".28"></circle></pattern>`];
 
-  // Location pin + total-sales badge markers. All-India view: one pin per state
-  // that has any sales. Zoomed-into-a-state view: one pin per city in that state
-  // (grid-placed inside the state's bounding box, since per-city coordinates
-  // aren't available — only state-level shapes exist in the GeoJSON).
-  let markers='';
   if(!selState){
-    markers=gj.features.map(f=>{
-      const p=f.properties||{};
-      const name=p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'';
-      const data=byState[name];
-      if(!data||!data.amount)return '';
-      const [lon,lat]=geometryCentroidLonLat_(f.geometry);
-      const [x,y]=project(lon,lat);
-      return markerSvg_(x,y,data.amount,name,true,'#1E5ADC');
+    const maxAmt=Math.max(1,...Object.values(byState).map(s=>s.amount));
+    const searchQ=(S.map.searchQuery||'').toLowerCase();
+    mapShapes=gj.features.map(f=>{
+      const name=stateNameFromFeature_(f),data=byState[name]||byState[normalizeStateName_(name)];
+      const match=searchQ&&name.toLowerCase().includes(searchQ);
+      return `<path d="${geoPathD_(f.geometry,project)}" fill="${mapColor_(data?data.amount:0,maxAmt,'var(--map-empty-fill,#E8EDF4)')}" stroke="${match?'#F59E0B':'#FFFFFF'}" stroke-width="${match?2.7:1.25}" data-action="map-select-state" data-state="${esc(normalizeStateName_(name)||name)}" class="map-state-path${match?' map-search-highlight':''}"><title>${esc(name)}${data?': '+fmtINR(data.amount):': No sales'}</title></path>`;
     }).join('');
-  }else{
-    const selData=byState[selState];
-    const cityRows=selData?cityRowsForState_(selData):[];
-    const shown=cityRows.slice(0,6); // top 6 by amount; rest visible in side table
-    if(shown.length){
-      // Use the ACTUAL state feature's bounds (not the padded viewBox) so pins
-      // stay INSIDE the state shape even for irregular states like UP.
-      const feat=gj.features.find(f=>{const p=f.properties||{};return (p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'')===selState;});
-      const stateBounds=feat?geometryBounds_(feat.geometry):vb;
-      const tl=project(stateBounds.minX,stateBounds.maxY), br=project(stateBounds.maxX,stateBounds.minY);
-      const pts=gridPositions_(shown.length,tl[0],tl[1],br[0],br[1]);
-      markers=shown.map((c,i)=>cityMarkerSvg_(pts[i][0],pts[i][1],c.amount,c.city)).join('');
+    markers=gj.features.map(f=>{
+      const name=stateNameFromFeature_(f),canonical=normalizeStateName_(name)||name,data=byState[name]||byState[canonical];
+      if(!data||!data.amount)return '';
+      const point=interiorPositions_(1,f.geometry,project)[0];
+      return point?markerSvg_(point[0],point[1],data.amount,canonical,true,'#1E5ADC'):'';
+    }).join('');
+    boundaryText='State boundaries • drag to pan • wheel or +/− to zoom';
+  }else if(selectedGeometry){
+    const statePath=geoPathD_(selectedGeometry,project),clipId='selectedStateClip';
+    defs.push(`<clipPath id="${clipId}"><path d="${statePath}"></path></clipPath>`);
+    if(districtGj&&districtGj.features&&districtGj.features.length){
+      const summary=districtSalesForState_(selState,districtGj.features),maxDistrict=Math.max(1,...summary.rows.map(r=>r.amount));
+      const districtPaths=districtGj.features.map(f=>{
+        const name=districtNameFromFeature_(f),data=summary.byName[name];
+        return `<path d="${geoPathD_(f.geometry,project)}" fill="${mapColor_(data?data.amount:0,maxDistrict,'var(--map-empty-fill,#E9EEF4)')}" class="map-district-path${data?' has-sales':''}" data-district="${esc(name)}"><title>${esc(name)}${data?': '+fmtINR(data.amount)+' • '+data.invoices+' invoices':': No matched city sales'}</title></path>`;
+      }).join('');
+      mapShapes=`<path d="${statePath}" class="map-state-backdrop"></path><g clip-path="url(#${clipId})">${districtPaths}</g><path d="${statePath}" class="map-selected-outline"></path>`;
+      const featureByName={};districtGj.features.forEach(f=>{featureByName[districtNameFromFeature_(f)]=f;});
+      const labelItems=summary.rows.map(data=>{
+        const f=featureByName[data.district];if(!f)return null;
+        const pt=interiorPositions_(1,f.geometry,project)[0];return pt?{data,ax:pt[0],ay:pt[1]}:null;
+      }).filter(Boolean);
+      const labelContainmentGeometry=selectedFeature?selectedFeature.geometry:selectedGeometry;
+      const cardInsideState=(x,y)=>{
+        // Sample the full card (edges + interior), not just four corners: a
+        // concave coast/border can cut through a rectangle whose corners are all
+        // technically inside. Labels that cannot fit cleanly are omitted.
+        for(let ix=0;ix<=8;ix++)for(let iy=0;iy<=4;iy++){
+          const px=x-56+112*ix/8,py=y-21+42*iy/4;
+          if(!geometryContainsLonLat_(labelContainmentGeometry,unproject(px,py)))return false;
+        }
+        return true;
+      };
+      labels='<g clip-path="url(#'+clipId+')">'+resolveDistrictLabels_(labelItems,W,H,cardInsideState).map(districtLabelSvg_).join('')+'</g>';
+      const total=Math.abs(summary.matchedAmount)+Math.abs(summary.unmappedAmount);
+      const coverage=total?Math.abs(summary.matchedAmount)/total*100:0;
+      boundaryText=`${districtGj.features.length} administrative districts • ${coverage.toFixed(0)}% sales mapped`;
+      overlay=`<div class="map-coverage-card"><span class="map-coverage-good">Mapped ${fmtINR(summary.matchedAmount)}</span><span>Unmapped ${fmtINR(summary.unmappedAmount)}</span><strong>${coverage.toFixed(0)}% coverage</strong></div>`;
+    }else{
+      const selData=byState[selState],cityRows=selData?cityRowsForState_(selData):[],shown=cityRows.filter(c=>c.city!=='Unspecified').slice(0,6);
+      const points=interiorPositions_(shown.length,selectedGeometry,project);
+      markers=shown.map((c,i)=>points[i]?approximateCityMarkerSvg_(points[i][0],points[i][1],c.amount,c.city):'').join('');
+      mapShapes=`<path d="${statePath}" class="map-state-fallback"></path><g clip-path="url(#${clipId})">${markers}</g><path d="${statePath}" class="map-selected-outline"></path>`;markers='';
+      boundaryText='District boundaries unavailable • markers are approximate and clipped inside state';
+      overlay=`<div class="map-source-warning"><strong>Boundary source unavailable</strong><span>No fake city regions are shown. <button data-action="map-retry">Retry</button></span></div>`;
     }
   }
 
-  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="india-map-svg" style="transform:scale(${S.map.zoom||1}) translate(${S.map.panX||0}px,${S.map.panY||0}px);transform-origin:center;">${paths}${markers}</svg>`;
-
-  wrap.querySelectorAll('.map-state-path').forEach(p=>{
-    p.addEventListener('mouseenter',()=>p.classList.add('hover'));
-    p.addEventListener('mouseleave',()=>p.classList.remove('hover'));
-  });
-
-  // Pan/drag: hold mouse button and drag to move the map around
-  const svg=wrap.querySelector('.india-map-svg');
-  if(svg){
-    let dragging=false,startX=0,startY=0,startPanX=0,startPanY=0;
-    svg.addEventListener('mousedown',ev=>{
-      if(ev.target.closest('[data-action]'))return; // don't interfere with state clicks
-      dragging=true;startX=ev.clientX;startY=ev.clientY;
-      startPanX=S.map.panX||0;startPanY=S.map.panY||0;
-      svg.style.cursor='grabbing';ev.preventDefault();
-    });
-    svg.addEventListener('mousemove',ev=>{
-      if(!dragging)return;
-      const dx=ev.clientX-startX,dy=ev.clientY-startY;
-      const zoom=S.map.zoom||1;
-      S.map.panX=startPanX+dx/zoom;S.map.panY=startPanY+dy/zoom;
-      svg.style.transform=`scale(${zoom}) translate(${S.map.panX}px,${S.map.panY}px)`;
-    });
-    const stopDrag=()=>{if(dragging){dragging=false;svg.style.cursor='grab';}};
-    svg.addEventListener('mouseup',stopDrag);
-    svg.addEventListener('mouseleave',stopDrag);
-    svg.style.cursor='grab';
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="india-map-svg" role="img" aria-label="${esc(selState||'India')} sales map"><defs>${defs.join('')}</defs><rect width="${W}" height="${H}" fill="url(#mapDotGrid)"></rect><g id="mapViewport">${mapShapes}${markers}${labels}</g></svg>${overlay}<div class="map-navigation-hint"><span>Drag map</span><span>Wheel / + − zoom</span><strong id="mapZoomIndicator">100%</strong></div>`;
+  const note=document.getElementById('mapBoundaryNote');if(note)note.textContent=boundaryText;
+  const svg=wrap.querySelector('.india-map-svg'),group=wrap.querySelector('#mapViewport');
+  if(svg&&group){
+    MAP_RUNTIME={svg,group,W,H,contentBounds:{minX:contentTL[0],minY:contentTL[1],maxX:contentBR[0],maxY:contentBR[1]}};
+    applyMapViewport_();bindMapInteractions_(svg);
   }
 }
 
 document.addEventListener('click',e=>{
+  if(Date.now()<MAP_SUPPRESS_CLICK_UNTIL&&e.target.closest('#mapCanvasWrap'))return;
   const el=e.target.closest('[data-action]'); if(!el)return;
   const a=el.getAttribute('data-action');
   if(a==='map-select-state'){
-    S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;S.map.citySortCol='amount';S.map.citySortDir=-1;render();return;
+    S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;S.map.panX=0;S.map.panY=0;S.map.citySortCol='amount';S.map.citySortDir=-1;render();return;
   }
   if(a==='map-back'){ S.map.selectedState='';S.map.zoom=1;S.map.panX=0;S.map.panY=0;render();return; }
   if(a==='map-retry'){ retryIndiaMap();return; }
@@ -525,19 +784,20 @@ document.addEventListener('click',e=>{
   }
   if(a==='map-zoom'){
     const dir=el.getAttribute('data-dir');
-    if(dir==='in')S.map.zoom=Math.min(3,(S.map.zoom||1)+0.25);
-    else if(dir==='out')S.map.zoom=Math.max(0.5,(S.map.zoom||1)-0.25);
-    else {S.map.zoom=1;S.map.panX=0;S.map.panY=0;}
-    const svg=document.querySelector('.india-map-svg');
-    if(svg){ svg.style.transform=`scale(${S.map.zoom}) translate(${S.map.panX||0}px,${S.map.panY||0}px)`; return; }
-    render();
+    if(dir==='reset'){S.map.zoom=1;S.map.panX=0;S.map.panY=0;applyMapViewport_();return;}
+    if(MAP_RUNTIME)setMapZoom_((Number(S.map.zoom)||1)+(dir==='in'?0.35:-0.35));
+    return;
   }
 });
-// Search state input handler (uses input event, not click)
+// Debounce state search so typing is not interrupted by a full page repaint.
 document.addEventListener('input',e=>{
   if(e.target.classList.contains('map-search-input')){
     S.map.searchQuery=e.target.value;
-    render();
+    clearTimeout(renderMapSearchBox_._timer);
+    renderMapSearchBox_._timer=setTimeout(()=>{
+      const value=S.map.searchQuery;render();
+      requestAnimationFrame(()=>{const input=document.querySelector('.map-search-input');if(input){input.focus();input.setSelectionRange(value.length,value.length);}});
+    },180);
   }
 });
 </script>

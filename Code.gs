@@ -245,6 +245,24 @@ function findColIndexByHeaderContains_(headerRow, substrings) {
   return -1;
 }
 
+// Finds geographic text columns without accidentally choosing DISTRICT CODE,
+// CITY ID, etc. Exact business headers win; a conservative contains fallback is
+// used only when the header is not a code/number field.
+function findLocationColIndex_(headerRow, exactNames, fallbackTokens) {
+  var exact = {};
+  exactNames.forEach(function (name) { exact[String(name).toUpperCase()] = true; });
+  var normalized = headerRow.map(function (value) {
+    return String(value || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').replace(/^\s+|\s+$/g, '').replace(/\s+/g, ' ');
+  });
+  for (var i = 0; i < normalized.length; i++) if (exact[normalized[i]]) return i;
+  for (var j = 0; j < normalized.length; j++) {
+    var h = normalized[j];
+    if (/\b(CODE|ID|NUMBER|NO)\b/.test(h)) continue;
+    for (var k = 0; k < fallbackTokens.length; k++) if (h.indexOf(fallbackTokens[k]) !== -1) return j;
+  }
+  return -1;
+}
+
 function getHeaderRow_(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(name);
@@ -273,7 +291,15 @@ function mapSalesRows_(rows, headerRow) {
   var invoiceToIdx = findColIndexByHeaderContains_(headerRow, ['INVOICE TO', 'CUSTOMER NAME', 'PARTY NAME', 'BUYER NAME']);
   var addressIdx = findColIndexByHeaderContains_(headerRow, ['BILLING ADDRESS', 'CUSTOMER ADDRESS', 'ADDRESS']);
   var stateIdx = findColIndexByHeaderContains_(headerRow, ['STATE']);
-  var cityIdx = findColIndexByHeaderContains_(headerRow, ['CITY', 'DISTRICT', 'PLACE']);
+  // Keep CITY and DISTRICT separate for the map. District is the only field that
+  // can be matched honestly to an administrative boundary; CITY/PLACE remains
+  // the customer-facing label. If a sheet has only DISTRICT, reuse it as city so
+  // the existing city table still works without requiring a sheet migration.
+  var districtIdx = findLocationColIndex_(headerRow,
+    ['DISTRICT', 'DISTRICT NAME', 'CUSTOMER DISTRICT', 'BILLING DISTRICT'], ['DISTRICT']);
+  var cityIdx = findLocationColIndex_(headerRow,
+    ['CITY', 'CITY NAME', 'CUSTOMER CITY', 'BILLING CITY', 'PLACE'], ['CITY', 'PLACE']);
+  if (cityIdx === -1) cityIdx = districtIdx;
   var gstIdx = findColIndexByHeaderContains_(headerRow, ['GST NO', 'GSTIN', 'GST NUMBER']);
   var contactIdx = findColIndexByHeaderContains_(headerRow, ['CONTACT PERSON NAME', 'CONTACT PERSON']);
   var phoneIdx = findColIndexByHeaderContains_(headerRow, ['PHONE', 'MOBILE', 'CONTACT NO']);
@@ -316,6 +342,7 @@ function mapSalesRows_(rows, headerRow) {
       address: addressIdx === -1 ? '' : fmtValue_(row[addressIdx]),
       state: stateIdx === -1 ? '' : fmtValue_(row[stateIdx]),
       city: cityIdx === -1 ? '' : fmtValue_(row[cityIdx]),
+      district: districtIdx === -1 ? '' : fmtValue_(row[districtIdx]),
       gstNo: gstIdx === -1 ? '' : fmtValue_(row[gstIdx]),
       contactPerson: contactIdx === -1 ? '' : fmtValue_(row[contactIdx]),
       phone: phoneIdx === -1 ? '' : fmtValue_(row[phoneIdx]),
