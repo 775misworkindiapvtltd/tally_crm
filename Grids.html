@@ -444,7 +444,7 @@ function ageingGridRows(kind){
 function creditNoteRows(){return dataForFY('balanceVouchers').filter(v=>/credit\s*note/i.test(v.voucherType||'')).map(v=>Object.assign({},v,{amount:Number(v.debit||v.credit)||0}));}
 
 const GRID_DEFS={
-  expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense'),reportTabs:()=>(typeof renderExpenseReportViewToggle_==='function'?renderExpenseReportViewToggle_():'')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
+  expense:{cols:EXPENSE_COLS,data:()=>dataForFY('expense')},payables:{cols:PAYABLES_COLS,data:()=>dataForFY('payables')},receivables:{cols:RECEIVABLES_COLS,data:()=>dataForFY('receivables')},
   // noToolbar: this grid is only ever embedded inside the Receivables Ageing
   // Summary "All Data" tab (see renderAgeing() in Receivables.html), which already
   // folds its own Refresh + Columns controls into the kind/mode-tabs row directly
