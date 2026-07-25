@@ -191,13 +191,35 @@ function renderSalesCategoryPivot(){
     return `background:rgb(${r},${g},${b});color:${t>0.45?'#fff':'#1E3A5F'};font-weight:700;`;
   }
 
-  const body=sorted.length?sorted.map((r,idx)=>`<tr>
-      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
+  // Pagination for Duration pivot
+  const totalRows=sorted.length;
+  const pageSize=S.salesCategoryPageSize||50;
+  const totalPages=Math.max(1,Math.ceil(totalRows/pageSize));
+  if(S.salesCategoryPage>totalPages)S.salesCategoryPage=totalPages;
+  const curPage=S.salesCategoryPage||1;
+  const pageStart=(curPage-1)*pageSize;
+  const pageEnd=Math.min(pageStart+pageSize,totalRows);
+  const paged=sorted.slice(pageStart,pageEnd);
+
+  const body=paged.length?paged.map((r,idx)=>`<tr>
+      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${pageStart+idx+1}</td>
       <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatTotal_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
       <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
       <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
       ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatPeriod_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
     </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
+
+  const salesPaginationHtml=`<div class="dt-pagination">
+      <div class="pp"><label>Rows per page</label><select data-action="sales-cat-pagesize">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="page-range">${totalRows===0?'0':`${pageStart+1}\u2013${pageEnd}`} of ${totalRows}</div>
+      <div class="nav" aria-label="Pagination">
+        <button data-action="sales-cat-pagefirst" title="First page" ${curPage<=1?'disabled':''}>«</button>
+        <button data-action="sales-cat-pageprev" title="Previous page" ${curPage<=1?'disabled':''}>‹</button>
+        <span class="pageinfo">${curPage} / ${totalPages}</span>
+        <button data-action="sales-cat-pagenext" title="Next page" ${curPage>=totalPages?'disabled':''}>›</button>
+        <button data-action="sales-cat-pagelast" title="Last page" ${curPage>=totalPages?'disabled':''}>»</button>
+      </div>
+    </div>`;
 
   // Layout (per explicit user instruction — positions numbered per screenshot):
   // Row 1 (left): Sales / Duration toggle + Monthly / Yearly / Custom Range
@@ -240,6 +262,7 @@ function renderSalesCategoryPivot(){
           <tbody>${body}</tbody>
         </table>
       </div>
+      ${salesPaginationHtml}
     </div>`;
 }
 document.addEventListener('click',e=>{
@@ -247,7 +270,7 @@ document.addEventListener('click',e=>{
   if(el){
     const a=el.getAttribute('data-action');
     if(a==='sales-report-view'){S.salesReportView=el.getAttribute('data-view');render();return;}
-    if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');render();return;}
+    if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');S.salesCategoryPage=1;render();return;}
     if(a==='sales-cat-range-open'){S.salesCategoryRangeOpen=!S.salesCategoryRangeOpen;render();return;}
     if(a==='sales-cat-fy-all'){
       const allKeys=availableFinancialYears().map(f=>f.key);
@@ -283,8 +306,13 @@ document.addEventListener('click',e=>{
       if(salesCatResizedRecently)return;
       const col=el.getAttribute('data-col');
       if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='dim'?1:-1;}
-      render();return;
+      S.salesCategoryPage=1;render();return;
     }
+    // Pagination actions for sales Duration pivot
+    if(a==='sales-cat-pagefirst'){S.salesCategoryPage=1;render();return;}
+    if(a==='sales-cat-pageprev'){S.salesCategoryPage=Math.max(1,S.salesCategoryPage-1);render();return;}
+    if(a==='sales-cat-pagenext'){S.salesCategoryPage++;render();return;}
+    if(a==='sales-cat-pagelast'){S.salesCategoryPage=999999;render();return;}
   }
   // Click-away close for the Custom Range popover and Cross-filter dropdown.
   if(S.salesCategoryRangeOpen&&!e.target.closest('.sales-cat-range-multi')){S.salesCategoryRangeOpen=false;render();}
@@ -292,6 +320,9 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
   const el=e.target;
+  if(el.getAttribute('data-action')==='sales-cat-pagesize'){
+    S.salesCategoryPageSize=parseInt(el.value,10);S.salesCategoryPage=1;render();return;
+  }
   if(el.getAttribute('data-action')==='sales-dimension-select'){
     const v=el.value;
     if(SALES_DIMENSION_META[v]){
@@ -370,6 +401,7 @@ document.addEventListener('mouseup',()=>{
     else if(salesCatResizeCtx.target==='pct')S.salesCategoryPctWidth=Math.round(nw);
     else if(salesCatResizeCtx.target==='category')S.salesCategoryCatWidth=Math.round(nw);
     else S.salesCategoryColWidth=Math.round(nw);
+    persistPivotColWidths_();
   }
   salesCatResizeCtx=null;
   // Flag that a resize just completed — the click event that follows mouseup on the
@@ -637,13 +669,35 @@ function renderExpenseCategoryPivot(){
     return `background:rgb(${r},${g},${b});color:${t>0.45?'#fff':'#1E3A5F'};font-weight:700;`;
   }
 
-  const body=sorted.length?sorted.map((r,idx)=>`<tr>
-      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
+  // Pagination for Expense Duration pivot
+  const expTotalRows=sorted.length;
+  const expPageSize=S.expenseCategoryPageSize||50;
+  const expTotalPages=Math.max(1,Math.ceil(expTotalRows/expPageSize));
+  if(S.expenseCategoryPage>expTotalPages)S.expenseCategoryPage=expTotalPages;
+  const expCurPage=S.expenseCategoryPage||1;
+  const expPageStart=(expCurPage-1)*expPageSize;
+  const expPageEnd=Math.min(expPageStart+expPageSize,expTotalRows);
+  const expPaged=sorted.slice(expPageStart,expPageEnd);
+
+  const body=expPaged.length?expPaged.map((r,idx)=>`<tr>
+      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${expPageStart+idx+1}</td>
       <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatTotalExp_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
       <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
       <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
       ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatPeriodExp_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
     </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No expense lines for the selected financial year(s)</div></div></td></tr>`;
+
+  const expPaginationHtml=`<div class="dt-pagination">
+      <div class="pp"><label>Rows per page</label><select data-action="expense-cat-pagesize">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${expPageSize===n?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="page-range">${expTotalRows===0?'0':`${expPageStart+1}\u2013${expPageEnd}`} of ${expTotalRows}</div>
+      <div class="nav" aria-label="Pagination">
+        <button data-action="expense-cat-pagefirst" title="First page" ${expCurPage<=1?'disabled':''}>«</button>
+        <button data-action="expense-cat-pageprev" title="Previous page" ${expCurPage<=1?'disabled':''}>‹</button>
+        <span class="pageinfo">${expCurPage} / ${expTotalPages}</span>
+        <button data-action="expense-cat-pagenext" title="Next page" ${expCurPage>=expTotalPages?'disabled':''}>›</button>
+        <button data-action="expense-cat-pagelast" title="Last page" ${expCurPage>=expTotalPages?'disabled':''}>»</button>
+      </div>
+    </div>`;
 
   const crossAllValues=expenseDimensionValues_(crossDim);
   const crossSearch=(S.expenseCrossFilterSearch||'').toLowerCase();
@@ -680,6 +734,7 @@ function renderExpenseCategoryPivot(){
           <tbody>${body}</tbody>
         </table>
       </div>
+      ${expPaginationHtml}
     </div>`;
 }
 // Event handlers for expense report
@@ -688,7 +743,7 @@ document.addEventListener('click',e=>{
   if(el){
     const a=el.getAttribute('data-action');
     if(a==='expense-report-view'){S.expenseReportView=el.getAttribute('data-view');render();return;}
-    if(a==='expense-cat-mode'){S.expenseCategoryMode=el.getAttribute('data-mode');render();return;}
+    if(a==='expense-cat-mode'){S.expenseCategoryMode=el.getAttribute('data-mode');S.expenseCategoryPage=1;render();return;}
     if(a==='expense-cat-range-open'){S.expenseCategoryRangeOpen=!S.expenseCategoryRangeOpen;render();return;}
     if(a==='expense-cat-fy-all'){
       const allKeys=availableFinancialYears().map(f=>f.key);
@@ -719,14 +774,22 @@ document.addEventListener('click',e=>{
       if(expenseCatResizedRecently)return;
       const col=el.getAttribute('data-col');
       if(S.expenseCategorySort===col)S.expenseCategorySortDir*=-1;else{S.expenseCategorySort=col;S.expenseCategorySortDir=col==='dim'?1:-1;}
-      render();return;
+      S.expenseCategoryPage=1;render();return;
     }
+    // Pagination actions for expense Duration pivot
+    if(a==='expense-cat-pagefirst'){S.expenseCategoryPage=1;render();return;}
+    if(a==='expense-cat-pageprev'){S.expenseCategoryPage=Math.max(1,S.expenseCategoryPage-1);render();return;}
+    if(a==='expense-cat-pagenext'){S.expenseCategoryPage++;render();return;}
+    if(a==='expense-cat-pagelast'){S.expenseCategoryPage=999999;render();return;}
   }
   if(S.expenseCategoryRangeOpen&&!e.target.closest('.expense-cat-range-multi')){S.expenseCategoryRangeOpen=false;render();}
   if(S.expenseCrossFilterOpen&&!e.target.closest('.expense-cross-filter-multi')){S.expenseCrossFilterOpen=false;S.expenseCrossFilterSearch='';render();}
 });
 document.addEventListener('change',e=>{
   const el=e.target;
+  if(el.getAttribute('data-action')==='expense-cat-pagesize'){
+    S.expenseCategoryPageSize=parseInt(el.value,10);S.expenseCategoryPage=1;render();return;
+  }
   if(el.getAttribute('data-action')==='expense-dimension-select'){
     const v=el.value;
     if(EXPENSE_DIMENSION_META[v]){
@@ -791,6 +854,7 @@ document.addEventListener('mouseup',()=>{
     else if(expenseCatResizeCtx.target==='pct')S.expenseCategoryPctWidth=Math.round(nw);
     else if(expenseCatResizeCtx.target==='category')S.expenseCategoryCatWidth=Math.round(nw);
     else S.expenseCategoryColWidth=Math.round(nw);
+    persistPivotColWidths_();
   }
   expenseCatResizeCtx=null;
   expenseCatResizedRecently=true;

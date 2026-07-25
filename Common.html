@@ -69,6 +69,16 @@ function applyPersistedGridPrefs_(tableKey){
   if(p.dir===1||p.dir===-1)st.dir=p.dir;
   if(p.pageSize&&PAGE_SIZE_OPTIONS.indexOf(p.pageSize)!==-1)st.pageSize=p.pageSize;
 }
+// Persist Duration pivot (Sales + Expense) column widths to localStorage so
+// user-resized columns survive page refresh, per explicit user instruction.
+function persistPivotColWidths_(){
+  try{localStorage.setItem('tally_pivot_col_widths',JSON.stringify({
+    salesColW:S.salesCategoryColWidth,salesTotW:S.salesCategoryTotalWidth,
+    salesCatW:S.salesCategoryCatWidth,salesPctW:S.salesCategoryPctWidth,
+    expenseColW:S.expenseCategoryColWidth,expenseTotW:S.expenseCategoryTotalWidth,
+    expenseCatW:S.expenseCategoryCatWidth,expensePctW:S.expenseCategoryPctWidth
+  }));}catch(e){}
+}
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
@@ -126,6 +136,9 @@ let S = {
   expenseCategorySort:'total', expenseCategorySortDir:-1,
   expenseCategoryColWidth:110, expenseCategoryTotalWidth:130, expenseCategoryCatWidth:210, expenseCategoryPctWidth:90,
   expenseDimension:'group', expenseCategoryRangeOpen:false,
+  // Duration pivot pagination state (Sales + Expense)
+  salesCategoryPage:1, salesCategoryPageSize:50,
+  expenseCategoryPage:1, expenseCategoryPageSize:50,
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
@@ -138,6 +151,20 @@ try{
 // the remembered size for table body cells.
 try{document.documentElement.style.setProperty('--data-scale',String(S.fontSize/100));}catch(e){}
 try{ const dim=localStorage.getItem('tally_sales_dimension'); if(dim==='category'||dim==='partyName'||dim==='state'){S.salesDimension=dim;} }catch(e){}
+// Restore Duration pivot column widths from localStorage
+try{
+  const raw=localStorage.getItem('tally_pivot_col_widths');
+  if(raw){const o=JSON.parse(raw);
+    if(o.salesColW)S.salesCategoryColWidth=o.salesColW;
+    if(o.salesTotW)S.salesCategoryTotalWidth=o.salesTotW;
+    if(o.salesCatW)S.salesCategoryCatWidth=o.salesCatW;
+    if(o.salesPctW)S.salesCategoryPctWidth=o.salesPctW;
+    if(o.expenseColW)S.expenseCategoryColWidth=o.expenseColW;
+    if(o.expenseTotW)S.expenseCategoryTotalWidth=o.expenseTotW;
+    if(o.expenseCatW)S.expenseCategoryCatWidth=o.expenseCatW;
+    if(o.expensePctW)S.expenseCategoryPctWidth=o.expensePctW;
+  }
+}catch(e){}
 // Remembered login session id — see establishSession_()/loadAll() below. This lets a
 // signed-in user auto-resume instantly if the page ever gets reloaded unintentionally
 // (e.g. a two-finger trackpad swipe triggering the browser's back/forward navigation
