@@ -224,7 +224,7 @@ table.apv-table thead tr.apv-totals-row th{display:none;} /* keep header cell se
 table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:center;padding:5px 5px;border-bottom:1px solid var(--line);letter-spacing:-0.5px;}
 table.apv-table thead .apv-totals-row td.apv-name{background:var(--surface);}
 table.apv-table thead .apv-totals-row td.apv-tot-name{background:var(--surface);color:var(--muted);font-family:inherit;font-size:9px;letter-spacing:.06em;}
-table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:31px;z-index:6;background:#1E4FC4;color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:23px;z-index:6;background:#1E4FC4;color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
 table.apv-table thead tr:not(.apv-totals-row) th.apv-name{background:var(--surface);color:var(--ink);}
 /* Header label stays CENTER-aligned (per explicit user instruction: "header center
    align he rehne dena") — only the body cells below change alignment. */
@@ -335,7 +335,7 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .report-switcher-toolbar .view-toggle{margin-bottom:0;}
 .sales-cat-mode-toggle{margin-bottom:0;}
 .sales-cat-daterange{margin-bottom:0;}
-.sales-cat-wrap table.dt.scp-table{table-layout:fixed;}
+.sales-cat-wrap table.dt.scp-table{table-layout:fixed;min-width:100%;}
 /* The Duration pivot's own .dt-scroll must have a bounded height so IT (not the
    page-level .content) becomes the scroll container — this is what makes
    position:sticky on the <thead> cells actually work (sticky only activates relative
@@ -373,7 +373,7 @@ table.scp-table thead tr.scp-totals-row td.scp-sno,table.scp-table thead tr.scp-
 table.scp-table thead tr.scp-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);border-right:1px solid var(--line-light);white-space:nowrap;letter-spacing:-0.5px;}
 table.scp-table thead tr.scp-totals-row td.scp-cat{text-align:left;color:var(--muted);font-family:inherit;font-size:9.5px;letter-spacing:.06em;background:var(--surface);}
 table.scp-table thead tr.scp-totals-row td.scp-sno{background:var(--surface);}
-table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:37px;z-index:4;background:#1E4FC4;color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:29px;z-index:6;background:#1E4FC4;color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
 table.scp-table thead th.scp-cat,table.scp-table thead th.scp-sno{text-align:left;background:var(--surface);color:var(--ink);cursor:default;}
 /* Frozen header cells (both sticky-top + sticky-left) need higher z-index so they
    layer above BOTH the body cells AND the non-frozen header cells when scrolling
