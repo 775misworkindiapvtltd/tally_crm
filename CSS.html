@@ -372,7 +372,7 @@ table.scp-table tbody tr:nth-child(even) td.scp-sno,table.scp-table tbody tr:nth
 /* Totals row frozen cells — need z-index higher than both regular sticky-top and
    regular sticky-left so the intersection (top-left corner) always stays on top */
 table.scp-table thead tr.scp-totals-row td.scp-sno,table.scp-table thead tr.scp-totals-row td.scp-total,table.scp-table thead tr.scp-totals-row td.scp-pct,table.scp-table thead tr.scp-totals-row td.scp-cat{z-index:9;background:#F5F8FF;}
-table.scp-table thead tr.scp-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line-light);white-space:nowrap;letter-spacing:-0.5px;}
+table.scp-table thead tr.scp-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);border-right:1px solid var(--line-light);white-space:nowrap;letter-spacing:-0.5px;}
 table.scp-table thead tr.scp-totals-row td.scp-cat{text-align:left;color:var(--muted);font-family:inherit;font-size:9.5px;letter-spacing:.06em;background:var(--surface);}
 table.scp-table thead tr.scp-totals-row td.scp-sno{background:var(--surface);}
 table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:37px;z-index:4;background:#1E4FC4;color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
@@ -381,7 +381,7 @@ table.scp-table thead th.scp-cat,table.scp-table thead th.scp-sno{text-align:lef
    layer above BOTH the body cells AND the non-frozen header cells when scrolling
    in both directions simultaneously */
 table.scp-table thead tr:not(.scp-totals-row) th.scp-sno,table.scp-table thead tr:not(.scp-totals-row) th.scp-total,table.scp-table thead tr:not(.scp-totals-row) th.scp-pct,table.scp-table thead tr:not(.scp-totals-row) th.scp-cat{z-index:8;}
-.scp-th-inner{display:flex;align-items:center;justify-content:flex-end;gap:5px;padding:9px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:normal;word-break:normal;overflow-wrap:break-word;line-height:1.2;position:relative;}
+.scp-th-inner{display:flex;align-items:center;justify-content:flex-end;gap:5px;padding:6px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:normal;word-break:normal;overflow-wrap:break-word;line-height:1.2;position:relative;}
 table.scp-table th.scp-cat .scp-th-inner{justify-content:flex-start;}
 /* Dimension header dropdown (Category/Party Name/State) — sits inline with the
    sort arrow, styled to read as part of the dark header row rather than a plain
@@ -395,7 +395,7 @@ table.scp-table th.scp-cat .scp-th-inner{justify-content:flex-start;}
 .scp-resize{position:absolute;right:-4px;top:0;bottom:0;width:12px;cursor:col-resize;z-index:5;}
 .scp-resize:hover{background:rgba(255,255,255,.25);}
 table.scp-table th.scp-cat .scp-resize:hover{background:rgba(46,107,242,.25);}
-table.scp-table tbody td.scp-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:11px;padding:10px 10px;border-right:1px solid var(--line-light);letter-spacing:-0.5px;vertical-align:middle;height:40px;}
+table.scp-table tbody td.scp-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:calc(11px * var(--data-scale));padding:5px 8px;border-right:1px solid var(--line-light);letter-spacing:-0.5px;vertical-align:middle;}
 /* Period (month/year) amount cells: must never wrap mid-number — when the column is
    resized narrower than the value, the font shrinks instead of wrapping, per explicit
    user instruction ("amount wrap na ho uska font chota ho jaye in case agar col size
@@ -409,15 +409,12 @@ table.scp-table tbody td.scp-cell.scp-total,
 table.scp-table thead tr.scp-totals-row td.scp-total{white-space:nowrap;font-family:Tahoma,Geneva,sans-serif;font-weight:700;letter-spacing:-0.5px;}
 table.scp-table tbody td.scp-cell.scp-cat{text-align:left;font-weight:700;color:var(--ink);font-family:inherit;background:var(--accent-tint2);}
 table.scp-table tbody td.scp-cell.scp-total{font-weight:700;color:var(--ink);background:var(--accent-tint2);}
-/* % Amt column — each row's share of the grand total, sitting between Total and
-   the dimension column per explicit user instruction. Lighter weight than Total so
-   the absolute amount still reads as the primary figure. */
 table.scp-table tbody td.scp-cell.scp-pct{color:var(--muted);font-weight:600;background:var(--accent-tint2);}
 table.scp-table thead tr.scp-totals-row td.scp-pct{color:var(--ink-secondary);}
 table.scp-table tbody td.scp-cell.scp-sno{font-weight:600;}
-table.scp-table tbody td.scp-cell.scp-zero{color:#C7CCDA;}
+table.scp-table tbody td.scp-cell.scp-zero{color:#C7CCDA;background:transparent!important;}
 table.scp-table tbody tr:nth-child(even) td.scp-cell:not(.scp-cat):not(.scp-total):not(.scp-pct):not(.scp-sno){background:#FAFBFD;}
-table.scp-table tbody tr:hover td{filter:brightness(0.97);}
+table.scp-table tbody tr:hover td{filter:brightness(0.95);}
 
 /* ---------- INDIA MAP VIEW ---------- */
 .map-shell{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;flex:1;min-height:0;}

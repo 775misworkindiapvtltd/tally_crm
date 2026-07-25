@@ -165,12 +165,31 @@ function renderSalesCategoryPivot(){
       ${periods.map(p=>`<td class="scp-tot scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${fmtNum(periodGrandTotals[p.key]||0)}</td>`).join('')}
     </tr>`;
 
+  // Heatmap: compute max per period AND for the Total column, then shade each cell.
+  const maxTotal=Math.max(1,...sorted.map(r=>r.total));
+  const periodMaxes={};periods.forEach(p=>{periodMaxes[p.key]=Math.max(1,...sorted.map(r=>r.periods[p.key]||0));});
+  function heatBg_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal); // 0..1
+    // Gradient: white (#FFFFFF) → light blue (#DBE9FE) → strong blue (#2563EB)
+    let r,g,b;
+    if(t<=0.5){
+      const s=t*2; // 0..1 within first half
+      r=Math.round(255+(219-255)*s); g=Math.round(255+(233-255)*s); b=Math.round(255+(254-255)*s);
+    } else {
+      const s=(t-0.5)*2; // 0..1 within second half
+      r=Math.round(219+(37-219)*s); g=Math.round(233+(99-233)*s); b=Math.round(254+(235-254)*s);
+    }
+    const textColor=t>0.65?'#fff':'var(--ink)';
+    return `background:rgb(${r},${g},${b});color:${textColor};`;
+  }
+
   const body=sorted.length?sorted.map((r,idx)=>`<tr>
       <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
-      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;">${fmtNum(r.total)}</td>
+      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatBg_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
       <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
       <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
-      ${periods.map(p=>`<td class="scp-cell scp-period${!r.periods[p.key]?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${r.periods[p.key]?fmtNum(r.periods[p.key]):'—'}</td>`).join('')}
+      ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatBg_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
     </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
 
   // Layout (per explicit user instruction — positions numbered per screenshot):
