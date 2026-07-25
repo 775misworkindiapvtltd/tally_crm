@@ -528,4 +528,272 @@ function renderReports(){
     </div>`;
 }
 registerPage('reports',renderReports);
+
+// ============================= EXPENSE REPORT — LIST/REPORT PIVOT =============================
+function renderExpenseReportViewToggle_(){
+  const view=S.expenseReportView||'list';
+  return `<div class="view-toggle expense-report-view-toggle">
+      <button class="${view==='list'?'active':''}" data-action="expense-report-view" data-view="list">List</button>
+      <button class="${view==='report'?'active':''}" data-action="expense-report-view" data-view="report">Report</button>
+    </div>`;
+}
+function renderExpenseReport(){
+  const view=S.expenseReportView||'list';
+  return view==='report'?renderExpenseCategoryPivot():renderGrid('expense');
+}
+registerPage('expense',renderExpenseReport);
+
+function renderExpenseCategoryPivot(){
+  const mode=S.expenseCategoryMode||'month';
+  const dimension=S.expenseDimension||'group';
+  const dimMeta=EXPENSE_DIMENSION_META[dimension]||EXPENSE_DIMENSION_META.group;
+  const crossDim=dimension==='group'?'subGroup':'group';
+  const crossMeta=EXPENSE_DIMENSION_META[crossDim]||EXPENSE_DIMENSION_META.group;
+  const crossFilter=S.expenseCrossFilter||[];
+  const {periods,rows}=buildExpenseDimensionPivot_(mode,dimension,crossFilter.length?crossDim:null,crossFilter);
+  const sortKey=S.expenseCategorySort||'total',sortDir=S.expenseCategorySortDir===1?1:-1;
+  const sorted=rows.slice().sort((a,b)=>{
+    if(sortKey==='dim'){
+      const x=a.dimVal.toLowerCase(),y=b.dimVal.toLowerCase();
+      if(x<y)return -1*sortDir;if(x>y)return 1*sortDir;return 0;
+    }
+    if(sortKey==='pct'){ return (a.total-b.total)*sortDir; }
+    const x=sortKey==='total'?a.total:(a.periods[sortKey]||0);
+    const y=sortKey==='total'?b.total:(b.periods[sortKey]||0);
+    return (x-y)*sortDir;
+  });
+  const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+  const periodGrandTotals={};periods.forEach(p=>{periodGrandTotals[p.key]=rows.reduce((s,r)=>s+(r.periods[p.key]||0),0);});
+  const pctOf=t=>grandTotal?((t/grandTotal)*100).toFixed(1)+'%':'0.0%';
+
+  const customFYs=S.expenseCategoryCustomFYs||[];
+  const allFYs=availableFinancialYears();
+  const customFYLabel=customFYs.length?customFYs.map(k=>{const f=financialYearFromKey(k);return f?`${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)}`:k;}).join(', '):'Select Financial Year(s)';
+  const fyPickerBtn=`<div class="fy-multi expense-cat-range-multi">
+      <button type="button" class="fy-multi-btn" data-action="expense-cat-range-open">${esc(customFYLabel)} <span>▾</span></button>
+      ${S.expenseCategoryRangeOpen?`<div class="fy-menu expense-cat-range-menu">
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="expense-cat-fy-all" ${customFYs.length===allFYs.length?'checked':''}> <span>Select All</span></label></div>
+        ${allFYs.map(f=>`<div class="fy-option"><label><input type="checkbox" data-action="expense-cat-fy-toggle" data-key="${esc(f.key)}" ${customFYs.includes(f.key)?'checked':''}> <span>${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)} (Apr ${f.start.getFullYear()} – Mar ${f.end.getFullYear()})</span></label></div>`).join('')}
+      </div>`:''}
+    </div>`;
+  const modeBar=`<div class="view-toggle expense-cat-mode-toggle">
+      <button class="${mode==='month'?'active':''}" data-action="expense-cat-mode" data-mode="month">Monthly</button>
+      <button class="${mode==='year'?'active':''}" data-action="expense-cat-mode" data-mode="year">Yearly</button>
+      <button class="${mode==='custom'?'active':''}" data-action="expense-cat-mode" data-mode="custom">Custom Range</button>
+    </div>
+    ${fyPickerBtn}`;
+
+  const totW=S.expenseCategoryTotalWidth||130,pctW=S.expenseCategoryPctWidth||90,catW=S.expenseCategoryCatWidth||210,colW=S.expenseCategoryColWidth||110;
+  const snoW=52,leftTotal=snoW,leftPct=snoW+totW,leftCat=snoW+totW+pctW;
+  const sortArrow=k=>sortKey===k?(sortDir===1?'▲':'▼'):'↕';
+  const snoTh=`<th class="scp-th scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"><div class="scp-th-inner" style="justify-content:center;cursor:default;">S.No</div></th>`;
+  const totalTh=`<th class="scp-th scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;" data-action="expense-cat-sort" data-col="total">
+      <div class="scp-th-inner"><span>Total</span><span class="scp-sort-ic">${sortArrow('total')}</span></div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="total"></div>
+    </th>`;
+  const pctTh=`<th class="scp-th scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;" data-action="expense-cat-sort" data-col="pct">
+      <div class="scp-th-inner"><span>% Amt</span><span class="scp-sort-ic">${sortArrow('pct')}</span></div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="pct"></div>
+    </th>`;
+  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">
+      <div class="scp-th-inner scp-dim-inner">
+        <select class="scp-dim-select" data-action="expense-dimension-select" title="Group rows by">
+          ${Object.keys(EXPENSE_DIMENSION_META).map(k=>`<option value="${k}" ${dimension===k?'selected':''}>${esc(EXPENSE_DIMENSION_META[k].label)}</option>`).join('')}
+        </select>
+        <span class="scp-sort-ic" data-action="expense-cat-sort" data-col="dim" title="Sort">${sortArrow('dim')}</span>
+      </div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="category"></div>
+    </th>`;
+  const periodTh=periods.map(p=>`<th class="scp-th scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;" data-action="expense-cat-sort" data-col="${esc(p.key)}">
+      <div class="scp-th-inner"><span title="${esc(p.label)}">${esc(p.label)}</span><span class="scp-sort-ic">${sortArrow(p.key)}</span></div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="period"></div>
+    </th>`).join('');
+
+  const totalsRow=`<tr class="scp-totals-row">
+      <td class="scp-tot scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"></td>
+      <td class="scp-tot scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;">${fmtNum(grandTotal)}</td>
+      <td class="scp-tot scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">100.0%</td>
+      <td class="scp-tot scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">TOTAL</td>
+      ${periods.map(p=>`<td class="scp-tot scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${fmtNum(periodGrandTotals[p.key]||0)}</td>`).join('')}
+    </tr>`;
+
+  const maxTotal=Math.max(1,...sorted.map(r=>r.total));
+  const periodMaxes={};periods.forEach(p=>{periodMaxes[p.key]=Math.max(1,...sorted.map(r=>r.periods[p.key]||0));});
+  function heatPeriodExp_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal);
+    let r,g,b;
+    if(t<=0.5){const s=t*2;r=Math.round(240+(16-240)*s);g=Math.round(253+(185-253)*s);b=Math.round(244+(129-244)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(16+(6-16)*s);g=Math.round(185+(78-185)*s);b=Math.round(129+(59-129)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.55?'#fff':'#064E3B'};font-weight:700;`;
+  }
+  function heatTotalExp_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal);
+    let r,g,b;
+    if(t<=0.5){const s=t*2;r=Math.round(239+(37-239)*s);g=Math.round(246+(99-246)*s);b=Math.round(255+(235-255)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(37+(30-37)*s);g=Math.round(99+(58-99)*s);b=Math.round(235+(95-235)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.45?'#fff':'#1E3A5F'};font-weight:700;`;
+  }
+
+  const body=sorted.length?sorted.map((r,idx)=>`<tr>
+      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${idx+1}</td>
+      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatTotalExp_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
+      <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
+      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
+      ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatPeriodExp_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
+    </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No expense lines for the selected financial year(s)</div></div></td></tr>`;
+
+  const crossAllValues=expenseDimensionValues_(crossDim);
+  const crossSearch=(S.expenseCrossFilterSearch||'').toLowerCase();
+  const crossFiltered=crossSearch?crossAllValues.filter(v=>v.toLowerCase().includes(crossSearch)):crossAllValues;
+  const crossLabel=crossFilter.length?`${crossMeta.label}: ${crossFilter.length} selected`:`Filter by ${crossMeta.label}`;
+  const crossDropdown=`<div class="fy-multi expense-cross-filter-multi">
+      <button type="button" class="fy-multi-btn" data-action="expense-cross-open">${esc(crossLabel)} <span>▾</span></button>
+      ${S.expenseCrossFilterOpen?`<div class="fy-menu expense-cross-menu">
+        <input type="text" class="cross-filter-search" placeholder="Type to search ${crossMeta.label}…" data-action="expense-cross-search" value="${esc(S.expenseCrossFilterSearch||'')}">
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="expense-cross-all" ${crossFilter.length===crossAllValues.length?'checked':''}> <span>Select All (${crossAllValues.length})</span></label></div>
+        <div class="cross-filter-options">${crossFiltered.map(v=>`<div class="fy-option"><label><input type="checkbox" data-action="expense-cross-toggle" data-val="${esc(v)}" ${crossFilter.includes(v)?'checked':''}> <span>${esc(v)}</span></label></div>`).join('')}</div>
+        ${crossFilter.length?`<div class="cross-filter-clear"><button class="btn btn-ghost" data-action="expense-cross-clear" style="padding:4px 10px;font-size:10px;width:100%;">Clear All</button></div>`:''} 
+      </div>`:''}
+    </div>`;
+
+  const catToolbar=`<div class="dt-toolbar expense-cat-toolbar">
+      ${renderExpenseReportViewToggle_()}
+      ${modeBar}
+      ${crossDropdown}
+      <div class="report-switcher-right">
+        <span class="count">${rows.length} ${esc(dimMeta.plural)}</span>
+        <button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
+      </div>
+    </div>`;
+
+  return `${catToolbar}
+    <div class="dt-table-wrap expense-cat-wrap">
+      <div class="dt-scroll">
+        <table class="dt scp-table">
+          <thead>
+            ${totalsRow}
+            <tr>${snoTh}${totalTh}${pctTh}${catTh}${periodTh}</tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+// Event handlers for expense report
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='expense-report-view'){S.expenseReportView=el.getAttribute('data-view');render();return;}
+    if(a==='expense-cat-mode'){S.expenseCategoryMode=el.getAttribute('data-mode');render();return;}
+    if(a==='expense-cat-range-open'){S.expenseCategoryRangeOpen=!S.expenseCategoryRangeOpen;render();return;}
+    if(a==='expense-cat-fy-all'){
+      const allKeys=availableFinancialYears().map(f=>f.key);
+      S.expenseCategoryCustomFYs=S.expenseCategoryCustomFYs.length===allKeys.length?[]:allKeys.slice();
+      render();return;
+    }
+    if(a==='expense-cat-fy-toggle'){
+      const key=el.getAttribute('data-key');
+      const idx=S.expenseCategoryCustomFYs.indexOf(key);
+      if(idx===-1)S.expenseCategoryCustomFYs.push(key);else S.expenseCategoryCustomFYs.splice(idx,1);
+      render();return;
+    }
+    if(a==='expense-cross-open'){S.expenseCrossFilterOpen=!S.expenseCrossFilterOpen;S.expenseCrossFilterSearch='';render();return;}
+    if(a==='expense-cross-all'){
+      const crossDim=(S.expenseDimension||'group')==='group'?'subGroup':'group';
+      const allVals=expenseDimensionValues_(crossDim);
+      S.expenseCrossFilter=S.expenseCrossFilter.length===allVals.length?[]:allVals.slice();
+      render();return;
+    }
+    if(a==='expense-cross-toggle'){
+      const val=el.getAttribute('data-val');
+      const idx=S.expenseCrossFilter.indexOf(val);
+      if(idx===-1)S.expenseCrossFilter.push(val);else S.expenseCrossFilter.splice(idx,1);
+      render();return;
+    }
+    if(a==='expense-cross-clear'){S.expenseCrossFilter=[];render();return;}
+    if(a==='expense-cat-sort'){
+      if(expenseCatResizedRecently)return;
+      const col=el.getAttribute('data-col');
+      if(S.expenseCategorySort===col)S.expenseCategorySortDir*=-1;else{S.expenseCategorySort=col;S.expenseCategorySortDir=col==='dim'?1:-1;}
+      render();return;
+    }
+  }
+  if(S.expenseCategoryRangeOpen&&!e.target.closest('.expense-cat-range-multi')){S.expenseCategoryRangeOpen=false;render();}
+  if(S.expenseCrossFilterOpen&&!e.target.closest('.expense-cross-filter-multi')){S.expenseCrossFilterOpen=false;S.expenseCrossFilterSearch='';render();}
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.getAttribute('data-action')==='expense-dimension-select'){
+    const v=el.value;
+    if(EXPENSE_DIMENSION_META[v]){
+      S.expenseDimension=v;
+      S.expenseCrossFilter=[];S.expenseCrossFilterOpen=false;S.expenseCrossFilterSearch='';
+      render();
+    }
+  }
+});
+document.addEventListener('input',e=>{
+  const el=e.target,a=el.getAttribute('data-action');
+  if(a==='expense-cross-search'){
+    S.expenseCrossFilterSearch=el.value;
+    clearTimeout(S._expenseCrossSearchTimer);
+    S._expenseCrossSearchTimer=setTimeout(()=>{
+      const pos=el.selectionStart;
+      render();
+      const ag=document.querySelector('input[data-action="expense-cross-search"]');
+      if(ag){ag.focus();ag.setSelectionRange(pos,pos);}
+    },200);
+    return;
+  }
+});
+// Column resize for expense pivot
+let expenseCatResizeCtx=null;
+let expenseCatResizedRecently=false;
+document.addEventListener('mousedown',e=>{
+  const el=e.target.closest('[data-action="expense-cat-resize"]');if(!el)return;
+  const target=el.getAttribute('data-target');const th=el.closest('th');
+  expenseCatResizeCtx={target,startX:e.clientX,startW:th.getBoundingClientRect().width};
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('mousemove',e=>{
+  if(!expenseCatResizeCtx)return;
+  const nw=Math.max(70,Math.round(expenseCatResizeCtx.startW+(e.clientX-expenseCatResizeCtx.startX)));
+  const target=expenseCatResizeCtx.target;
+  if(target==='period'){
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-period').forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+  } else {
+    const selector=target==='total'?'.scp-total':target==='pct'?'.scp-pct':'.scp-cat';
+    document.querySelectorAll('.expense-cat-wrap .scp-table '+selector).forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+    const snoW=52;
+    const totEl=document.querySelector('.expense-cat-wrap .scp-table th.scp-total');
+    const pctEl=document.querySelector('.expense-cat-wrap .scp-table th.scp-pct');
+    const catEl=document.querySelector('.expense-cat-wrap .scp-table th.scp-cat');
+    const curTotW=totEl?totEl.getBoundingClientRect().width:(S.expenseCategoryTotalWidth||130);
+    const curPctW=pctEl?pctEl.getBoundingClientRect().width:(S.expenseCategoryPctWidth||90);
+    const leftTotal=snoW,leftPct=snoW+curTotW,leftCat=snoW+curTotW+curPctW;
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-total').forEach(cell=>{cell.style.left=leftTotal+'px';});
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-pct').forEach(cell=>{cell.style.left=leftPct+'px';});
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-cat').forEach(cell=>{cell.style.left=leftCat+'px';});
+  }
+});
+document.addEventListener('mouseup',()=>{
+  if(!expenseCatResizeCtx)return;
+  const targetClass=expenseCatResizeCtx.target==='total'?'scp-total':expenseCatResizeCtx.target==='pct'?'scp-pct':expenseCatResizeCtx.target==='category'?'scp-cat':'scp-period';
+  const el=document.querySelector('.expense-cat-wrap .scp-table th.'+targetClass);
+  const nw=el?el.getBoundingClientRect().width:null;
+  if(nw){
+    if(expenseCatResizeCtx.target==='total')S.expenseCategoryTotalWidth=Math.round(nw);
+    else if(expenseCatResizeCtx.target==='pct')S.expenseCategoryPctWidth=Math.round(nw);
+    else if(expenseCatResizeCtx.target==='category')S.expenseCategoryCatWidth=Math.round(nw);
+    else S.expenseCategoryColWidth=Math.round(nw);
+  }
+  expenseCatResizeCtx=null;
+  expenseCatResizedRecently=true;
+  setTimeout(()=>{expenseCatResizedRecently=false;},0);
+  render();
+});
 </script>

@@ -317,6 +317,21 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .sales-cat-toolbar .sales-cat-mode-toggle button{padding:4px 10px;font-size:10.5px;border-radius:4px;}
 .sales-cat-toolbar .sales-cat-range-multi{margin:0;flex:none;}
 .sales-cat-toolbar .sales-cat-range-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+/* Expense Report pivot toolbar — mirrors sales-cat-toolbar styling exactly */
+.expense-cat-toolbar{flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+.expense-report-view-toggle{padding:1px!important;gap:1px!important;margin:0!important;border-radius:6px!important;}
+.expense-report-view-toggle button{padding:4px 10px!important;font-size:10.5px!important;border-radius:4px!important;}
+.expense-cat-toolbar .expense-cat-mode-toggle{margin:0;flex:none;padding:1px;gap:1px;border-radius:6px;}
+.expense-cat-toolbar .expense-cat-mode-toggle button{padding:4px 10px;font-size:10.5px;border-radius:4px;}
+.expense-cat-toolbar .expense-cat-range-multi{margin:0;flex:none;}
+.expense-cat-toolbar .expense-cat-range-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+.expense-cross-filter-multi{flex:none;min-width:160px;}
+.expense-cross-filter-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+.expense-cross-menu{min-width:260px;max-height:350px;overflow:auto;}
+.expense-cat-range-multi{flex:0 1 240px;min-width:170px;}
+.expense-cat-range-menu{padding:12px;min-width:260px;}
+.expense-cat-wrap table.dt.scp-table{table-layout:fixed;}
+.dt-table-wrap.expense-cat-wrap{overflow:visible;}
 /* Cross-filter dropdown (Category filter when Party Name is the dimension, and vice
    versa) — searchable multi-select, same .fy-multi pattern as the FY picker, per
    explicit user instruction ("dono dropdown multiselect wale chahiye AND type bhi

@@ -119,6 +119,13 @@ let S = {
   // (Invoice To), or 'state'. Persisted below so "by default vo aayega jo maine
   // last select kiya tha" holds even across a fresh page load, not just this session.
   salesDimension:'category',
+  // Expense Report pivot — same concept as Sales Duration pivot but for EXPENSE data.
+  // Toggle between 'list' (plain grid) and 'report' (pivot table).
+  expenseReportView:'list', expenseCategoryMode:'month', expenseCategoryCustomFYs:[],
+  expenseCrossFilter:[],expenseCrossFilterOpen:false,expenseCrossFilterSearch:'',
+  expenseCategorySort:'total', expenseCategorySortDir:-1,
+  expenseCategoryColWidth:110, expenseCategoryTotalWidth:130, expenseCategoryCatWidth:210, expenseCategoryPctWidth:90,
+  expenseDimension:'group', expenseCategoryRangeOpen:false,
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}

@@ -1,0 +1,38 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Add List/Report toggle to the Expense page and implement a Duration-style pivot table for Expense Report view, mirroring the Sales Report Duration pivot exactly but sourcing data from EXPENSE rows with Group/SubGroup as dimensions.",
+  "status": "in_progress",
+  "steps": [
+    "1. In Common.html, add new state variables to the S object (after the salesDimension line, around line 102): expenseReportView:'list', expenseCategoryMode:'month', expenseCategoryCustomFYs:[], expenseCrossFilter:[], expenseCrossFilterOpen:false, expenseCrossFilterSearch:'', expenseCategorySort:'total', expenseCategorySortDir:-1, expenseCategoryColWidth:110, expenseCategoryTotalWidth:130, expenseCategoryCatWidth:210, expenseCategoryPctWidth:90, expenseDimension:'group', expenseCategoryRangeOpen:false",
+    "2. In Grids.html, add EXPENSE_DIMENSION_META (similar to SALES_DIMENSION_META) with: group:{label:'Group',plural:'Groups'}, subGroup:{label:'Sub Group',plural:'Sub Groups'}",
+    "3. In Grids.html, add expenseDimensionRawValue_(row, dimension) function: if dimension==='subGroup' return row.subGroup; else return row.group;",
+    "4. In Grids.html, add expenseDimensionValues_(dimension) function (same pattern as salesDimensionValues_ but uses dataForFY('expense') and expenseDimensionRawValue_)",
+    "5. In Grids.html, add expenseCategoryPeriods_(mode) function (same pattern as salesCategoryPeriods_ but uses S.expenseCategoryCustomFYs instead of S.salesCategoryCustomFYs)",
+    "6. In Grids.html, add buildExpenseDimensionPivot_(mode, dimension, crossFilterDim, crossFilterValues) function - same logic as buildSalesDimensionPivot_ but: uses dataForFY('expense') instead of dataForFY('sales'), uses expenseDimensionRawValue_ instead of salesDimensionRawValue_, uses expenseCategoryPeriods_ instead of salesCategoryPeriods_, and sums 'amount' field (Number(r.amount)||0)",
+    "7. In Finance.html, add renderExpenseReportViewToggle_() function - same pattern as renderSalesReportViewToggle_() but uses S.expenseReportView and data-action='expense-report-view' with buttons labeled 'List' and 'Report'",
+    "8. In Finance.html, add renderExpenseReport() function that checks S.expenseReportView: if 'report' call renderExpenseCategoryPivot(), else call renderGrid('expense')",
+    "9. In Finance.html, add renderExpenseCategoryPivot() function - replicate renderSalesCategoryPivot() exactly but: use S.expenseCategoryMode, S.expenseDimension, EXPENSE_DIMENSION_META, S.expenseCrossFilter, buildExpenseDimensionPivot_(), S.expenseCategorySort/SortDir, S.expenseCategoryCustomFYs, S.expenseCategoryRangeOpen, S.expenseCategory*Width. Cross-filter logic: if dimension is 'group' show SubGroup filter above, if 'subGroup' show Group filter. Use expenseDimensionValues_ for dropdown options. The toolbar should show List/Report toggle (renderExpenseReportViewToggle_()) + Monthly/Yearly/Custom Range mode toggle + FY picker + cross-filter dropdown + row count + Refresh button. Use CSS classes: expense-cat-toolbar (will alias to sales-cat-toolbar styling), expense-cat-wrap (will alias to sales-cat-wrap). Table uses same .scp-* classes for cells.",
+    "10. In Finance.html, replace registerPage for expense: add registerPage('expense', renderExpenseReport) AFTER the renderExpenseReport function. This replaces the GRID_DEFS[S.page] fallback that previously rendered the plain grid.",
+    "11. In Finance.html, add event handlers for expense report actions - add a NEW click event listener block (or extend the existing one near line 184) handling: 'expense-report-view' (set S.expenseReportView), 'expense-cat-mode' (set S.expenseCategoryMode), 'expense-cat-range-open' (toggle S.expenseCategoryRangeOpen), 'expense-cat-fy-all' / 'expense-cat-fy-toggle' (manage S.expenseCategoryCustomFYs), 'expense-cross-open' / 'expense-cross-all' / 'expense-cross-toggle' / 'expense-cross-clear' (manage S.expenseCrossFilter), 'expense-cat-sort' (manage S.expenseCategorySort/Dir), 'expense-dimension-select' change handler",
+    "12. In Finance.html, add column resize handlers for expense pivot - same mousedown/mousemove/mouseup pattern as the sales pivot resize but using expenseCatResizeCtx / expenseCatResizedRecently and writing to S.expenseCategory*Width. Target selectors should scope to '.expense-cat-wrap .scp-table' to avoid conflicts with sales pivot.",
+    "13. In Finance.html, add input handler for 'expense-cross-search' (same debounced pattern as sales-cross-search but writing to S.expenseCrossFilterSearch)",
+    "14. In Finance.html, add click-away close handlers for S.expenseCategoryRangeOpen and S.expenseCrossFilterOpen (close when clicking outside .expense-cat-range-multi / .expense-cross-filter-multi)",
+    "15. In CSS.html, add expense pivot toolbar styles: .expense-cat-toolbar copies .sales-cat-toolbar rules. .expense-cat-toolbar .expense-cat-mode-toggle copies .sales-cat-toolbar .sales-cat-mode-toggle. .expense-cat-toolbar .expense-cat-range-multi copies .sales-cat-toolbar .sales-cat-range-multi rules. .expense-cat-wrap copies .sales-cat-wrap rules (table-layout:fixed, overflow:visible). Also add .expense-report-view-toggle with same styles as .sales-report-view-toggle.",
+    "16. In Grids.html, update GRID_DEFS.expense to add reportTabs that returns renderExpenseReportViewToggle_() - same pattern as salesReport's reportTabs: reportTabs:()=>(typeof renderExpenseReportViewToggle_==='function'?renderExpenseReportViewToggle_():'')"
+  ],
+  "acceptance_criteria": [
+    "Parse check passes for all .html files (no syntax errors)",
+    "The expense page (S.page==='expense') now shows List/Report toggle buttons with same compact styling as Sales/Duration toggle",
+    "Clicking 'List' shows the original expense grid (unchanged behavior)",
+    "Clicking 'Report' shows a Duration-style pivot table with: Monthly/Yearly/Custom Range mode, FY multi-select, dimension dropdown (Group/SubGroup), cross-filter dropdown, Total/% Amt/dimension/period columns, heatmap coloring, frozen left columns, sortable columns, resizable columns (period cols resize together)",
+    "All expense data comes from dataForFY('expense') and sums the 'amount' field",
+    "Cross-filter works: when dimension is Group, SubGroup filter shows above; when SubGroup, Group filter shows above"
+  ],
+  "verification": [
+    "Run the parse check command to confirm all HTML files have valid JavaScript syntax",
+    "Run CSS brace-matching check to confirm CSS.html is valid"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
