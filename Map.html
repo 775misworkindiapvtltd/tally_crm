@@ -135,6 +135,71 @@ function fmtCompactINR_(n){
   return fmtINR(n);
 }
 
+/* ============================= MAP KPI CARDS ============================= */
+function renderMapKpiCards_(byState){
+  const stateRows=Object.values(byState).sort((a,b)=>b.amount-a.amount);
+  const totalSales=stateRows.reduce((s,r)=>s+r.amount,0);
+  const statesWithSales=stateRows.filter(r=>r.amount>0).length;
+  const topState=stateRows.length?stateRows[0]:null;
+  const avgPerState=statesWithSales?totalSales/statesWithSales:0;
+  return `<div class="map-kpi-strip">
+    <div class="map-kpi-card"><div class="card-icon c-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div class="map-kpi-body"><span class="card-label">Total Sales</span><span class="card-value">${fmtINR(totalSales)}</span></div></div>
+    <div class="map-kpi-card"><div class="card-icon c-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></div><div class="map-kpi-body"><span class="card-label">States with Sales</span><span class="card-value">${statesWithSales}</span></div></div>
+    <div class="map-kpi-card"><div class="card-icon c-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="map-kpi-body"><span class="card-label">Top State</span><span class="card-value">${topState?esc(topState.state):'--'}</span><span class="card-sub">${topState?fmtINR(topState.amount):''}</span></div></div>
+    <div class="map-kpi-card"><div class="card-icon c-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></div><div class="map-kpi-body"><span class="card-label">Avg per State</span><span class="card-value">${fmtINR(avgPerState)}</span></div></div>
+  </div>`;
+}
+
+/* ============================= TOP CUSTOMERS PER STATE ============================= */
+function topCustomersForState_(stateName){
+  const rows=dataForFY('sales');
+  const customers={};
+  rows.forEach(r=>{
+    const raw=String(r.state||'').trim(); if(!raw)return;
+    const canon=normalizeStateName_(raw);
+    if(canon!==stateName)return;
+    const name=String(r.invoiceTo||'').trim(); if(!name)return;
+    const key=name.toLowerCase();
+    if(!customers[key])customers[key]={name:name,amount:0,invoices:0};
+    customers[key].amount+=Number(r.amount)||0;
+    customers[key].invoices++;
+  });
+  return Object.values(customers).sort((a,b)=>b.amount-a.amount).slice(0,5);
+}
+
+/* ============================= CITY SORTABLE TABLE ============================= */
+// S.map.citySortCol: 'city'|'amount'|'invoices'|'share', S.map.citySortDir: 1|-1
+function renderCityTable_(cityRows, stateTotal){
+  if(!S.map.citySortCol) S.map.citySortCol='amount';
+  if(!S.map.citySortDir) S.map.citySortDir=-1;
+  const col=S.map.citySortCol, dir=S.map.citySortDir;
+  const sorted=cityRows.slice().sort((a,b)=>{
+    if(col==='city') return dir*a.city.localeCompare(b.city);
+    if(col==='share') return dir*((a.amount/(stateTotal||1))-(b.amount/(stateTotal||1)));
+    return dir*((a[col]||0)-(b[col]||0));
+  });
+  const arrow=d=>d===1?'▲':'▼';
+  const thClass=k=>col===k?'map-th-active':'';
+  return `<div class="map-city-table-wrap"><table class="map-city-table">
+    <thead><tr>
+      <th class="${thClass('city')}" data-action="map-city-sort" data-col="city">City ${col==='city'?arrow(dir):''}</th>
+      <th class="${thClass('amount')} num" data-action="map-city-sort" data-col="amount">Amount ${col==='amount'?arrow(dir):''}</th>
+      <th class="${thClass('invoices')} num" data-action="map-city-sort" data-col="invoices">Invoices ${col==='invoices'?arrow(dir):''}</th>
+      <th class="${thClass('share')} num" data-action="map-city-sort" data-col="share">% Share ${col==='share'?arrow(dir):''}</th>
+    </tr></thead>
+    <tbody>${sorted.map(c=>{
+      const pct=stateTotal?(c.amount/stateTotal*100):0;
+      return `<tr><td>${esc(c.city)}</td><td class="num">${fmtINR(c.amount)}</td><td class="num">${c.invoices}</td><td class="num">${pct.toFixed(1)}%</td></tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+/* ============================= SEARCH STATE ============================= */
+function renderMapSearchBox_(){
+  const q=S.map.searchQuery||'';
+  return `<div class="map-search-box"><input type="text" class="map-search-input" placeholder="Search state..." value="${esc(q)}" data-action="map-search-input" /><span class="map-search-icon">🔍</span></div>`;
+}
+
 /* ============================= RENDER ============================= */
 function renderMapView(){
   const byState=salesByState_();
@@ -143,22 +208,29 @@ function renderMapView(){
   const selState=S.map.selectedState;
   const selData=selState?byState[selState]:null;
   const cityRows=selData?cityRowsForState_(selData):[];
+  const topCustomers=selState?topCustomersForState_(selState):[];
+
+  // Filter states by search query
+  const searchQ=(S.map.searchQuery||'').toLowerCase();
+  const filteredStates=searchQ?stateRows.filter(s=>s.state.toLowerCase().includes(searchQ)):stateRows;
 
   return `
   ${renderFilterBar()}
+  ${renderMapKpiCards_(byState)}
   <div class="map-shell">
     <div class="map-panel">
       <div class="map-toolbar">
-        <div class="map-title">${selState?esc(selState):'India — State-wise Sales'}</div>
+        <div class="map-title">${selState?esc(selState):'India Sales Map'}</div>
+        ${renderMapSearchBox_()}
         <div class="map-zoom-controls">
-          ${selState?`<button class="btn btn-ghost" data-action="map-back">← All India</button>`:''}
+          ${selState?`<button class="btn btn-ghost" data-action="map-back">\u2190 All India</button>`:''}
           <button class="btn btn-ghost" data-action="map-zoom" data-dir="in" title="Zoom in">+</button>
-          <button class="btn btn-ghost" data-action="map-zoom" data-dir="out" title="Zoom out">−</button>
-          <button class="btn btn-ghost" data-action="map-zoom" data-dir="reset" title="Reset zoom">⤾</button>
+          <button class="btn btn-ghost" data-action="map-zoom" data-dir="out" title="Zoom out">\u2212</button>
+          <button class="btn btn-ghost" data-action="map-zoom" data-dir="reset" title="Reset zoom">\u2934</button>
         </div>
       </div>
       <div class="map-canvas-wrap" id="mapCanvasWrap">
-        <div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map…</div></div>
+        <div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading map\u2026</div></div>
       </div>
       <div class="map-legend">
         <span>Low</span><div class="map-legend-bar"></div><span>High</span>
@@ -169,11 +241,14 @@ function renderMapView(){
       <div class="panel-title" style="background:transparent;border:0;padding:0 0 10px;">${selState?`Cities in ${esc(selState)}`:'Top States by Sales'}</div>
       <div class="map-list">
         ${selState?
-          (cityRows.length?cityRows.map(c=>`<div class="map-list-row"><div class="mlr-name">${esc(c.city)}</div><div class="mlr-track"><div class="mlr-fill" style="width:${Math.max(4,c.amount/Math.max(1,cityRows[0].amount)*100)}%;"></div></div><div class="mlr-val">${fmtINR(c.amount)}</div></div>`).join(''):`<div class="empty-state"><div class="big">No city data</div>Is state ke liye SALES sheet mein city/district column nahi mila.</div>`)
+          (cityRows.length?renderCityTable_(cityRows, selData.amount):`<div class="empty-state"><div class="big">No city data</div>Is state ke liye SALES sheet mein city/district column nahi mila.</div>`)
           :
-          (stateRows.length?stateRows.map(s=>`<div class="map-list-row" data-action="map-select-state" data-state="${esc(s.state)}"><div class="mlr-name">${esc(s.state)}</div><div class="mlr-track"><div class="mlr-fill" style="width:${Math.max(4,s.amount/totalAmt*100)}%;"></div></div><div class="mlr-val">${fmtINR(s.amount)}</div></div>`).join(''):`<div class="empty-state"><div class="big">No state data</div>SALES sheet mein State column nahi mila ya khaali hai.</div>`)
+          (filteredStates.length?filteredStates.map(s=>`<div class="map-list-row" data-action="map-select-state" data-state="${esc(s.state)}"><div class="mlr-name">${esc(s.state)}</div><div class="mlr-track"><div class="mlr-fill" style="width:${Math.max(4,s.amount/totalAmt*100)}%;"></div></div><div class="mlr-val">${fmtINR(s.amount)}</div></div>`).join(''):`<div class="empty-state"><div class="big">${searchQ?'No matching states':'No state data'}</div>${searchQ?'Try a different search term.':'SALES sheet mein State column nahi mila ya khaali hai.'}</div>`)
         }
       </div>
+      ${selState&&topCustomers.length?`
+      <div class="panel-title" style="background:transparent;border:0;padding:10px 0 6px;border-top:1px solid var(--line-light);margin-top:10px;">Top Customers in ${esc(selState)}</div>
+      <div class="map-customers-list">${topCustomers.map((c,i)=>`<div class="map-cust-row"><span class="map-cust-rank">${i+1}</span><span class="map-cust-name" title="${esc(c.name)}">${esc(c.name)}</span><span class="map-cust-amt">${fmtINR(c.amount)}</span><span class="map-cust-inv">${c.invoices} inv</span></div>`).join('')}</div>`:''}
     </div>
   </div>`;
 }
@@ -318,7 +393,11 @@ function drawIndiaMap_(gj){
     const data=byState[name];
     const d=geoPathD_(f.geometry,project);
     const isSel=name===selState;
-    return `<path d="${d}" fill="${colorFor(data?data.amount:0)}" stroke="${isSel?'#111729':'#ffffff'}" stroke-width="${isSel?2:1}" data-action="map-select-state" data-state="${esc(name)}" class="map-state-path"><title>${esc(name)}${data?': '+fmtINR(data.amount):': No sales data'}</title></path>`;
+    const searchQ=(S.map.searchQuery||'').toLowerCase();
+    const isSearchMatch=searchQ&&name.toLowerCase().includes(searchQ);
+    const strokeColor=isSel?'#111729':isSearchMatch?'#F08A1D':'#ffffff';
+    const strokeW=isSel?2:isSearchMatch?2.5:1;
+    return `<path d="${d}" fill="${colorFor(data?data.amount:0)}" stroke="${strokeColor}" stroke-width="${strokeW}" data-action="map-select-state" data-state="${esc(name)}" class="map-state-path${isSearchMatch?' map-search-highlight':''}"><title>${esc(name)}${data?': '+fmtINR(data.amount):': No sales data'}</title></path>`;
   }).join('');
 
   // Location pin + total-sales badge markers. All-India view: one pin per state
@@ -359,10 +438,16 @@ document.addEventListener('click',e=>{
   const el=e.target.closest('[data-action]'); if(!el)return;
   const a=el.getAttribute('data-action');
   if(a==='map-select-state'){
-    S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;render();return;
+    S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;S.map.citySortCol='amount';S.map.citySortDir=-1;render();return;
   }
   if(a==='map-back'){ S.map.selectedState='';S.map.zoom=1;render();return; }
   if(a==='map-retry'){ retryIndiaMap();return; }
+  if(a==='map-city-sort'){
+    const col=el.getAttribute('data-col');
+    if(S.map.citySortCol===col) S.map.citySortDir=(S.map.citySortDir||(-1))*-1;
+    else { S.map.citySortCol=col; S.map.citySortDir=col==='city'?1:-1; }
+    render();return;
+  }
   if(a==='map-zoom'){
     const dir=el.getAttribute('data-dir');
     if(dir==='in')S.map.zoom=Math.min(3,(S.map.zoom||1)+0.25);
@@ -370,6 +455,13 @@ document.addEventListener('click',e=>{
     else S.map.zoom=1;
     const svg=document.querySelector('.india-map-svg');
     if(svg){ svg.style.transform=`scale(${S.map.zoom})`; return; }
+    render();
+  }
+});
+// Search state input handler (uses input event, not click)
+document.addEventListener('input',e=>{
+  if(e.target.classList.contains('map-search-input')){
+    S.map.searchQuery=e.target.value;
     render();
   }
 });
