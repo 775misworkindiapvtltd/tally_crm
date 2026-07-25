@@ -317,7 +317,7 @@ function gridPositions_(n,x0,y0,x1,y1){
   if(n<=0)return [];
   const cols=Math.max(1,Math.ceil(Math.sqrt(n)));
   const rows=Math.max(1,Math.ceil(n/cols));
-  const padX=(x1-x0)*0.28, padY=(y1-y0)*0.28;
+  const padX=(x1-x0)*0.35, padY=(y1-y0)*0.35;
   const gx0=x0+padX, gx1=x1-padX, gy0=y0+padY, gy1=y1-padY;
   const stepX=cols>1?(gx1-gx0)/(cols-1):0, stepY=rows>1?(gy1-gy0)/(rows-1):0;
   const pts=[];
@@ -328,6 +328,24 @@ function gridPositions_(n,x0,y0,x1,y1){
   return pts;
 }
 
+// City marker (state drill-down) — shows amount badge on top, city name below
+// the pin in a readable label. More visually attractive than the state marker.
+function cityMarkerSvg_(x,y,amount,cityName){
+  const label=fmtCompactINR_(amount);
+  const labelW=Math.max(42,label.length*6.6+16), labelH=18, r=7;
+  const nameLabel=String(cityName||'').length>18?cityName.slice(0,16)+'…':cityName;
+  const nameW=Math.max(40,nameLabel.length*5.5+12);
+  return `<g class="map-marker map-city-marker">
+    <rect x="${(x-labelW/2).toFixed(1)}" y="${(y-r-labelH-4).toFixed(1)}" width="${labelW.toFixed(1)}" height="${labelH}" rx="6" fill="#065F46" opacity="0.94"></rect>
+    <text x="${x.toFixed(1)}" y="${(y-r-labelH-4+labelH/2+3.8).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ffffff" font-family="'JetBrains Mono',monospace">${esc(label)}</text>
+    <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="#10B981" stroke="#ffffff" stroke-width="2.5"></circle>
+    <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#ffffff"></circle>
+    <rect x="${(x-nameW/2).toFixed(1)}" y="${(y+r+3).toFixed(1)}" width="${nameW.toFixed(1)}" height="14" rx="4" fill="#ffffff" stroke="#D1D5DB" stroke-width="0.5" opacity="0.95"></rect>
+    <text x="${x.toFixed(1)}" y="${(y+r+3+10.5).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="#065F46" font-family="'Inter',sans-serif">${esc(nameLabel)}</text>
+    <title>${esc(cityName)}: ${fmtINR(amount)}</title>
+  </g>`;
+}
+
 // One "location pin + amount badge" marker. State markers are clickable (drill into
 // that state's cities, same as clicking the shape); city markers are display-only
 // since there's no further drill-down level.
@@ -335,11 +353,16 @@ function markerSvg_(x,y,amount,name,clickable,colorHex){
   const label=fmtCompactINR_(amount);
   const labelW=Math.max(38,label.length*6.4+14), labelH=17, r=8.5;
   const clickAttr=clickable?`data-action="map-select-state" data-state="${esc(name)}"`:'';
+  // Compact state name (max 12 chars) shown below the pin
+  const shortName=String(name||'').length>12?name.slice(0,10)+'…':name;
+  const nameW=Math.max(36,shortName.length*5.2+10);
   return `<g class="map-marker" ${clickAttr} style="cursor:${clickable?'pointer':'default'};">
     <rect x="${(x-labelW/2).toFixed(1)}" y="${(y-r-labelH-3).toFixed(1)}" width="${labelW.toFixed(1)}" height="${labelH}" rx="5" fill="#111729" opacity="0.92"></rect>
     <text x="${x.toFixed(1)}" y="${(y-r-labelH-3+labelH/2+3.4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ffffff" font-family="'JetBrains Mono',monospace">${esc(label)}</text>
     <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${colorHex}" stroke="#ffffff" stroke-width="2"></circle>
     <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#ffffff"></circle>
+    <rect x="${(x-nameW/2).toFixed(1)}" y="${(y+r+2).toFixed(1)}" width="${nameW.toFixed(1)}" height="12" rx="3" fill="#ffffff" stroke="#E5E7EB" stroke-width="0.5" opacity="0.9"></rect>
+    <text x="${x.toFixed(1)}" y="${(y+r+2+9).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="600" fill="#1E3A5F" font-family="'Inter',sans-serif">${esc(shortName)}</text>
     <title>${esc(name)}: ${fmtINR(amount)}</title>
   </g>`;
 }
@@ -419,11 +442,15 @@ function drawIndiaMap_(gj){
   }else{
     const selData=byState[selState];
     const cityRows=selData?cityRowsForState_(selData):[];
-    const shown=cityRows.slice(0,8); // top 8 by amount; rest visible in side table
+    const shown=cityRows.slice(0,6); // top 6 by amount; rest visible in side table
     if(shown.length){
-      const topLeft=project(vb.minX,vb.maxY), bottomRight=project(vb.maxX,vb.minY);
-      const pts=gridPositions_(shown.length,topLeft[0],topLeft[1],bottomRight[0],bottomRight[1]);
-      markers=shown.map((c,i)=>markerSvg_(pts[i][0],pts[i][1],c.amount,c.city,false,'#16A34A')).join('');
+      // Use the ACTUAL state feature's bounds (not the padded viewBox) so pins
+      // stay INSIDE the state shape even for irregular states like UP.
+      const feat=gj.features.find(f=>{const p=f.properties||{};return (p.st_nm||p.ST_NM||p.NAME_1||p.name||p.State_Name||'')===selState;});
+      const stateBounds=feat?geometryBounds_(feat.geometry):vb;
+      const tl=project(stateBounds.minX,stateBounds.maxY), br=project(stateBounds.maxX,stateBounds.minY);
+      const pts=gridPositions_(shown.length,tl[0],tl[1],br[0],br[1]);
+      markers=shown.map((c,i)=>cityMarkerSvg_(pts[i][0],pts[i][1],c.amount,c.city)).join('');
     }
   }
 
