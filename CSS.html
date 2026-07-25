@@ -151,6 +151,11 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
 .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4C5FE0);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
 .content{padding:6px 8px 12px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto;overscroll-behavior-x:none;}
+/* Receipt List prototype owns the full remaining viewport. The page itself never
+   scrolls and there is no bottom padding/background strip; only its row viewport
+   scrolls, while its pagination remains visible at the physical bottom. */
+.content.page-receipt{overflow:hidden;padding-bottom:0;}
+.content.page-receipt .content-zoom{flex:none;overflow:hidden;}
 /* .content-zoom: the actual zoomed element, sized to compensate for CSS `zoom`
    (see renderShell() in Common.html) so it always visually fills the whole of
    .content regardless of the A-/A/A+ text-size level — this is what removes the
@@ -168,6 +173,8 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-fontsize button{border:none;background:transparent;cursor:pointer;padding:5px 8px;border-radius:4px;font-size:11px;font-weight:700;color:var(--ink-secondary);transition:all .12s;line-height:1;font-family:'Inter',system-ui,sans-serif;}
 .topbar-fontsize button:hover{background:var(--accent-tint);color:var(--accent-dark);}
 .topbar-fontsize button.active{background:var(--accent);color:#fff;}
+.topbar-fontsize button:disabled{opacity:.35;cursor:default;}
+.topbar-fontsize button:disabled:hover{background:transparent;color:var(--ink-secondary);}
 /* Receivable/Payable Ageing switch — moved back OUT of the topbar and into the
    page body per explicit user instruction (renders as its own row ABOVE the All
    Data/Ageing Wise mode tabs — see .ageing-kind-tabs below, and kindTabs in
@@ -709,6 +716,21 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .recv-dashboard-table .dt-pagination{padding:7px 10px;font-size:11px;}
 .recv-dashboard-table .dt-pagination select,.recv-dashboard-table .dt-pagination .nav button{font-size:11px;padding:4px 8px;}
 .dt-scroll{flex:1;overflow:auto;min-height:0;max-height:calc(100vh - 180px);overscroll-behavior-x:none;}
+/* ---------- RECEIPT LIST VIEWPORT-FIT PROTOTYPE ----------
+   This shell is deliberately scoped to Receipt List only. It consumes the complete
+   zoom-compensated content height, leaves the toolbar fixed, and allocates every
+   remaining pixel to one bordered table panel. */
+.receipt-grid-shell{display:flex;flex-direction:column;flex:1;height:100%;min-height:0;overflow:hidden;}
+.receipt-grid-shell .dt-toolbar{flex:none;}
+.receipt-grid-table-wrap{display:flex;flex:1;min-height:0;border-radius:10px 10px 0 0;overflow:hidden;}
+.receipt-grid-table-wrap>.dt-scroll{flex:1;min-height:0;max-height:none;overflow:auto;background:var(--surface);}
+.receipt-grid-table-wrap>.dt-pagination{flex:none;margin-top:0;}
+.receipt-reset-filters{padding:5px 12px!important;font-size:11.5px!important;}
+.receipt-reset-filters:disabled{opacity:.42;cursor:default;}
+/* Applied filters must be obvious without reopening each header control. */
+table.dt thead th.filter-active{background:#2458B8;box-shadow:inset 0 -3px #67E8F9;}
+table.dt thead th.filter-active .search-ic{color:#FFFFFF;}
+
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
 table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}
 table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;gap:5px;position:relative;min-height:36px;}
@@ -853,12 +875,22 @@ html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!importan
    chahiye"). */
 .dt-pagination{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:none;margin-top:auto;background:var(--surface);border-top:1px solid var(--line);padding:7px 14px;font-size:11.5px;color:var(--muted);font-weight:500;}
 .dt-pagination .pp{display:flex;align-items:center;gap:8px;}
-.dt-pagination select{padding:5px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;}
-.dt-pagination .nav{display:flex;align-items:center;gap:4px;margin-left:auto;}
+.dt-pagination .pp label{white-space:nowrap;}
+.dt-pagination select{padding:5px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;color:var(--ink);}
+.dt-pagination .page-range{white-space:nowrap;}
+.dt-pagination .nav{display:flex;flex:none;align-items:center;gap:4px;margin-left:auto;padding:0;overflow:visible;}
 .dt-pagination .nav button{border:1.5px solid var(--line);background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:600;color:var(--ink-secondary);font-size:12px;transition:all .12s;}
 .dt-pagination .nav button:disabled{opacity:.35;cursor:default;}
 .dt-pagination .nav button:not(:disabled):hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
 .dt-pagination .pageinfo{font-weight:600;color:var(--ink-secondary);white-space:nowrap;}
+/* Compact professional footer for Receipt List: page size and range stay left;
+   navigation owns the far-right corner. Fixed control dimensions prevent the
+   footer from wasting vertical space at any content zoom. */
+.receipt-pagination{min-height:36px;padding:3px 10px;gap:14px;border-top:1px solid var(--line);}
+.receipt-pagination select{height:28px;padding:2px 24px 2px 8px;font-size:11px;}
+.receipt-pagination .nav{gap:3px;}
+.receipt-pagination .nav button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-radius:6px;font-size:13px;line-height:1;}
+.receipt-pagination .pageinfo{min-width:58px;text-align:center;font-size:11px;}
 
 /* ---------- MOBILE CARD LIST (alt view of a grid on small screens) ---------- */
 .mcard-list{display:none;flex-direction:column;gap:10px;}
@@ -1016,6 +1048,17 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
   .mcard-list{display:flex;}
   .dt-pagination{padding:8px 10px;justify-content:space-between;}
   .dt-pagination .pp{display:none;}
+  /* Receipt keeps the same bottom-anchored navigation on narrow screens. Its cards
+     become the sole scroll region while the desktop table viewport is hidden. */
+  .receipt-grid-shell{overflow:hidden;}
+  .receipt-grid-table-wrap{display:flex;order:3;flex:none;border-radius:0;}
+  .receipt-grid-table-wrap>.dt-scroll{display:none;}
+  .receipt-mcard-list{order:2;flex:1;min-height:0;overflow:auto;padding-bottom:6px;}
+  .receipt-pagination{width:100%;padding:4px 8px;gap:8px;}
+  .receipt-pagination .pp{display:flex;}
+  .receipt-pagination .pp label{display:none;}
+  .receipt-pagination .page-range{font-size:10px;}
+  .receipt-pagination .nav{margin-left:auto;}
 
   .ledger-shell{flex-direction:column;}
   .ledger-party-list{width:100%;max-height:220px;}

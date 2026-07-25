@@ -9,19 +9,20 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-24.1 (zoom grey-gap fix, pagination always at bottom, ageing tab order, ledger PDF freeze fix)";
+const APP_BUILD = "2026-07-24.2 (Receipt List viewport-fit prototype, compact pagination, incremental text scaling)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
-// Text size presets shown top-right (A-/A/A+/A++), applied to the main content area
-// (tables/panels) via CSS zoom — 100 ("A", normal website font) is the default the
-// FIRST time the app opens, since normal size reads best in dense tables per explicit
-// user instruction. The chosen size is remembered (localStorage) for every later visit.
-// A++ (130%) preset removed per explicit user instruction ("remove a++ font
-// size") — only three sizes remain now. Any browser that still has 130 saved in
-// localStorage from before simply falls through to the existing "unrecognised
-// preset -> fall back to A (100%)" guard below, so no separate migration is needed.
-const FONT_SIZE_OPTIONS = [90,100,115];
-const FONT_SIZE_LABELS = {90:'A-',100:'A',115:'A+'};
+// Repeatable content-size controls. A-/A+ move one 5% step on every click while
+// A always returns to 100%. The bounded range prevents either unreadably small
+// content or a zoom level too large for the fixed application chrome.
+const FONT_SIZE_MIN = 80;
+const FONT_SIZE_MAX = 140;
+const FONT_SIZE_STEP = 5;
+const FONT_SIZE_CONTROLS = [
+  {label:'A-',command:'down'},
+  {label:'A',command:'reset'},
+  {label:'A+',command:'up'}
+];
 
 /* ============================= STATE ============================= */
 // highlightedRowKey: the single row (matched via def.rowKeyFn) that should stay
@@ -121,10 +122,11 @@ let S = {
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
-// Text size: only restore a value that's still one of the current presets — if a
-// user's browser has a stray value from an older/removed preset, silently fall back
-// to the "A" (100%, normal) default rather than applying an unrecognised size.
-try{ const fs=parseInt(localStorage.getItem('tally_font_size'),10); if(FONT_SIZE_OPTIONS.indexOf(fs)!==-1){S.fontSize=fs;} }catch(e){}
+// Restore every valid incremental size, including values reached by repeated clicks.
+try{
+  const fs=parseInt(localStorage.getItem('tally_font_size'),10);
+  if(Number.isFinite(fs))S.fontSize=Math.min(FONT_SIZE_MAX,Math.max(FONT_SIZE_MIN,fs));
+}catch(e){}
 try{ const dim=localStorage.getItem('tally_sales_dimension'); if(dim==='category'||dim==='partyName'||dim==='state'){S.salesDimension=dim;} }catch(e){}
 // Remembered login session id — see establishSession_()/loadAll() below. This lets a
 // signed-in user auto-resume instantly if the page ever gets reloaded unintentionally
@@ -668,15 +670,19 @@ function renderShell(inner){
           ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
         </div>
         <div class="topbar-right">
-          <div class="topbar-fontsize" role="group" aria-label="Text size">
-            ${FONT_SIZE_OPTIONS.map(fs=>`<button class="${S.fontSize===fs?'active':''}" data-action="set-fontsize" data-size="${fs}" title="Text size ${FONT_SIZE_LABELS[fs]}">${esc(FONT_SIZE_LABELS[fs])}</button>`).join('')}
+          <div class="topbar-fontsize" role="group" aria-label="Content size">
+            ${FONT_SIZE_CONTROLS.map(control=>{
+              const active=control.command==='reset'?S.fontSize===100:(control.command==='down'?S.fontSize<100:S.fontSize>100);
+              const disabled=control.command==='down'?S.fontSize<=FONT_SIZE_MIN:(control.command==='up'?S.fontSize>=FONT_SIZE_MAX:false);
+              return `<button class="${active?'active':''}" data-action="set-fontsize" data-font-command="${control.command}" title="${control.command==='reset'?'Reset content size to 100%':`${control.label} — click repeatedly (${S.fontSize}%)`}" ${disabled?'disabled':''}>${esc(control.label)}</button>`;
+            }).join('')}
           </div>
           <div class="topbar-controls"><button data-action="toggle-theme" title="Toggle dark/light mode">${S.darkMode?'☀️':'🌙'}</button></div>
           <div class="topbar-welcome"><b>${esc(S.user.name)}</b><span>${esc(S.user.role||'Team Member')}</span></div>
           <div class="avatar">${initials}</div>
         </div>
       </div>
-      <div class="content">
+      <div class="content page-${esc(S.page||'none')}">
         <div class="content-zoom" style="zoom:${zoomVal};width:${zoomCompPct}%;height:${zoomCompPct}%;">${inner}</div>
       </div>
     </div>
@@ -718,21 +724,38 @@ function renderColMenuBtnHtml_(tableKey,overlay){
         ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
       </div>`;
 }
+// True only when a column has an applied value/range (an open but empty filter
+// editor is not considered active). Receipt List uses this to make filtered headers
+// visibly different and to enable its Reset Filters control.
+function hasActiveColumnFilter_(st,key){
+  if(String((st.filters&&st.filters[key])??'').trim()!=='')return true;
+  const df=st.dateFilters&&st.dateFilters[key];
+  if(df&&(df.from||df.to))return true;
+  const nf=st.numFilters&&st.numFilters[key];
+  return !!(nf&&((nf.min!==''&&nf.min!=null)||(nf.max!==''&&nf.max!=null)));
+}
+function hasAnyActiveColumnFilter_(st){
+  const keys=new Set([].concat(Object.keys(st.filters||{}),Object.keys(st.dateFilters||{}),Object.keys(st.numFilters||{})));
+  return Array.from(keys).some(key=>hasActiveColumnFilter_(st,key));
+}
+
 // GRID_DEFS is populated in Grids.html: { key: {cols:[{key,label,width,pill,num,date}], data:()=>[...] } }
 function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
+  const receiptLayout=tableKey==='receipt';
   const compact=!!def.compact; // compact grids: no pagination UI, just a scrollable box, sort still works
   Object.entries(st.filters).forEach(([k,v])=>{
-    if(!v)return;
+    const filterValue=String(v??'').trim();
+    if(!filterValue)return;
     const col=def.cols.find(c=>c.key===k);
     if(col&&col.filterType==='select'){
       // Exact-match against one token of a (possibly concatenated) value, e.g. Sales
       // Report's Category column where one invoice can hold "A & B" — filterValues()
       // lets a column supply its own list of matchable tokens per row.
       const getValues=col.filterValues||(r=>[r[k]]);
-      rows=rows.filter(r=>getValues(r).some(x=>String(x||'').toLowerCase()===v.toLowerCase()));
+      rows=rows.filter(r=>getValues(r).some(x=>String(x||'').toLowerCase()===filterValue.toLowerCase()));
     } else {
-      rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));
+      rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(filterValue.toLowerCase()));
     }
   });
   Object.entries(st.dateFilters||{}).forEach(([k,range])=>{
@@ -820,7 +843,8 @@ function renderGrid(tableKey){
       return fmtINRCompact(amounts.reduce((sum,v)=>sum+(Number(v)||0),0));
     })():null;
     const headerLabel=`${esc(c.label)}${c.headerSub?`<span class="th-sub">${esc(c.headerSub)}</span>`:''}${headerTotal!==null?`<span class="th-total">Total: ${esc(headerTotal)}</span>`:''}`;
-    return `<th style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
+    const filterActive=receiptLayout&&hasActiveColumnFilter_(st,c.key);
+    return `<th${filterActive?' class="filter-active"':''} style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
       <div class="th-inner"><div class="th-row">
         <span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${headerLabel}</span>
         <span class="sort-ic${def.showSortArrows?' sort-ready':''}" title="${sortTitle}" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${si2}</span>
@@ -937,6 +961,7 @@ function renderGrid(tableKey){
 
   const colMenuBtnHtml=renderColMenuBtnHtml_(tableKey);
   const refreshBtnHtml=renderRefreshBtnHtml_();
+  const resetFiltersBtnHtml=receiptLayout?`<button class="btn btn-ghost receipt-reset-filters" data-action="reset-grid-filters" data-table="${tableKey}" ${hasAnyActiveColumnFilter_(st)?'':'disabled'} title="Clear all Receipt List column filters">Reset Filters</button>`:'';
 
   // Report-switcher grids (Customer List/Receipt List/Collection Analysis/Follow Up
   // List/Credit Notes — see def.reportTabs, wired in Grids.html) get a different
@@ -962,6 +987,7 @@ function renderGrid(tableKey){
     <div class="dt-toolbar report-switcher-toolbar">
       ${reportTabsHtml}
       <div class="report-switcher-right">
+        ${resetFiltersBtnHtml}
         ${refreshBtnHtml}
         ${colMenuBtnHtml}
       </div>
@@ -974,6 +1000,31 @@ function renderGrid(tableKey){
       </div>
     </div>`);
   const subGridColMenuOverlay=subGrid?renderColMenuBtnHtml_(tableKey,true):'';
+  const paginationHtml=noPagination?'':`<div class="dt-pagination${subGrid?' sub-grid':''}${receiptLayout?' receipt-pagination':''}">
+      <div class="pp"><label for="pagesize-${tableKey}">Rows per page</label><select id="pagesize-${tableKey}" aria-label="Rows per page" data-action="pagesize" data-table="${tableKey}">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${st.pageSize===n?'selected':''}>${n}</option>`).join("")}</select></div>
+      <div class="page-range" aria-live="polite">${total===0?'0':`${rf}–${rt}`} of ${total}</div>
+      <div class="nav" aria-label="Pagination">
+        <button data-action="pagefirst" data-table="${tableKey}" title="First page" aria-label="First page" ${st.page<=1?'disabled':''}>«</button>
+        <button data-action="pageprev" data-table="${tableKey}" title="Previous page" aria-label="Previous page" ${st.page<=1?'disabled':''}>‹</button>
+        <span class="pageinfo" aria-label="Page ${st.page} of ${tp}">${st.page} / ${tp}</span>
+        <button data-action="pagenext" data-table="${tableKey}" title="Next page" aria-label="Next page" ${st.page>=tp?'disabled':''}>›</button>
+        <button data-action="pagelast" data-table="${tableKey}" title="Last page" aria-label="Last page" ${st.page>=tp?'disabled':''}>»</button>
+      </div>
+    </div>`;
+
+  // Receipt List is the viewport-fit prototype: toolbar stays above one bordered
+  // flex panel, rows are the only scrolling region, and pagination is part of that
+  // panel at the viewport bottom even when there are zero or only a few rows.
+  if(receiptLayout){
+    return `<section class="receipt-grid-shell">
+      ${toolbarHtml}
+      <div class="dt-table-wrap receipt-grid-table-wrap">
+        <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
+        ${paginationHtml}
+      </div>
+      <div class="mcard-list receipt-mcard-list">${mcards}</div>
+    </section>`;
+  }
 
   return `
     ${toolbarHtml}
@@ -982,17 +1033,7 @@ function renderGrid(tableKey){
       <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
     </div>
     <div class="mcard-list">${mcards}</div>
-    ${noPagination?'':`<div class="dt-pagination${subGrid?' sub-grid':''}">
-      <div class="pp">Rows per page: <select data-action="pagesize" data-table="${tableKey}">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${st.pageSize===n?'selected':''}>${n}</option>`).join("")}</select></div>
-      <div>${total===0?'0':`${rf}–${rt}`} of ${total}</div>
-      <div class="nav">
-        <button data-action="pagefirst" data-table="${tableKey}" ${st.page<=1?'disabled':''}>«</button>
-        <button data-action="pageprev" data-table="${tableKey}" ${st.page<=1?'disabled':''}>‹</button>
-        <span class="pageinfo">${st.page} / ${tp}</span>
-        <button data-action="pagenext" data-table="${tableKey}" ${st.page>=tp?'disabled':''}>›</button>
-        <button data-action="pagelast" data-table="${tableKey}" ${st.page>=tp?'disabled':''}>»</button>
-      </div>
-    </div>`}`;
+    ${paginationHtml}`;
 }
 
 // Mobile card fallback renderer — each grid def can supply mcard(r) for a custom layout;
@@ -1084,26 +1125,27 @@ document.addEventListener('click',e=>{
     return;
   }
   if(a==='set-fontsize'){
-    // Same reasoning as toggle-theme above — update the zoom level and the active
-    // button highlight directly on the existing DOM instead of calling render(),
-    // so the page/table scroll position never jumps.
-    const size=parseInt(el.getAttribute('data-size'),10);
-    if(FONT_SIZE_OPTIONS.indexOf(size)!==-1){
-      S.fontSize=size;
-      try{localStorage.setItem('tally_font_size',String(size));}catch(e){}
-      // Update BOTH the zoom AND its width/height compensation directly on the
-      // existing DOM (no render()) — same reasoning as toggle-theme above. Without
-      // the compensation, switching to A- would immediately show a grey gap below
-      // the content until the next full re-render; keeping it in sync here means
-      // it never appears even for a single frame.
-      const zoomEl=document.querySelector('.content-zoom');
-      if(zoomEl){
-        const zoomVal=size/100,pct=(100/zoomVal).toFixed(4);
-        zoomEl.style.zoom=zoomVal;zoomEl.style.width=pct+'%';zoomEl.style.height=pct+'%';
-      }
-      const group=el.closest('.topbar-fontsize');
-      if(group)group.querySelectorAll('button').forEach(b=>b.classList.toggle('active',parseInt(b.getAttribute('data-size'),10)===size));
+    // Increment/decrement on every click; A is an exact reset. Update the existing
+    // zoomed box in place so table scroll positions stay still and no intermediate
+    // grey gap can flash while the size changes.
+    const command=el.getAttribute('data-font-command');
+    let size=command==='reset'?100:S.fontSize+(command==='down'?-FONT_SIZE_STEP:FONT_SIZE_STEP);
+    size=Math.min(FONT_SIZE_MAX,Math.max(FONT_SIZE_MIN,size));
+    S.fontSize=size;
+    try{localStorage.setItem('tally_font_size',String(size));}catch(e){}
+    const zoomEl=document.querySelector('.content-zoom');
+    if(zoomEl){
+      const zoomVal=size/100,pct=(100/zoomVal).toFixed(4);
+      zoomEl.style.zoom=zoomVal;zoomEl.style.width=pct+'%';zoomEl.style.height=pct+'%';
     }
+    const group=el.closest('.topbar-fontsize');
+    if(group)group.querySelectorAll('button').forEach(button=>{
+      const buttonCommand=button.getAttribute('data-font-command');
+      const active=buttonCommand==='reset'?size===100:(buttonCommand==='down'?size<100:size>100);
+      button.classList.toggle('active',active);
+      button.disabled=buttonCommand==='down'?size<=FONT_SIZE_MIN:(buttonCommand==='up'?size>=FONT_SIZE_MAX:false);
+      button.title=buttonCommand==='reset'?'Reset content size to 100%':`${button.textContent} — click repeatedly (${size}%)`;
+    });
     return;
   }
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
@@ -1113,6 +1155,15 @@ document.addEventListener('click',e=>{
   if(a==='syncnow'){refreshData();return;} // sidebar "Sync with Tally" — always a full refresh
   if(a==='refreshpage'){refreshCurrentPage();return;} // per-page "Refresh" button — scoped when PAGE_CHUNK_KEYS has an entry for the current page
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
+  if(a==='reset-grid-filters'){
+    const t=el.getAttribute('data-table');
+    // Receipt-only prototype: clear transient column filters without touching the
+    // persisted hidden columns, order, widths, sort, or rows-per-page preference.
+    if(t==='receipt'){
+      const st=tableState(t);st.filters={};st.dateFilters={};st.numFilters={};st.filterOpen=null;st.page=1;render();
+    }
+    return;
+  }
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;persistGridPrefs_(t);render();return;}
   if(a==='togglerowexpand'){
     // Only ONE row can be expanded at a time per table — clicking a second row's "+"
