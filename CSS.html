@@ -719,6 +719,12 @@ table.scp-table tbody tr:hover td{filter:brightness(0.95);}
 table.dt thead th.filter-active{background:#2458B8;box-shadow:inset 0 -3px #67E8F9;}
 table.dt thead th.filter-active .search-ic{color:#FFFFFF;}
 
+/* .dt-scroll is THE scroll container that makes thead position:sticky work.
+   It MUST have a bounded height (flex:1 inside a height-constrained flex parent,
+   OR an explicit max-height) — without that, sticky has no scrolling ancestor to
+   stick within and the header scrolls away with the content. */
+.dt-scroll{flex:1;overflow:auto;min-height:0;max-height:calc(100vh - 160px);overscroll-behavior-x:none;}
+
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
 table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}
 table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;gap:5px;position:relative;min-height:36px;}
