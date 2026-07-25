@@ -14,6 +14,7 @@
   --recv:#2E6BF2;--recv-tint:#E9F0FE;--pay:#F08A1D;--pay-tint:#FDF0DE;
   --danger:#E23A3A;--danger-tint:#FCEAEA;--success:#16A34A;--success-tint:#E7F7ED;
   --accent:#2E6BF2;--accent-dark:#1E4FC4;--accent-tint:#E9F0FE;--accent-tint2:#F5F8FF;
+  --data-scale:1;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
@@ -150,20 +151,12 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome b{color:var(--ink);font-weight:700;font-size:12px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
 .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4C5FE0);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
-.content{padding:6px 8px 12px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto;overscroll-behavior-x:none;}
-/* Receipt List prototype owns the full remaining viewport. The page itself never
-   scrolls and there is no bottom padding/background strip; only its row viewport
-   scrolls, while its pagination remains visible at the physical bottom. */
-.content.page-receipt{overflow:hidden;padding-bottom:0;}
-.content.page-receipt .content-zoom{flex:none;overflow:hidden;}
-/* .content-zoom: the actual zoomed element, sized to compensate for CSS `zoom`
-   (see renderShell() in Common.html) so it always visually fills the whole of
-   .content regardless of the A-/A/A+ text-size level — this is what removes the
-   grey gap that used to show up below the table whenever a non-100% size was
-   selected. It's also a flex column itself so a page's own pagination footer
-   (see .dt-pagination margin-top:auto below) can anchor to ITS bottom edge, which
-   after this compensation is always the true bottom of the visible screen. */
-.content-zoom{display:flex;flex-direction:column;min-height:0;}
+.content{padding:6px 8px 0;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;overscroll-behavior-x:none;}
+/* .content-zoom is now a simple flex column that fills .content. No CSS `zoom` or
+   size compensation is applied — A-/A/A+ only scale table body cells via
+   --data-scale. This eliminates the grey gap permanently because .content itself
+   is overflow:hidden and .content-zoom fills it without any shrink/grow mismatch. */
+.content-zoom{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;}
 /* Text size control (A- / A / A+ / A++) — sits top-right in the topbar, next to the
    dark/light toggle. "A" (100%, normal website font) is the default the first time
    the app opens since it reads best in dense tables, per explicit user instruction;
@@ -243,7 +236,7 @@ table.apv-table thead .apv-sort-ic{font-size:8.5px;flex:none;}
 /* Party Name body cells: LEFT-aligned per explicit user instruction ("i want this
    section to be left aligned"), while the header above stays centered (unchanged). */
 table.apv-table tbody td.apv-name{font-weight:700;color:var(--ink);text-align:left;padding:6px 10px;background:var(--accent-tint2);border-left:1px solid var(--line);border-right:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-table.apv-table tbody td.apv-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:11px;padding:6px 8px;letter-spacing:-0.5px;}
+table.apv-table tbody td.apv-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:calc(11px * var(--data-scale));padding:6px 8px;letter-spacing:-0.5px;}
 table.apv-table tbody td.apv-cell.apv-od{color:#B4231E;background:#FEF4F3;}
 table.apv-table tbody td.apv-cell.apv-nd{color:#0E7C3F;background:#F2FBF6;}
 table.apv-table tbody td.apv-cell.apv-total{color:var(--ink);font-weight:700;background:var(--accent-tint2);}
@@ -651,7 +644,7 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .dt-colmenu label{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:5px 4px;cursor:pointer;border-radius:4px;}
 .dt-colmenu label:hover{background:var(--accent-tint2);}
 .dt-colmenu-row{display:flex;align-items:center;gap:8px;border-radius:5px;}.dt-colmenu-row>label{flex:1;min-width:0}.dt-colmenu-row>label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.col-shift{display:flex;gap:3px}.col-shift button{width:25px;height:25px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink-secondary);cursor:pointer}.col-shift button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}.col-shift button:disabled{opacity:.25;cursor:default;}
-.dt-table-wrap{flex:none;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.dt-table-wrap{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.04);}
 .dt-table-wrap.compact{flex:none;height:390px;}
 .dt-table-wrap.compact .dt-scroll{max-height:390px;}
 /* Dashboard mini reports: dense screenshot-like tables, no S.No column, clipped
@@ -715,14 +708,14 @@ table.scp-table tbody tr:hover td{filter:brightness(0.97);}
 .recv-dashboard-table table.dt tbody td{padding:6px 10px;font-size:11.5px;line-height:1.25;}
 .recv-dashboard-table .dt-pagination{padding:7px 10px;font-size:11px;}
 .recv-dashboard-table .dt-pagination select,.recv-dashboard-table .dt-pagination .nav button{font-size:11px;padding:4px 8px;}
-.dt-scroll{flex:1;overflow:auto;min-height:0;max-height:calc(100vh - 180px);overscroll-behavior-x:none;}
+.dt-scroll{flex:1;overflow:auto;min-height:0;overscroll-behavior-x:none;}
 /* ---------- RECEIPT LIST VIEWPORT-FIT PROTOTYPE ----------
    This shell is deliberately scoped to Receipt List only. It consumes the complete
    zoom-compensated content height, leaves the toolbar fixed, and allocates every
    remaining pixel to one bordered table panel. */
 .receipt-grid-shell{display:flex;flex-direction:column;flex:1;height:100%;min-height:0;overflow:hidden;}
 .receipt-grid-shell .dt-toolbar{flex:none;}
-.receipt-grid-table-wrap{display:flex;flex:1;min-height:0;border-radius:10px 10px 0 0;overflow:hidden;}
+.receipt-grid-table-wrap{display:flex;flex-direction:column;flex:1;min-height:0;border-radius:10px 10px 0 0;overflow:hidden;}
 .receipt-grid-table-wrap>.dt-scroll{flex:1;min-height:0;max-height:none;overflow:auto;background:var(--surface);}
 .receipt-grid-table-wrap>.dt-pagination{flex:none;margin-top:0;}
 .receipt-reset-filters{padding:5px 12px!important;font-size:11.5px!important;}
@@ -759,7 +752,7 @@ table.dt thead th .dr-clear{cursor:pointer;color:#F87171;text-align:center;font-
 table.dt thead th .th-filter input::placeholder{color:#5A6070;}
 table.dt thead th .resize-handle{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:5;}
 table.dt thead th .resize-handle:hover,table.dt thead th .resize-handle.active{background:rgba(46,107,242,.5);}
-table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);border-right:1px solid #F2F0EA;font-size:12.5px;white-space:normal;word-break:break-word;vertical-align:middle;overflow-wrap:anywhere;}
+table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);border-right:1px solid #F2F0EA;font-size:calc(12.5px * var(--data-scale));white-space:normal;word-break:break-word;vertical-align:middle;overflow-wrap:anywhere;}
 /* Columns explicitly flagged nowrap:true (e.g. Sales Report's Invoice No) always
    stay on ONE line — clipped with an ellipsis rather than wrapping onto a second
    line, per explicit user instruction ("invoice number bhi ek he row me dikhe"). */
@@ -852,7 +845,7 @@ html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!importan
 .dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready:hover{color:var(--accent-dark);}
 .dt-table-wrap.sub-grid table.dt thead th .search-ic{color:var(--accent-dark);opacity:.7;}
 .dt-table-wrap.sub-grid table.dt thead th .search-ic:hover{opacity:1;}
-.dt-table-wrap.sub-grid table.dt tbody td{font-size:12px;line-height:1.25;padding:6px 10px;}
+.dt-table-wrap.sub-grid table.dt tbody td{font-size:calc(12px * var(--data-scale));line-height:1.25;padding:6px 10px;}
 .dt-table-wrap.sub-grid table.dt tbody td.nowrap{white-space:nowrap;word-break:normal;overflow:hidden;text-overflow:ellipsis;}
 .dt-table-wrap.sub-grid table.dt tbody tr:nth-child(even){background:var(--accent-tint2);}
 .dt-pagination.sub-grid{padding:7px 10px;font-size:10.5px;}
@@ -938,7 +931,7 @@ table.ledger-table thead th{position:sticky;top:0;z-index:2;background:#1E4FC4;c
 table.ledger-table thead th.num{text-align:right;}
 table.ledger-table tfoot td{position:sticky;bottom:0;z-index:2;background:var(--accent-tint);font-weight:700;color:var(--ink);padding:8px 10px;border-top:2px solid var(--accent);font-size:11.5px;}
 table.ledger-table tfoot td.num{text-align:right;font-family:'JetBrains Mono',monospace;}
-table.ledger-table tbody td{padding:7px 10px;border-bottom:1px solid var(--line-light);font-size:11.5px;}
+table.ledger-table tbody td{padding:7px 10px;border-bottom:1px solid var(--line-light);font-size:calc(11.5px * var(--data-scale));}
 table.ledger-table tbody td.num{text-align:right;font-family:'JetBrains Mono',monospace;}
 table.ledger-table tbody tr.opening-row{background:var(--accent-tint2);font-weight:600;}
 table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
@@ -1025,7 +1018,7 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
   .sidebar-overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55;}
   .hamburger{display:inline-flex;}
   .topbar-welcome span,.tb-search{display:none;}
-  .content{padding:6px 8px 70px;}
+  .content{padding:6px 8px 70px;overflow:auto;}
 
   .fbar{gap:8px;padding:10px 12px;}
   .fbar-group{min-width:0;flex:1 1 44%;}

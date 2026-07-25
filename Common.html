@@ -127,6 +127,9 @@ try{
   const fs=parseInt(localStorage.getItem('tally_font_size'),10);
   if(Number.isFinite(fs))S.fontSize=Math.min(FONT_SIZE_MAX,Math.max(FONT_SIZE_MIN,fs));
 }catch(e){}
+// Apply the data-scale CSS variable immediately so the first render already uses
+// the remembered size for table body cells.
+try{document.documentElement.style.setProperty('--data-scale',String(S.fontSize/100));}catch(e){}
 try{ const dim=localStorage.getItem('tally_sales_dimension'); if(dim==='category'||dim==='partyName'||dim==='state'){S.salesDimension=dim;} }catch(e){}
 // Remembered login session id — see establishSession_()/loadAll() below. This lets a
 // signed-in user auto-resume instantly if the page ever gets reloaded unintentionally
@@ -625,20 +628,6 @@ function renderShell(inner){
 
   const title=PAGE_TITLES[S.page]||{t:'Dashboard',s:''};
   const alerts=alertCount();
-  // Text-size zoom compensation: CSS `zoom` scales BOTH the rendering AND the box
-  // model of an element, but its FLEX PARENT (.content, sized correctly via
-  // flex:1 to fill the viewport) does not know that — so zooming OUT (A-, 90%)
-  // visibly shrinks the content while .content's own allocated space stays the
-  // same, leaving a grey gap below the table; zooming IN (A+, 115%) can overflow
-  // instead. Fix: give the actual zoomed element (.content-zoom, a child of the
-  // correctly-sized .content) a width/height of (100/zoomFactor)% of its parent —
-  // once the browser applies the zoom scale on TOP of that, the rendered size
-  // works out to exactly 100% again, so .content-zoom always visually fills the
-  // full available area at every zoom level, per explicit user instruction
-  // ("A- neeche grey screen aa rahi hai...dont show me that...adapt the screen
-  // size...so that extra white space is not visible").
-  const zoomVal=(S.fontSize||100)/100;
-  const zoomCompPct=(100/zoomVal).toFixed(4);
 
   return `
   <div class="shell">
@@ -683,7 +672,7 @@ function renderShell(inner){
         </div>
       </div>
       <div class="content page-${esc(S.page||'none')}">
-        <div class="content-zoom" style="zoom:${zoomVal};width:${zoomCompPct}%;height:${zoomCompPct}%;">${inner}</div>
+        <div class="content-zoom">${inner}</div>
       </div>
     </div>
     ${bottomNav}
@@ -1125,19 +1114,15 @@ document.addEventListener('click',e=>{
     return;
   }
   if(a==='set-fontsize'){
-    // Increment/decrement on every click; A is an exact reset. Update the existing
-    // zoomed box in place so table scroll positions stay still and no intermediate
-    // grey gap can flash while the size changes.
+    // Increment/decrement on every click; A is an exact reset. Only the table
+    // body rows change size — headers, toolbar, and pagination stay fixed. A CSS
+    // variable drives this so no full re-render is needed (scroll stays stable).
     const command=el.getAttribute('data-font-command');
     let size=command==='reset'?100:S.fontSize+(command==='down'?-FONT_SIZE_STEP:FONT_SIZE_STEP);
     size=Math.min(FONT_SIZE_MAX,Math.max(FONT_SIZE_MIN,size));
     S.fontSize=size;
     try{localStorage.setItem('tally_font_size',String(size));}catch(e){}
-    const zoomEl=document.querySelector('.content-zoom');
-    if(zoomEl){
-      const zoomVal=size/100,pct=(100/zoomVal).toFixed(4);
-      zoomEl.style.zoom=zoomVal;zoomEl.style.width=pct+'%';zoomEl.style.height=pct+'%';
-    }
+    document.documentElement.style.setProperty('--data-scale',String(size/100));
     const group=el.closest('.topbar-fontsize');
     if(group)group.querySelectorAll('button').forEach(button=>{
       const buttonCommand=button.getAttribute('data-font-command');
