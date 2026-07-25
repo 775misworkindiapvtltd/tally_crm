@@ -75,6 +75,37 @@ function ensureIndiaGeoJson(){
 function retryIndiaMap(){ INDIA_GEOJSON=null;indiaGeoLoadPromise=null;mapLoadError='';paintIndiaMap(); }
 
 /* ============================= DATA AGGREGATION ============================= */
+// Extract city name from an address string when no dedicated CITY column exists.
+// Indian addresses typically end with: "..., City Name, State - Pincode" or
+// "..., City Name - Pincode" or "..., City Name, Pincode". We grab the most
+// likely city token: the part just before the pincode or state suffix.
+function extractCityFromAddress_(address){
+  if(!address)return '';
+  let s=String(address).trim();
+  // Remove trailing pincode (6 digits, optional dash/space prefix)
+  s=s.replace(/[-\s]*\d{6}\s*$/,'').trim();
+  // Remove trailing state name (if it matches known states)
+  const stateNames=Object.values(STATE_NAME_ALIASES);
+  const upper=s.toUpperCase();
+  for(const st of stateNames){
+    const stUp=st.toUpperCase();
+    if(upper.endsWith(stUp)||upper.endsWith(', '+stUp)){
+      s=s.slice(0,-(st.length)).replace(/,\s*$/,'').trim();
+      break;
+    }
+  }
+  // The last comma-separated segment is likely the city
+  const parts=s.split(/[,\n]+/).map(p=>p.trim()).filter(Boolean);
+  if(parts.length>=2){
+    const last=parts[parts.length-1];
+    // Skip if it's a PO Box/Plot/Floor/Sector kind of token
+    if(!/^\d|^plot|^floor|^sector|^unit|^flat|^block|^house/i.test(last)&&last.length>2){
+      return last.replace(/\s+/g,' ');
+    }
+  }
+  return parts.length?parts[parts.length-1].replace(/\s+/g,' '):'';
+}
+
 function salesByState_(){
   const rows=dataForFY('sales'); const map={};
   rows.forEach(r=>{
@@ -82,7 +113,8 @@ function salesByState_(){
     const canon=normalizeStateName_(raw);
     if(!map[canon])map[canon]={state:canon,amount:0,invoices:0,cities:{}};
     map[canon].amount+=Number(r.amount)||0; map[canon].invoices++;
-    const city=String(r.city||'Unspecified').trim()||'Unspecified';
+    // City: use dedicated city field first; fallback to extracting from address
+    const city=(String(r.city||'').trim()||extractCityFromAddress_(r.address))||'Unspecified';
     if(!map[canon].cities[city])map[canon].cities[city]={city,amount:0,invoices:0};
     map[canon].cities[city].amount+=Number(r.amount)||0; map[canon].cities[city].invoices++;
   });
