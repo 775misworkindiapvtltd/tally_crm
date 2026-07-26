@@ -319,13 +319,16 @@ table.apv-table thead tr.apv-totals-row th{display:none;} /* keep header cell se
 table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:center;padding:5px 5px;border-bottom:1px solid var(--line);letter-spacing:-0.5px;}
 table.apv-table thead .apv-totals-row td.apv-name{background:var(--surface);}
 table.apv-table thead .apv-totals-row td.apv-tot-name{background:var(--surface);color:var(--muted);font-family:inherit;font-size:9px;letter-spacing:.06em;}
-table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:23px;z-index:6;background:#1E4FC4;color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+/* Same Appearance-accent header color as every other grid (table.dt above) — was a
+   hardcoded blue, per explicit user instruction ("jitne bhi tab hai sabke header
+   same color ke kardo"). */
+table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:23px;z-index:6;background:var(--accent);color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
 table.apv-table thead tr:not(.apv-totals-row) th.apv-name{background:var(--surface);color:var(--ink);}
 /* Header label stays CENTER-aligned (per explicit user instruction: "header center
    align he rehne dena") — only the body cells below change alignment. */
 table.apv-table thead .apv-th-inner{display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:normal;overflow-wrap:break-word;line-height:1.2;}
 table.apv-table thead th.apv-name .apv-th-inner{color:var(--ink);}
-table.apv-table thead th.apv-sorted{background:#163C9E;}
+table.apv-table thead th.apv-sorted{background:var(--accent-dark);}
 table.apv-table thead th.apv-name.apv-sorted{background:var(--accent-tint);}
 table.apv-table thead .apv-sort-ic{font-size:8.5px;flex:none;}
 /* Party Name body cells: LEFT-aligned per explicit user instruction ("i want this
@@ -483,7 +486,10 @@ table.scp-table thead tr.scp-totals-row td.scp-sno,table.scp-table thead tr.scp-
 table.scp-table thead tr.scp-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);border-right:1px solid var(--line-light);white-space:nowrap;letter-spacing:-0.5px;}
 table.scp-table thead tr.scp-totals-row td.scp-cat{text-align:left;color:var(--muted);font-family:inherit;font-size:9.5px;letter-spacing:.06em;background:var(--surface);}
 table.scp-table thead tr.scp-totals-row td.scp-sno{background:var(--surface);}
-table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:22px;z-index:6;background:#1E4FC4;color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+/* Same Appearance-accent header color as every other grid — was a hardcoded blue,
+   per explicit user instruction ("jitne bhi tab hai sabke header same color ke
+   kardo"). */
+table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:22px;z-index:6;background:var(--accent);color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
 table.scp-table thead th.scp-cat,table.scp-table thead th.scp-sno{text-align:left;background:var(--surface);color:var(--ink);cursor:default;}
 /* Frozen header cells (both sticky-top + sticky-left) need higher z-index so they
    layer above BOTH the body cells AND the non-frozen header cells when scrolling
@@ -949,12 +955,16 @@ html.dark .map-data-note{background:#101E31;border-color:#1E4F73;color:#A6AEC4;}
 .receipt-reset-filters{padding:5px 12px!important;font-size:11.5px!important;}
 .receipt-reset-filters:disabled{opacity:.42;cursor:default;}
 /* Applied filters must be obvious without reopening each header control. */
-table.dt thead th.filter-active{background:#2458B8;box-shadow:inset 0 -3px #67E8F9;}
+/* Filter-active state uses the darker --accent-dark tone (still the same color
+   family as the resting --accent header, just visibly deeper) plus a translucent
+   white underline instead of a fixed navy+cyan combo, so it reads correctly no
+   matter which Appearance color scheme is active. */
+table.dt thead th.filter-active{background:var(--accent-dark);box-shadow:inset 0 -3px rgba(255,255,255,.7);}
 table.dt thead th.filter-active .search-ic{color:#FFFFFF;}
 /* Date/Timestamp column's 📅 icon turns active-colored once a range is applied,
    same visual language as filter-active above, but scoped to just the icon since
    the date column no longer has its own inline th-filter row to also highlight. */
-table.dt thead th .search-ic.date-filter-active{color:#67E8F9;}
+table.dt thead th .search-ic.date-filter-active{color:rgba(255,255,255,.9);}
 
 /* ---------- CALENDAR DATE-RANGE POPUP (shared across every date/timestamp column) ----------
  * Appended directly to <body> as #drPopupRoot (see DateRange.html) — position:fixed
@@ -1004,7 +1014,14 @@ html.dark .dr-nav{background:var(--surface);border-color:var(--line);color:var(-
 .dt-scroll{flex:1;overflow:auto;min-height:0;max-height:calc(100vh - 160px);overscroll-behavior-x:none;}
 
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
-table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}
+/* Every grid header on every page now uses --accent (the active Appearance color
+   scheme) instead of a hardcoded dark navy — same color as the view-toggle/
+   fbar-presets "active" buttons the user pointed at ("jaise appearance color ke
+   hai isme jo buttons ke color hai waise hi"), per explicit user instruction ("jitne
+   bhi tab hai sabke header same color ke kardo"). The border uses a translucent
+   white overlay instead of a fixed hex so it stays legible against ANY accent
+   color, not just the original blue. */
+table.dt thead th{position:sticky;top:0;background:var(--accent);color:#fff;z-index:4;padding:0;border-right:1px solid rgba(255,255,255,.18);overflow:hidden;}
 /* Header cell content is vertically centered top-to-bottom (not just left/right)
    across every grid on every page, per explicit user instruction ("header top n
    bottom se center allign karna hai - use for all pages"). justify-content acts on
@@ -1016,12 +1033,15 @@ table.dt thead th .th-label{font-size:10px;font-weight:600;text-transform:upperc
    header showing "With GST"/"W/o GST" beneath it instead of the old "Total Price
    (Incl. GST)"/"Amount (Excl. GST)" full-length labels, per explicit user
    instruction. The sub-grid variant below overrides this with an even smaller size. */
-table.dt thead th .th-sub{display:block;margin-top:2px;color:#9BB1E5;font-size:8.5px;font-weight:600;line-height:1.1;letter-spacing:0;text-transform:none;}
-table.dt thead th .th-total{display:block;margin-top:2px;color:#9BB1E5;font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:600;line-height:1.1;letter-spacing:0;text-transform:none;}
-table.dt thead th .sort-ic{font-size:9px;color:var(--accent);width:10px;flex:none;}
+/* Subtitle/sort-arrow colors switched from a fixed light-blue hex to a translucent
+   white overlay — a fixed light-blue read fine against the old navy header but
+   would clash against warmer/lighter accent colors (orange, gold, pink, etc). */
+table.dt thead th .th-sub{display:block;margin-top:2px;color:rgba(255,255,255,.78);font-size:8.5px;font-weight:600;line-height:1.1;letter-spacing:0;text-transform:none;}
+table.dt thead th .th-total{display:block;margin-top:2px;color:rgba(255,255,255,.78);font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:600;line-height:1.1;letter-spacing:0;text-transform:none;}
+table.dt thead th .sort-ic{font-size:9px;color:#fff;width:10px;flex:none;opacity:.85;}
 /* Sales Report deliberately exposes a sort arrow on every header, including
    unsorted columns, and the arrow is clickable just like the header label. */
-table.dt thead th .sort-ic.sort-ready{cursor:pointer;color:#9BB1E5;opacity:.9;}
+table.dt thead th .sort-ic.sort-ready{cursor:pointer;color:rgba(255,255,255,.78);opacity:.9;}
 table.dt thead th .sort-ic.sort-ready:hover{color:#FFF;opacity:1;}
 table.dt thead th .search-ic{margin-left:auto;cursor:pointer;color:#6B7280;flex:none;font-size:11px;transition:color .15s;}
 table.dt thead th .search-ic:hover{color:var(--accent);}
@@ -1033,7 +1053,7 @@ table.dt thead th .th-num-filter .date-sep{text-align:center;font-size:9px;color
 table.dt thead th .dr-clear{cursor:pointer;color:#F87171;text-align:center;font-size:11px;font-weight:700;}
 table.dt thead th .th-filter input::placeholder{color:#5A6070;}
 table.dt thead th .resize-handle{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:5;}
-table.dt thead th .resize-handle:hover,table.dt thead th .resize-handle.active{background:rgba(46,107,242,.5);}
+table.dt thead th .resize-handle:hover,table.dt thead th .resize-handle.active{background:rgba(255,255,255,.3);}
 table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);border-right:1px solid #F2F0EA;font-size:calc(12.5px * var(--data-scale));white-space:normal;word-break:break-word;vertical-align:middle;overflow-wrap:anywhere;}
 /* Columns explicitly flagged nowrap:true (e.g. Sales Report's Invoice No) always
    stay on ONE line — clipped with an ellipsis rather than wrapping onto a second
@@ -1209,7 +1229,10 @@ html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!importan
    the data rows scroll between them, per explicit user instruction ("header scroll
    mein na gaye ho...closing wala bhi fix rahe...uske under data upar niche ho"). */
 table.ledger-table{width:100%;border-collapse:separate;border-spacing:0;}
-table.ledger-table thead th{position:sticky;top:0;z-index:2;background:#1E4FC4;color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+/* Same Appearance-accent header color as every other grid — was a hardcoded blue,
+   per explicit user instruction ("jitne bhi tab hai sabke header same color ke
+   kardo"). */
+table.ledger-table thead th{position:sticky;top:0;z-index:2;background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
 table.ledger-table thead th.num{text-align:right;}
 table.ledger-table tfoot td{position:sticky;bottom:0;z-index:2;background:var(--accent-tint);font-weight:700;color:var(--ink);padding:8px 10px;border-top:2px solid var(--accent);font-size:11.5px;}
 table.ledger-table tfoot td.num{text-align:right;font-family:'JetBrains Mono',monospace;}
