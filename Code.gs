@@ -495,19 +495,111 @@ function mapExpenseTrendRows_(rows) {
   });
 }
 
-// Positional mapper for Receipt / PAYMENT (18 columns, header names repeat so we can't
-// key off header text reliably — read by column index instead).
-function mapReceiptRows_(rows) {
+// Strips whitespace/underscores and uppercases — lets "Sub_Group", "Sub Group", and
+// "SUBGROUP" all compare equal, and (critically) lets an EXACT match distinguish
+// "DATE" from "INST_DATE"/"Inst Date" (which would otherwise collide under a plain
+// substring search like the one findColIndexByHeaderContains_ uses for SALES).
+function normalizeHeaderText_(h) { return String(h == null ? '' : h).replace(/[\s_]+/g, '').toUpperCase(); }
+function findAllExactHeaderIndices_(headerRow, exactNormalized) {
+  var out = [];
+  for (var i = 0; i < headerRow.length; i++) { if (normalizeHeaderText_(headerRow[i]) === exactNormalized) out.push(i); }
+  return out;
+}
+function findExactHeaderIndex_(headerRow, exactNormalized) {
+  var all = findAllExactHeaderIndices_(headerRow, exactNormalized);
+  return all.length ? all[0] : -1;
+}
+
+// Detects which of the first TWO rows of a Receipt/PAYMENT-style sheet is the REAL
+// field-name header ("Timestamp"/"Ledger_Name"/"Ledger_Amount"/etc) versus a merged
+// SECTION-TITLE row (e.g. "CreditLedgers"/"DebitLedgers" spanning several columns,
+// confirmed present in the user's screenshot of the actual PAYMENT sheet). Reading
+// the section-title row as "the header" (the old behavior) meant the REAL field-name
+// row directly underneath it got treated as the first DATA row — a row of literal
+// header text ("Timestamp", "Ledger_Name", ...) instead of real values — and every
+// genuine data row after it was correspondingly misaligned. Scores both candidate
+// rows by how many cells match a known Receipt/PAYMENT field-name token and picks
+// whichever scores higher, so this works whether the real header is row 1 or row 2.
+var RECEIPT_FIELD_TOKENS_ = ['TIMESTAMP','VOUCHERNUMBER','DATE','GROUP','SUBGROUP','LEDGERNAME','LEDGERAMOUNT',
+  'BILLTYPE','BILLNAME','BILLAMOUNT','TYPE','BANKPARTYNAME','TRANSACTIONTYPE','INSTNO','INSTDATE','BANKNAME'];
+function scoreReceiptHeaderRow_(row) {
+  var score = 0;
+  (row || []).forEach(function (cell) { if (RECEIPT_FIELD_TOKENS_.indexOf(normalizeHeaderText_(cell)) !== -1) score++; });
+  return score;
+}
+function getReceiptStyleHeaderAndRows_(sheetName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) return { headerRow: [], rows: [] };
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return { headerRow: [], rows: [] };
+  var row0Score = scoreReceiptHeaderRow_(data[0]);
+  var row1Score = data.length > 1 ? scoreReceiptHeaderRow_(data[1]) : -1;
+  var headerIdx = (row1Score > row0Score) ? 1 : 0;
+  var headerRow = data[headerIdx];
+  var rows = data.slice(headerIdx + 1)
+    .filter(function (row) { return row.some(function (c) { return c !== ''; }); })
+    .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); });
+  return { headerRow: headerRow, rows: rows };
+}
+
+// Receipt / PAYMENT mapper. Reads each field by EXACT (whitespace/underscore-
+// normalized) header text instead of a hardcoded column position — per explicit
+// user report with a screenshot showing the actual PAYMENT sheet's real column
+// order is completely different from the originally documented layout (Group/
+// Sub_Group sit near the END next to the Debit ledger block, not right after Date;
+// Ledger_Name/Ledger_Amount for the Credit block sit immediately after Date, etc).
+// A hardcoded positional read against that real order would silently pull every
+// field from the wrong column. "Ledger_Name"/"Ledger_Amount" appear TWICE (once for
+// the Credit ledger block, once for the Debit ledger block) — the FIRST occurrence
+// (left-to-right column order) is treated as the Credit block, the second as Debit,
+// which matches both the documented intent and the CreditLedgers/DebitLedgers
+// section grouping visible in the actual sheet. Falls back to the ORIGINAL fixed
+// column positions only if header-text matching finds fewer than half the expected
+// fields (e.g. a sheet whose headers are blank/completely different text), so a
+// sheet that genuinely still uses the old layout keeps working unchanged.
+function mapReceiptRows_(rows, headerRow) {
+  headerRow = headerRow || [];
+  var ledgerNameIdx = findAllExactHeaderIndices_(headerRow, 'LEDGERNAME');
+  var ledgerAmountIdx = findAllExactHeaderIndices_(headerRow, 'LEDGERAMOUNT');
+  var idx = {
+    timestamp: findExactHeaderIndex_(headerRow, 'TIMESTAMP'),
+    voucherNumber: findExactHeaderIndex_(headerRow, 'VOUCHERNUMBER'),
+    date: findExactHeaderIndex_(headerRow, 'DATE'),
+    group: findExactHeaderIndex_(headerRow, 'GROUP'),
+    subGroup: findExactHeaderIndex_(headerRow, 'SUBGROUP'),
+    creditLedgerName: ledgerNameIdx.length > 0 ? ledgerNameIdx[0] : -1,
+    creditLedgerAmount: ledgerAmountIdx.length > 0 ? ledgerAmountIdx[0] : -1,
+    billType: findExactHeaderIndex_(headerRow, 'BILLTYPE'),
+    billName: findExactHeaderIndex_(headerRow, 'BILLNAME'),
+    billAmount: findExactHeaderIndex_(headerRow, 'BILLAMOUNT'),
+    type: findExactHeaderIndex_(headerRow, 'TYPE'),
+    debitLedgerName: ledgerNameIdx.length > 1 ? ledgerNameIdx[1] : -1,
+    debitLedgerAmount: ledgerAmountIdx.length > 1 ? ledgerAmountIdx[1] : -1,
+    bankPartyName: findExactHeaderIndex_(headerRow, 'BANKPARTYNAME'),
+    transactionType: findExactHeaderIndex_(headerRow, 'TRANSACTIONTYPE'),
+    instNo: findExactHeaderIndex_(headerRow, 'INSTNO'),
+    instDate: findExactHeaderIndex_(headerRow, 'INSTDATE'),
+    bankName: findExactHeaderIndex_(headerRow, 'BANKNAME')
+  };
+  var foundCount = Object.keys(idx).filter(function (k) { return idx[k] !== -1; }).length;
+  var useHeaderText = foundCount >= 9; // at least half of the 18 fields matched by header text
+  if (!useHeaderText) {
+    idx = { timestamp:0, voucherNumber:1, date:2, group:3, subGroup:4, creditLedgerName:5, creditLedgerAmount:6,
+      billType:7, billName:8, billAmount:9, type:10, debitLedgerName:11, debitLedgerAmount:12,
+      bankPartyName:13, transactionType:14, instNo:15, instDate:16, bankName:17 };
+  }
+  function at(row, i) { return i === -1 ? '' : row[i]; }
   return rows.map(function (row) {
     return {
-      timestamp: fmtTimestamp_(row[0]), voucherNumber: fmtValue_(row[1]), date: fmtDateOnly_(row[2]),
-      group: fmtValue_(row[3]), subGroup: fmtValue_(row[4]),
-      creditLedgerName: fmtValue_(row[5]), creditLedgerAmount: numOrZero_(row[6]),
-      billType: fmtValue_(row[7]), billName: fmtValue_(row[8]), billAmount: numOrZero_(row[9]),
-      type: fmtValue_(row[10]),
-      debitLedgerName: fmtValue_(row[11]), debitLedgerAmount: numOrZero_(row[12]),
-      bankPartyName: fmtValue_(row[13]), transactionType: fmtValue_(row[14]),
-      instNo: fmtValue_(row[15]), instDate: fmtDateOnly_(row[16]), bankName: fmtValue_(row[17])
+      timestamp: fmtTimestamp_(at(row, idx.timestamp)), voucherNumber: fmtValue_(at(row, idx.voucherNumber)), date: fmtDateOnly_(at(row, idx.date)),
+      group: fmtValue_(at(row, idx.group)), subGroup: fmtValue_(at(row, idx.subGroup)),
+      creditLedgerName: fmtValue_(at(row, idx.creditLedgerName)), creditLedgerAmount: numOrZero_(at(row, idx.creditLedgerAmount)),
+      billType: fmtValue_(at(row, idx.billType)), billName: fmtValue_(at(row, idx.billName)), billAmount: numOrZero_(at(row, idx.billAmount)),
+      type: fmtValue_(at(row, idx.type)),
+      debitLedgerName: fmtValue_(at(row, idx.debitLedgerName)), debitLedgerAmount: numOrZero_(at(row, idx.debitLedgerAmount)),
+      bankPartyName: fmtValue_(at(row, idx.bankPartyName)), transactionType: fmtValue_(at(row, idx.transactionType)),
+      instNo: fmtValue_(at(row, idx.instNo)), instDate: fmtDateOnly_(at(row, idx.instDate)), bankName: fmtValue_(at(row, idx.bankName))
     };
   });
 }
@@ -640,8 +732,21 @@ function getChunk(tabKey) {
     case 'expenseTrend':    return mapExpenseTrendRows_(sheetToRows_(SHEETS.expense));
     case 'payables':        return mapPayables_(sheetToObjects_(SHEETS.payables));
     case 'receivables':     return mapReceivablesRows_(sheetToRows_(SHEETS.receivables));
-    case 'receipt':         return mapReceiptRows_(sheetToRows_(SHEETS.receipt));
-    case 'payment':         return mapReceiptRows_(sheetToRows_(SHEETS.payment));
+    case 'receipt': {
+      var receiptData = getReceiptStyleHeaderAndRows_(SHEETS.receipt);
+      return mapReceiptRows_(receiptData.rows, receiptData.headerRow);
+    }
+    case 'payment': {
+      // Per explicit user report with a screenshot: the PAYMENT sheet has a merged
+      // SECTION-TITLE row ("CreditLedgers"/"DebitLedgers" spanning several columns)
+      // ABOVE the real field-name header row — getReceiptStyleHeaderAndRows_ detects
+      // and skips that extra row so the real header (and therefore every data row
+      // below it) is read from the correct row, instead of the section-title row
+      // being mistaken for the header and the real header row then being read as
+      // literal data.
+      var paymentData = getReceiptStyleHeaderAndRows_(SHEETS.payment);
+      return mapReceiptRows_(paymentData.rows, paymentData.headerRow);
+    }
     case 'sales':           return mapSalesRows_(sheetToRows_(SHEETS.sales), getHeaderRow_(SHEETS.sales));
     // Follow-up data: legacyMap = whatever DATE/REMARKS/PROMISED AMOUNT is already
     // sitting directly on the SALES sheet per party (see getSalesFollowUpLegacyMap_)
