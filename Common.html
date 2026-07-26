@@ -582,8 +582,6 @@ const NAV_ITEMS=[
   {key:'ageingSummary',  label:'Ageing Summary',       group:null, icon:'ageing', parent:true},
 
   {key:'salesDashboard', label:'Sales Dashboard',      group:'Finance', icon:'sales'},
-  {key:'salesReport',    label:'Sales Report',         group:'Finance', icon:'sales'},
-  {key:'expense',        label:'Expense Report',       group:'Finance', icon:'wallet'},
   {key:'expensesDashboard',label:'Expenses Dashboard', group:'Finance', icon:'wallet'},
   {key:'cashFlow',       label:'Cash Flow',            group:'Finance', icon:'cashflow'},
   {key:'profitLoss',     label:'Profit & Loss',        group:'Finance', icon:'pl'},
@@ -619,7 +617,22 @@ const PAGE_TITLES={
   ledger:{t:'Party Ledger',s:'Statement of account, printable & PDF'},
   expense:{t:'Expense Report',s:'Expense analysis with Group/Sub Group breakdown'},
   alerts:{t:'Alerts',s:'Things that need your attention'},
-  settings:{t:'Settings',s:'Preferences for this dashboard'}
+  settings:{t:'Settings',s:'Preferences for this dashboard'},
+  // New reports (see ReportsExtra.html) added per explicit user instruction ("add
+  // all reports u suggested add report tab") — reachable from the Reports hub page.
+  salesPersonPerf:{t:'Sales Person Performance',s:'Outstanding bills and overdue days grouped by Sales Person'},
+  stateSalesReport:{t:'State-wise Sales',s:'Sales amount and invoice count by State'},
+  customerNewRepeat:{t:'New vs Repeat Customers',s:'Customers grouped by whether they have purchased in one financial year only (New) or across multiple financial years (Repeat)'},
+  invoiceBuckets:{t:'Invoice Value Distribution',s:'Invoices grouped into amount buckets'},
+  gstSalesSplit:{t:'GST vs Non-GST Sales',s:'Invoices split by whether a GST No. is on file'},
+  itemExpenseReport:{t:'Item-wise Expense',s:'Expense amount and quantity grouped by Item Name'},
+  expenseRecurring:{t:'Recurring vs One-time Expense',s:'Parties billed in 2+ months vs a single month'},
+  collectionEfficiencyTrend:{t:'Collection Efficiency Trend',s:'Month-wise Sales vs Collections %'},
+  paymentTermsCompliance:{t:'Payment Terms Compliance',s:'Open bills grouped by Payment Terms — on-track vs overdue'},
+  customerRiskScore:{t:'Customer Risk Score',s:'Outstanding amount + overdue days combined into a risk score'},
+  partyGroupOutstanding:{t:'Party Group Outstanding',s:'Receivable/Payable outstanding rolled up by Party Group'},
+  bankCollectionReport:{t:'Bank & Mode Collection',s:'Receipts grouped by Bank Name and Transaction Type'},
+  creditNoteImpact:{t:'Credit Note Impact',s:'Credit notes as a % of total sales, and top customers'}
 };
 const NAV_ICONS={
   map:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>',
