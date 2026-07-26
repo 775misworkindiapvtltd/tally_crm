@@ -163,10 +163,15 @@ input,select,button{font-family:inherit;font-size:13px;}
 .sidebar{width:236px;flex:none;background:var(--sidebar);color:var(--sidebar-sub);display:flex;flex-direction:column;height:100vh;border-right:1px solid var(--sidebar-line);overflow:hidden;transition:transform .25s ease,width .2s ease;}
 .brand{padding:16px 16px 14px;border-bottom:1px solid var(--sidebar-line);display:flex;align-items:flex-start;justify-content:space-between;}
 .brand-inner{display:flex;align-items:center;gap:10px;}
-/* Tied to the active color scheme (was a hardcoded indigo/purple gradient) so the
-   brand mark visibly changes with Appearance, per explicit user instruction
-   ("apprearance is not working for side bar and header color"). */
-.brand-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:7px;flex:none;}
+/* Tied to the active color scheme via --accent/--accent-dark (NOT the raw
+   --color-primary/-hover tokens) — --accent is the one variable every other
+   component in the app already reads, and it is the ONLY one that also swaps to
+   the brighter dark-mode-tuned color in html.dark (see :root/html.dark above).
+   Using --color-primary directly here meant this gradient still changed with the
+   color-scheme picker but silently ignored the light/dark display-mode brightness
+   adjustment — fixed per explicit user instruction ("jo circle kiya hai vo
+   appearance mein change nahi ho rha hai usmein bhi kardo"). */
+.brand-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:7px;flex:none;}
 .brand-icon span{background:rgba(255,255,255,.85);border-radius:2px;}
 .brand-text .eyebrow{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#F3F5FC;letter-spacing:-.01em;}
 .brand-text .eyebrow sup{font-size:9px;color:#7C87A3;}
@@ -227,8 +232,11 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
 /* Square (rounded-square) avatar instead of a circle, per explicit user instruction
    ("instead of circle use square") — radius matches .brand-icon/buttons elsewhere
-   in the shell for a consistent look. */
-.avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
+   in the shell for a consistent look. Background uses --accent/--accent-dark (same
+   fix/reasoning as .brand-icon above) so this reliably reacts to BOTH the color
+   scheme AND the light/dark display mode, per explicit user instruction ("jo circle
+   kiya hai vo appearance mein change nahi ho rha hai usmein bhi kardo"). */
+.avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
 .content{padding:6px 8px 0;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;overscroll-behavior-x:none;}
 /* Pages with embedded grids that need sticky headers + bottom pagination visible:
    .content-zoom stays a non-scrolling flex column so the grid's own .dt-scroll is
@@ -1336,21 +1344,29 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
 
 @media (min-width:981px){
   .bottom-nav{display:none !important;}
-  /* Desktop-only collapsible sidebar: shrinks to an icon rail when the main table/
-     content area is clicked, and returns to full width as soon as the header
-     (topbar) is clicked — see setSidebarCollapsed_()/the dedicated click listener
-     in Common.html. Scoped to desktop only so the existing mobile off-canvas
-     open/close behavior (.sidebar.open / transform) is completely unaffected. */
-  .sidebar.collapsed{width:64px;}
-  .sidebar.collapsed .brand{padding:16px 8px 14px;justify-content:center;}
-  .sidebar.collapsed .brand-inner{gap:0;}
-  .sidebar.collapsed .brand-text{display:none;}
-  .sidebar.collapsed .nav{padding:10px 6px;}
-  .sidebar.collapsed .nav-group-label{display:none;}
-  .sidebar.collapsed .nav-item{justify-content:center;padding:9px 6px;gap:0;}
-  .sidebar.collapsed .nav-item span:not(.n-ic){display:none;}
-  .sidebar.collapsed .nav-children{display:none;}
-  .sidebar.collapsed .sidebar-foot{display:none;}
+  /* Desktop-only hover-collapsible sidebar: rests as a narrow icon-only rail at all
+     times, and expands to full width the instant the cursor moves over it (no
+     click needed) — collapsing back again the moment the cursor leaves — per
+     explicit user instruction ("left bar sab chota ho to sirf icon dikhe and jaise
+     hi curson side bar pe jaye to expank ho jaye"). Pure CSS :hover — no JS state
+     needed, so it can never get stuck in the wrong visual state. Scoped to desktop
+     only so the existing mobile off-canvas open/close behavior (.sidebar.open /
+     transform) is completely unaffected. */
+  .sidebar{width:64px;}
+  .sidebar:hover{width:236px;}
+  .sidebar:not(:hover) .brand{padding:16px 8px 14px;justify-content:center;}
+  .sidebar:not(:hover) .brand-inner{gap:0;}
+  .sidebar:not(:hover) .brand-text{display:none;}
+  .sidebar:not(:hover) .nav{padding:10px 6px;}
+  .sidebar:not(:hover) .nav-group-label{display:none;}
+  .sidebar:not(:hover) .nav-item{justify-content:center;padding:9px 6px;gap:0;}
+  .sidebar:not(:hover) .nav-item span:not(.n-ic){display:none;}
+  .sidebar:not(:hover) .nav-children{display:none;}
+  .sidebar:not(:hover) .sidebar-foot{display:none;}
+  /* Expanding pushes .main over via the flex layout (same width-transition
+     mechanism as before); a slightly elevated shadow while hovered makes that
+     motion read as an intentional "flyout" rather than a layout glitch. */
+  .sidebar:hover{box-shadow:6px 0 24px rgba(0,0,0,.18);z-index:65;}
 }
 
 /* ============ APPEARANCE SETTINGS MODAL ============ */

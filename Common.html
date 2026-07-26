@@ -82,16 +82,6 @@ function persistPivotColWidths_(){
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
-  // Desktop-only auto-collapse: shrinks to icon-only width the moment the user
-  // clicks anywhere in the main table/content area, and returns to full width the
-  // moment they click the header/topbar — per explicit user instruction ("side bar
-  // sould be chota ho jaye jaise hi hum bahar main table pe click kare...jaise hi
-  // header pe click kare vo jaise abhi hai waise ho jayega"). See sidebarClickAction_()
-  // and the plain document click listener near the bottom of this file. Purely a
-  // desktop enhancement — the CSS rule that actually shrinks the sidebar is scoped
-  // to @media (min-width:981px), so this flag is harmless (just unused) on mobile,
-  // where the sidebar already has its own separate open/close (off-canvas) behavior.
-  sidebarCollapsed:false,
   expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], balanceLedgers:{}, salesRows:[], expenseTrendRows:[],
   users:[], missingSheets:[], diagnostics:{}, diagBannerDismissed:false,
   toast:null, loginError:"",
@@ -688,7 +678,7 @@ function renderShell(inner){
   return `
   <div class="shell">
     <div class="sidebar-overlay ${S.sidebarOpen?'show':''}" data-action="close-sidebar"></div>
-    <div class="sidebar ${S.sidebarOpen?'open':''} ${S.sidebarCollapsed?'collapsed':''}">
+    <div class="sidebar ${S.sidebarOpen?'open':''}">
       <div class="brand">
         <div class="brand-inner">
           <div class="brand-icon"><span></span><span></span><span></span><span></span></div>
@@ -1240,37 +1230,10 @@ document.addEventListener('click',e=>{
   if(a==='ledger-print'){window.print();return;}
 });
 document.addEventListener('click',e=>{if(!e.target.closest('.dt-colmenu-wrap')&&S.colMenuOpen){S.colMenuOpen=null;render();}});
-
-/* ============================= SIDEBAR AUTO-COLLAPSE (DESKTOP ONLY) =============================
- * Per explicit user instruction: sidebar should shrink (icon-only) the moment the
- * user clicks anywhere in the main table/content area, and return to its current
- * full-width state the moment they click the header/topbar ("side bar sould be
- * chota ho jaye jaise hi hum bahar main table pe click kare...jaise hi header pe
- * click kare vo jaise abhi hai waise ho jayega"). Pulled out as a pure function
- * (no DOM/state access) so it's unit-testable on its own — the click listener below
- * only supplies the two booleans and applies the result.
- * Desktop-only: the `.sidebar.collapsed` CSS rule itself is scoped to
- * @media (min-width:981px), so on mobile this class is simply inert — but we still
- * skip the state flip below on small screens so it never interferes with the
- * existing off-canvas open/close (.sidebar.open slide-in) behaviour there. */
-function sidebarCollapseAction_(clickedInsideContent,clickedInsideTopbar){
-  if(clickedInsideTopbar)return 'expand';
-  if(clickedInsideContent)return 'collapse';
-  return null;
-}
-const SIDEBAR_COLLAPSE_MIN_WIDTH=981;
-document.addEventListener('click',e=>{
-  if(!S.user)return; // no shell rendered yet (login screen) — nothing to collapse
-  if(window.innerWidth<SIDEBAR_COLLAPSE_MIN_WIDTH)return;
-  const action=sidebarCollapseAction_(!!e.target.closest('.content'),!!e.target.closest('.topbar'));
-  if(action==='collapse'&&!S.sidebarCollapsed){
-    S.sidebarCollapsed=true;
-    const sb=document.querySelector('.sidebar');if(sb)sb.classList.add('collapsed');
-  }else if(action==='expand'&&S.sidebarCollapsed){
-    S.sidebarCollapsed=false;
-    const sb=document.querySelector('.sidebar');if(sb)sb.classList.remove('collapsed');
-  }
-});
+/* Note: the desktop sidebar's collapse/expand is handled entirely in CSS now
+ * (.sidebar / .sidebar:hover under @media (min-width:981px) in CSS.html) — it
+ * rests as an icon-only rail and expands on hover, no JS state needed. See that
+ * rule's comment for the full explicit-user-instruction reasoning. */
 
 document.addEventListener('mousedown',e=>{
   const el=e.target.closest('[data-action="resize"]');if(!el)return;
