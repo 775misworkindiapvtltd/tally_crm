@@ -368,9 +368,8 @@ function renderMapView(){
   const filteredStates=searchQ?stateRows.filter(s=>s.state.toLowerCase().includes(searchQ)):stateRows;
 
   return `
-  ${renderFilterBar()}
-  ${renderMapKpiCards_(byState)}
-  <div class="map-shell">
+  ${renderFilterBar(renderMapKpiCards_(byState))}
+  <div class="map-shell ${S.map.sidePanelOpen?'map-side-open':'map-side-closed'}">
     <div class="map-panel">
       <div class="map-toolbar">
         <div class="map-heading"><div class="map-title">${selState?esc(selState):'India Sales Map'}</div><div class="map-subtitle">${selState?'Administrative district boundaries • city sales mapped to districts':'Sales by state • select a state for district drill-down'}</div></div>
@@ -380,6 +379,9 @@ function renderMapView(){
           <button class="btn btn-ghost map-zoom-btn" data-action="map-zoom" data-dir="in" title="Zoom in">+</button>
           <button class="btn btn-ghost map-zoom-btn" data-action="map-zoom" data-dir="out" title="Zoom out">−</button>
           <button class="btn btn-ghost map-reset-btn" data-action="map-zoom" data-dir="reset" title="Fit map">Fit</button>
+          <button class="btn btn-ghost map-side-toggle${S.map.sidePanelOpen?' is-open':''}" data-action="map-toggle-side" aria-expanded="${S.map.sidePanelOpen?'true':'false'}" title="${S.map.sidePanelOpen?'Hide sales list and enlarge map':'Show sales list'}">
+            <span>${S.map.sidePanelOpen?'Hide List':'Sales List'}</span><b>${S.map.sidePanelOpen?'›':'+'}</b>
+          </button>
         </div>
       </div>
       <div class="map-canvas-wrap" id="mapCanvasWrap">
@@ -562,14 +564,16 @@ function districtLabelSvg_(item){
 // since there's no further drill-down level.
 function markerSvg_(x,y,amount,name,clickable,colorHex){
   const label=fmtCompactINR_(amount);
-  const labelW=Math.max(38,label.length*6.4+14), labelH=17, r=8.5;
+  // 25% larger than the previous state amount badge (9.5px → 11.9px).
+  // Badge dimensions grow with it so the value never clips.
+  const labelFont=11.9,labelW=Math.max(48,label.length*8+16),labelH=22,r=8.5;
   const clickAttr=clickable?`data-action="map-select-state" data-state="${esc(name)}"`:'';
   // Compact state name (max 12 chars) shown below the pin
   const shortName=String(name||'').length>12?name.slice(0,10)+'…':name;
   const nameW=Math.max(36,shortName.length*5.2+10);
   return `<g class="map-marker map-fixed-overlay" data-map-fixed-x="${x}" data-map-fixed-y="${y}" ${clickAttr} style="cursor:${clickable?'pointer':'default'};">
     <rect x="${(x-labelW/2).toFixed(1)}" y="${(y-r-labelH-3).toFixed(1)}" width="${labelW.toFixed(1)}" height="${labelH}" rx="5" fill="#111729" opacity="0.92"></rect>
-    <text x="${x.toFixed(1)}" y="${(y-r-labelH-3+labelH/2+3.4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#ffffff" font-family="'JetBrains Mono',monospace">${esc(label)}</text>
+    <text x="${x.toFixed(1)}" y="${(y-r-labelH-3+labelH/2+4.2).toFixed(1)}" text-anchor="middle" font-size="${labelFont}" font-weight="700" fill="#ffffff" font-family="'JetBrains Mono',monospace">${esc(label)}</text>
     <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${colorHex}" stroke="#ffffff" stroke-width="2"></circle>
     <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#ffffff"></circle>
     <rect x="${(x-nameW/2).toFixed(1)}" y="${(y+r+2).toFixed(1)}" width="${nameW.toFixed(1)}" height="12" rx="3" fill="#ffffff" stroke="#E5E7EB" stroke-width="0.5" opacity="0.9"></rect>
@@ -709,7 +713,12 @@ function bindMapInteractions_(svg){
 function drawIndiaMap_(gj,districtGj){
   const wrap=document.getElementById('mapCanvasWrap');if(!wrap)return;
   const byState=salesByState_(),selState=S.map.selectedState;
-  const W=920,H=760;
+  const H=760;
+  const wrapRect=wrap.getBoundingClientRect?wrap.getBoundingClientRect():null;
+  const canvasAspect=wrapRect&&wrapRect.height?wrapRect.width/wrapRect.height:920/760;
+  // Use the newly available width when the right panel is collapsed. Wide states
+  // can then occupy the expanded canvas instead of being confined to a 920px viewBox.
+  const W=Math.max(920,Math.min(1500,Math.round(H*canvasAspect)));
   const selectedFeature=selState?gj.features.find(f=>featureMatchesState_(f,selState)):null;
   const districtFeatures=selState&&districtGj&&districtGj.features?districtGj.features:[];
   const selectedGeometry=districtFeatures.length?geometryFromFeatures_(districtFeatures):(selectedFeature?selectedFeature.geometry:null);
@@ -801,6 +810,11 @@ document.addEventListener('click',e=>{
     S.map.selectedState=el.getAttribute('data-state');S.map.zoom=1;S.map.panX=0;S.map.panY=0;S.map.citySortCol='amount';S.map.citySortDir=-1;render();return;
   }
   if(a==='map-back'){ S.map.selectedState='';S.map.zoom=1;S.map.panX=0;S.map.panY=0;render();return; }
+  if(a==='map-toggle-side'){
+    S.map.sidePanelOpen=!S.map.sidePanelOpen;
+    try{localStorage.setItem('tally_map_side_panel_open',String(S.map.sidePanelOpen));}catch(err){}
+    render();return;
+  }
   if(a==='map-retry'){ retryIndiaMap();return; }
   if(a==='map-city-sort'){
     const col=el.getAttribute('data-col');

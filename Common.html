@@ -101,7 +101,7 @@ let S = {
   // The currently-open "Mark/Edit Follow Up" popup — {open,party,rowKey,date,remarks}.
   followUpPopup:null,
   ageingOpen:false, ageingMode:'all',
-  map:{selectedState:'',zoom:1,searchQuery:'',citySortCol:'amount',citySortDir:-1,panX:0,panY:0},
+  map:{selectedState:'',zoom:1,searchQuery:'',citySortCol:'amount',citySortDir:-1,panX:0,panY:0,sidePanelOpen:false},
   // Sales Report top toggle: 'sales' = existing invoice-wise master/detail grid
   // (unchanged), 'category' = the Category-wise Monthly/Yearly/Custom pivot below
   // (see renderSalesCategoryPivot() in Finance.html). This pivot is a bespoke table
@@ -142,6 +142,7 @@ let S = {
 };
 
 try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
+try{ S.map.sidePanelOpen=localStorage.getItem('tally_map_side_panel_open')==='true'; }catch(e){}
 // Restore every valid incremental size, including values reached by repeated clicks.
 try{
   const fs=parseInt(localStorage.getItem('tally_font_size'),10);

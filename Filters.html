@@ -109,10 +109,11 @@ function inRange(dateVal,fromISOStr,toISOStr){
 }
 function pctChange(cur,prev){if(!prev)return cur?100:0;return((cur-prev)/Math.abs(prev))*100;}
 
-function renderFilterBar(){
+function renderFilterBar(trailingHtml){
   const fys=availableFinancialYears();const selected=selectedFinancialYears();const all=!selected.length;
   const buttonText=all?'All Financial Years':(selected.length===1?financialYearFromKey(selected[0]).label:selected.length+' Financial Years Selected');
-  return `<div class="fbar fy-only-bar">
+  const hasTrailing=!!trailingHtml;
+  return `<div class="fbar fy-only-bar${hasTrailing?' fbar-with-trailing':''}">
     <span class="fy-inline-label">Financial Year</span>
     <div class="fy-multi">
       <button type="button" class="fy-multi-btn" data-action="fy-open">${esc(buttonText)} <span>▾</span></button>
@@ -122,7 +123,7 @@ function renderFilterBar(){
       </div>`:''}
     </div>
     <span class="fy-selection-note">Showing: <b>${esc(selectedFYLabel())}</b></span>
-    <div class="spacer"></div>
+    ${hasTrailing?`<div class="fbar-trailing">${trailingHtml}</div>`:'<div class="spacer"></div>'}
   </div>`;
 }
 
