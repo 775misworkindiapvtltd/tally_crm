@@ -61,8 +61,8 @@ function renderSettings(){
       <div class="simple-panel" style="margin-bottom:14px;">
         <h3 style="margin-bottom:6px;font-size:14px;">Appearance</h3>
         <div class="settings-row">
-          <div><div class="s-label">Dark Mode</div><div class="s-desc">Switch between light and dark theme</div></div>
-          <div class="toggle ${S.darkMode?'on':''}" data-action="settings-toggle-theme"><div class="knob"></div></div>
+          <div><div class="s-label">Display Mode &amp; Color Scheme</div><div class="s-desc">Choose Light/Dark/System and your accent color</div></div>
+          <button class="btn btn-ghost" data-action="open-appearance">🎨 Open Appearance Settings</button>
         </div>
       </div>
       <div class="simple-panel">
@@ -76,11 +76,4 @@ function renderSettings(){
     </div>`;
 }
 registerPage('settings',renderSettings);
-document.addEventListener('click',e=>{
-  const el=e.target.closest('[data-action="settings-toggle-theme"]');if(!el)return;
-  S.darkMode=!S.darkMode;
-  document.documentElement.classList.toggle('dark',S.darkMode);
-  try{localStorage.setItem('tally_dark_mode',S.darkMode?'true':'false');}catch(err){}
-  render();
-});
 </script>

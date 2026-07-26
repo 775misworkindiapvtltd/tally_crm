@@ -13,8 +13,18 @@
   --gold:#B4862B;--gold-tint:#F6ECD6;
   --recv:#2E6BF2;--recv-tint:#E9F0FE;--pay:#F08A1D;--pay-tint:#FDF0DE;
   --danger:#E23A3A;--danger-tint:#FCEAEA;--success:#16A34A;--success-tint:#E7F7ED;
-  --accent:#2E6BF2;--accent-dark:#1E4FC4;--accent-tint:#E9F0FE;--accent-tint2:#F5F8FF;
   --data-scale:1;
+  /* ============ DYNAMIC APPEARANCE ENGINE — PRIMARY COLOR TOKENS ============
+     Every accent color scheme (see [data-theme="..."] blocks near the end of this
+     file, and COLOR_SCHEMES in Common.html) sets ONLY these 5 raw tokens. Every
+     other variable that used to be a hardcoded blue (--accent/--accent-dark/
+     --accent-tint/--accent-tint2, plus the .btn-primary gradient, .avatar, and
+     .brand-icon gradient below) is now DERIVED from these, so switching a color
+     scheme recolors the entire app without touching a single component rule. */
+  --color-primary:#2E6BF2;--color-primary-hover:#1E4FC4;--color-primary-light:#E9F0FE;
+  --color-primary-glow:rgba(46,107,242,.35);--color-primary-soft:#F5F8FF;
+  --accent:var(--color-primary);--accent-dark:var(--color-primary-hover);
+  --accent-tint:var(--color-primary-light);--accent-tint2:var(--color-primary-soft);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
@@ -37,7 +47,14 @@ html.dark{
   --line:#212A42;--line-light:#1A2236;
   --blue-tint:#16233F;--green-tint:#132A1F;--red-tint:#2C1717;--orange-tint:#2C2013;--purple-tint:#211C3A;--teal-tint:#112826;--indigo-tint:#1B2040;
   --recv-tint:#16233F;--pay-tint:#2C2013;--danger-tint:#2C1717;--success-tint:#132A1F;
-  --accent:#4C82FF;--accent-dark:#7CA3FF;--accent-tint:#16233F;--accent-tint2:#141C30;--gold-tint:#2A2518;
+  --gold-tint:#2A2518;
+  /* Dark mode uses each color scheme's own --dark-* variant (brighter/more
+     saturated so it stays legible on a near-black surface) instead of the light
+     mode primary — see [data-theme] blocks below, each of which also sets
+     --color-primary-dark/-hover-dark/-light-dark/-soft-dark. Falls back to the
+     original hand-tuned blue if a scheme hasn't defined dark variants yet. */
+  --accent:var(--color-primary-dark,#4C82FF);--accent-dark:var(--color-primary-hover-dark,#7CA3FF);
+  --accent-tint:var(--color-primary-light-dark,#16233F);--accent-tint2:var(--color-primary-soft-dark,#141C30);
 }
 html.dark .login-wrap{background:linear-gradient(145deg,#05070C 0%,#0A0E1A 50%,#111729 100%);}
 html.dark .login-card{background:var(--surface);box-shadow:0 40px 80px -30px rgba(0,0,0,.8);}
@@ -60,6 +77,51 @@ html.dark .party-row:hover,html.dark .party-row.active{background:var(--accent-t
 html.dark .bottom-nav{background:var(--sidebar);border-color:var(--sidebar-line);}
 html.dark .qa-btn{background:var(--surface);border-color:var(--line);}
 html.dark .mini-table tbody tr:nth-child(even){background:#101627;}
+
+/* ============ DYNAMIC APPEARANCE ENGINE — 37 ACCENT COLOR SCHEMES ============
+ * Each [data-theme] block sets ONLY the 5 primary tokens (light-mode) plus 4 dark-
+ * mode variants. Every component in the app already reads --accent/--accent-dark/
+ * --accent-tint/--accent-tint2 (derived above), so applying data-theme on <html>
+ * recolors buttons, links, active nav, badges, focus rings, table headers, and
+ * charts app-wide with zero per-component changes. Generated with a consistent
+ * white-blend tint algorithm so every scheme reads equally polished. */
+[data-theme="violet-night"]{--color-primary:#7C3AED;--color-primary-hover:#9333EA;--color-primary-light:#EFE7FD;--color-primary-soft:#F8F5FE;--color-primary-glow:rgba(124,58,237,.35);--color-primary-dark:#945DF0;--color-primary-hover-dark:#AA7FF3;--color-primary-light-dark:#1F1640;--color-primary-soft-dark:#181333;}
+[data-theme="cobalt-blue"]{--color-primary:#2563EB;--color-primary-hover:#3B82F6;--color-primary-light:#E5ECFD;--color-primary-soft:#F4F7FE;--color-primary-glow:rgba(37,99,235,.35);--color-primary-dark:#4C7FEF;--color-primary-hover-dark:#719AF2;--color-primary-light-dark:#0F1D40;--color-primary-soft-dark:#0D1833;}
+[data-theme="emerald-dark"]{--color-primary:#059669;--color-primary-hover:#10B981;--color-primary-light:#E1F2ED;--color-primary-soft:#F3FAF8;--color-primary-glow:rgba(5,150,105,.35);--color-primary-dark:#32A984;--color-primary-hover-dark:#5DBB9E;--color-primary-light-dark:#092628;--color-primary-soft-dark:#091E23;}
+[data-theme="rose-quartz"]{--color-primary:#F43F5E;--color-primary-hover:#FB7185;--color-primary-light:#FEE8EC;--color-primary-soft:#FEF5F7;--color-primary-glow:rgba(244,63,94,.35);--color-primary-dark:#F6627B;--color-primary-hover-dark:#F88296;--color-primary-light-dark:#341726;--color-primary-soft-dark:#261422;}
+[data-theme="amber-forge"]{--color-primary:#F59E0B;--color-primary-hover:#D97706;--color-primary-light:#FEF3E2;--color-primary-soft:#FFFAF3;--color-primary-glow:rgba(245,158,11,.35);--color-primary-dark:#F7AF37;--color-primary-hover-dark:#F9C060;--color-primary-light-dark:#342817;--color-primary-soft-dark:#261F18;}
+[data-theme="crimson-edge"]{--color-primary:#DC2626;--color-primary-hover:#EF4444;--color-primary-light:#FBE5E5;--color-primary-soft:#FDF4F4;--color-primary-glow:rgba(220,38,38,.35);--color-primary-dark:#E24D4D;--color-primary-hover-dark:#E87272;--color-primary-light-dark:#30121C;--color-primary-soft-dark:#23111B;}
+[data-theme="slate-frost"]{--color-primary:#64748B;--color-primary-hover:#475569;--color-primary-light:#ECEEF1;--color-primary-soft:#F7F8F9;--color-primary-glow:rgba(100,116,139,.35);--color-primary-dark:#808DA0;--color-primary-hover-dark:#9AA5B4;--color-primary-light-dark:#1A202E;--color-primary-soft-dark:#151A28;}
+[data-theme="lime-surge"]{--color-primary:#84CC16;--color-primary-hover:#65A30D;--color-primary-light:#F0F9E3;--color-primary-soft:#F9FCF3;--color-primary-glow:rgba(132,204,22,.35);--color-primary-dark:#9AD540;--color-primary-hover-dark:#AFDE68;--color-primary-light-dark:#203019;--color-primary-soft-dark:#19251A;}
+[data-theme="indigo-wave"]{--color-primary:#6366F1;--color-primary-hover:#4F46E5;--color-primary-light:#ECEDFD;--color-primary-soft:#F7F7FE;--color-primary-glow:rgba(99,102,241,.35);--color-primary-dark:#7F82F4;--color-primary-hover-dark:#9A9CF6;--color-primary-light-dark:#1A1E41;--color-primary-soft-dark:#151934;}
+[data-theme="sunset-orange"]{--color-primary:#EA580C;--color-primary-hover:#F97316;--color-primary-light:#FCEBE2;--color-primary-soft:#FEF7F3;--color-primary-glow:rgba(234,88,12,.35);--color-primary-dark:#EE7638;--color-primary-hover-dark:#F19261;--color-primary-light-dark:#321B17;--color-primary-soft-dark:#251718;}
+[data-theme="orange"]{--color-primary:#FF6B00;--color-primary-hover:#FF8533;--color-primary-light:#FFEDE0;--color-primary-soft:#FFF8F2;--color-primary-glow:rgba(255,107,0,.35);--color-primary-dark:#FF862E;--color-primary-hover-dark:#FF9F59;--color-primary-light-dark:#361F15;--color-primary-soft-dark:#271917;}
+[data-theme="sunset"]{--color-primary:#FDBA74;--color-primary-hover:#FB923C;--color-primary-light:#FFF7EE;--color-primary-soft:#FFFCF8;--color-primary-glow:rgba(253,186,116,.35);--color-primary-dark:#FDC68D;--color-primary-hover-dark:#FED2A5;--color-primary-light-dark:#362D2A;--color-primary-soft-dark:#272325;}
+[data-theme="gold-luxe"]{--color-primary:#EAB308;--color-primary-hover:#CA8A04;--color-primary-light:#FCF6E1;--color-primary-soft:#FEFBF3;--color-primary-glow:rgba(234,179,8,.35);--color-primary-dark:#EEC134;--color-primary-hover-dark:#F1CE5E;--color-primary-light-dark:#322C17;--color-primary-soft-dark:#252218;}
+[data-theme="ruby"]{--color-primary:#E11D48;--color-primary-hover:#BE123C;--color-primary-light:#FBE4E9;--color-primary-soft:#FEF4F6;--color-primary-glow:rgba(225,29,72,.35);--color-primary-dark:#E64669;--color-primary-hover-dark:#EC6C88;--color-primary-light-dark:#311122;--color-primary-soft-dark:#241020;}
+[data-theme="berry-punch"]{--color-primary:#D946EF;--color-primary-hover:#C026D3;--color-primary-light:#FAE9FD;--color-primary-soft:#FDF6FE;--color-primary-glow:rgba(217,70,239,.35);--color-primary-dark:#E067F2;--color-primary-hover-dark:#E687F5;--color-primary-light-dark:#2F1840;--color-primary-soft-dark:#231534;}
+[data-theme="pink"]{--color-primary:#EC4899;--color-primary-hover:#DB2777;--color-primary-light:#FDE9F3;--color-primary-soft:#FEF6FA;--color-primary-glow:rgba(236,72,153,.35);--color-primary-dark:#EF69AB;--color-primary-hover-dark:#F388BD;--color-primary-light-dark:#331831;--color-primary-soft-dark:#251529;}
+[data-theme="fuchsia-bloom"]{--color-primary:#A855F7;--color-primary-hover:#9333EA;--color-primary-light:#F5EBFE;--color-primary-soft:#FBF7FF;--color-primary-glow:rgba(168,85,247,.35);--color-primary-dark:#B874F8;--color-primary-hover-dark:#C691FA;--color-primary-light-dark:#261B42;--color-primary-soft-dark:#1D1735;}
+[data-theme="plum"]{--color-primary:#8B5CF6;--color-primary-hover:#7C3AED;--color-primary-light:#F1EBFE;--color-primary-soft:#F9F7FF;--color-primary-glow:rgba(139,92,246,.35);--color-primary-dark:#A079F8;--color-primary-hover-dark:#B495F9;--color-primary-light-dark:#211C42;--color-primary-soft-dark:#191734;}
+[data-theme="midnight-navy"]{--color-primary:#1E3A8A;--color-primary-hover:#1E40AF;--color-primary-light:#E4E7F1;--color-primary-soft:#F4F5F9;--color-primary-glow:rgba(30,58,138,.35);--color-primary-dark:#475D9F;--color-primary-hover-dark:#6D7FB3;--color-primary-light-dark:#0E162E;--color-primary-soft-dark:#0C1327;}
+[data-theme="sky-wave"]{--color-primary:#0EA5E9;--color-primary-hover:#0284C7;--color-primary-light:#E2F4FC;--color-primary-soft:#F3FBFE;--color-primary-glow:rgba(14,165,233,.35);--color-primary-dark:#39B5ED;--color-primary-hover-dark:#62C5F1;--color-primary-light-dark:#0B293F;--color-primary-soft-dark:#0A2033;}
+[data-theme="cyan-pulse"]{--color-primary:#06B6D4;--color-primary-hover:#0891B2;--color-primary-light:#E1F6FA;--color-primary-soft:#F3FBFD;--color-primary-glow:rgba(6,182,212,.35);--color-primary-dark:#33C3DC;--color-primary-hover-dark:#5DD0E3;--color-primary-light-dark:#092C3B;--color-primary-soft-dark:#0A2230;}
+[data-theme="teal-tide"]{--color-primary:#14B8A6;--color-primary-hover:#0D9488;--color-primary-light:#E3F6F4;--color-primary-soft:#F3FBFB;--color-primary-glow:rgba(20,184,166,.35);--color-primary-dark:#3EC5B6;--color-primary-hover-dark:#66D1C5;--color-primary-light-dark:#0C2D33;--color-primary-soft-dark:#0B222B;}
+[data-theme="mint-surge"]{--color-primary:#10B981;--color-primary-hover:#059669;--color-primary-light:#E2F7F0;--color-primary-soft:#F3FCF9;--color-primary-glow:rgba(16,185,129,.35);--color-primary-dark:#3BC698;--color-primary-hover-dark:#64D2AD;--color-primary-light-dark:#0B2D2D;--color-primary-soft-dark:#0B2326;}
+[data-theme="chartreuse"]{--color-primary:#A3E635;--color-primary-hover:#84CC16;--color-primary-light:#F4FCE7;--color-primary-soft:#FAFEF5;--color-primary-glow:rgba(163,230,53,.35);--color-primary-dark:#B4EB59;--color-primary-hover-dark:#C3EF7C;--color-primary-light-dark:#26351F;--color-primary-soft-dark:#1C281D;}
+[data-theme="forest"]{--color-primary:#15803D;--color-primary-hover:#166534;--color-primary-light:#E3F0E8;--color-primary-soft:#F3F9F5;--color-primary-glow:rgba(21,128,61,.35);--color-primary-dark:#3F9760;--color-primary-hover-dark:#67AC81;--color-primary-light-dark:#0C2320;--color-primary-soft-dark:#0B1C1E;}
+[data-theme="jade"]{--color-primary:#047857;--color-primary-hover:#065F46;--color-primary-light:#E1EFEB;--color-primary-soft:#F2F8F7;--color-primary-glow:rgba(4,120,87,.35);--color-primary-dark:#319075;--color-primary-hover-dark:#5CA792;--color-primary-light-dark:#092125;--color-primary-soft-dark:#091B21;}
+[data-theme="seafoam"]{--color-primary:#2DD4BF;--color-primary-hover:#14B8A6;--color-primary-light:#E6FAF7;--color-primary-soft:#F5FDFC;--color-primary-glow:rgba(45,212,191,.35);--color-primary-dark:#53DCCB;--color-primary-hover-dark:#77E3D5;--color-primary-light-dark:#103238;--color-primary-soft-dark:#0E262E;}
+[data-theme="azure"]{--color-primary:#38BDF8;--color-primary-hover:#0284C7;--color-primary-light:#E7F7FE;--color-primary-soft:#F5FCFF;--color-primary-glow:rgba(56,189,248,.35);--color-primary-dark:#5CC9F9;--color-primary-hover-dark:#7ED4FA;--color-primary-light-dark:#122E42;--color-primary-soft-dark:#102335;}
+[data-theme="periwinkle"]{--color-primary:#818CF8;--color-primary-hover:#4F46E5;--color-primary-light:#F0F1FE;--color-primary-soft:#F9F9FF;--color-primary-glow:rgba(129,140,248,.35);--color-primary-dark:#98A1F9;--color-primary-hover-dark:#ADB4FA;--color-primary-light-dark:#1F2542;--color-primary-soft-dark:#181D35;}
+[data-theme="lavender"]{--color-primary:#C084FC;--color-primary-hover:#A855F7;--color-primary-light:#F7F0FF;--color-primary-soft:#FCF9FF;--color-primary-glow:rgba(192,132,252,.35);--color-primary-dark:#CB9AFD;--color-primary-hover-dark:#D6AFFD;--color-primary-light-dark:#2B2343;--color-primary-soft-dark:#201C35;}
+[data-theme="orchid"]{--color-primary:#E879F9;--color-primary-hover:#D946EF;--color-primary-light:#FCEFFE;--color-primary-soft:#FEF8FF;--color-primary-glow:rgba(232,121,249,.35);--color-primary-dark:#EC91FA;--color-primary-hover-dark:#F0A8FB;--color-primary-light-dark:#322142;--color-primary-soft-dark:#251B35;}
+[data-theme="flamingo"]{--color-primary:#FB7185;--color-primary-hover:#F43F5E;--color-primary-light:#FFEEF0;--color-primary-soft:#FFF8F9;--color-primary-glow:rgba(251,113,133,.35);--color-primary-dark:#FC8B9B;--color-primary-hover-dark:#FCA3B0;--color-primary-light-dark:#35202D;--color-primary-soft-dark:#271A27;}
+[data-theme="grapefruit"]{--color-primary:#FF6B6B;--color-primary-hover:#EE5253;--color-primary-light:#FFEDED;--color-primary-soft:#FFF8F8;--color-primary-glow:rgba(255,107,107,.35);--color-primary-dark:#FF8686;--color-primary-hover-dark:#FF9F9F;--color-primary-light-dark:#361F29;--color-primary-soft-dark:#271924;}
+[data-theme="wine"]{--color-primary:#9F1239;--color-primary-hover:#881337;--color-primary-light:#F3E3E7;--color-primary-soft:#FAF3F5;--color-primary-glow:rgba(159,18,57,.35);--color-primary-dark:#B03D5D;--color-primary-hover-dark:#C1657E;--color-primary-light-dark:#250F20;--color-primary-soft-dark:#1C0E1E;}
+[data-theme="copper"]{--color-primary:#B45309;--color-primary-hover:#92400E;--color-primary-light:#F6EAE1;--color-primary-soft:#FBF6F3;--color-primary-glow:rgba(180,83,9,.35);--color-primary-dark:#C27235;--color-primary-hover-dark:#CE8F5F;--color-primary-light-dark:#291A17;--color-primary-soft-dark:#1E1618;}
+[data-theme="tangerine"]{--color-primary:#F97316;--color-primary-hover:#EA580C;--color-primary-light:#FEEEE3;--color-primary-soft:#FFF8F3;--color-primary-glow:rgba(249,115,22,.35);--color-primary-dark:#FA8C40;--color-primary-hover-dark:#FBA468;--color-primary-light-dark:#352019;--color-primary-soft-dark:#271A1A;}
+[data-theme="honey"]{--color-primary:#FACC15;--color-primary-hover:#EAB308;--color-primary-light:#FEF9E3;--color-primary-soft:#FFFCF3;--color-primary-glow:rgba(250,204,21,.35);--color-primary-dark:#FBD53F;--color-primary-hover-dark:#FCDE67;--color-primary-light-dark:#353019;--color-primary-soft-dark:#272519;}
 
 #app{height:100vh;}
 h1,h2,h3,.disp{font-family:'Space Grotesk',sans-serif;}
@@ -86,8 +148,9 @@ input,select,button{font-family:inherit;font-size:13px;}
 .field input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-tint);}
 .btn{border:none;border-radius:8px;padding:11px 18px;font-weight:600;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;white-space:nowrap;}
 .btn:active{transform:scale(.98);}
-.btn-primary,.btn-gold{background:linear-gradient(135deg,#3B78F5,var(--blue-dark));color:#fff;box-shadow:0 2px 8px rgba(46,107,242,.3);}
-.btn-primary:hover,.btn-gold:hover{box-shadow:0 4px 14px rgba(46,107,242,.4);filter:brightness(1.05);}
+.btn-primary,.btn-gold{background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));color:#fff;box-shadow:0 2px 8px var(--color-primary-glow);}
+.btn-primary:hover,.btn-gold:hover{box-shadow:0 4px 14px var(--color-primary-glow);filter:brightness(1.05);}
+.btn-primary:focus-visible,.btn-ghost:focus-visible,.qa-btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;box-shadow:0 0 0 3px var(--color-primary-glow);}
 .btn-ghost{background:transparent;color:var(--muted);border:1.5px solid var(--line);}
 .btn-ghost:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
 .btn-block{width:100%;justify-content:center;}
@@ -150,7 +213,7 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;}
 .topbar-welcome b{color:var(--ink);font-weight:700;font-size:12px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
-.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4C5FE0);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
 .content{padding:6px 8px 0;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;overscroll-behavior-x:none;}
 /* Pages with embedded grids that need sticky headers + bottom pagination visible:
    .content-zoom stays a non-scrolling flex column so the grid's own .dt-scroll is
@@ -197,7 +260,7 @@ input,select,button{font-family:inherit;font-size:13px;}
 .fbar-presets{display:flex;align-items:center;gap:4px;background:var(--bg);border-radius:8px;padding:3px;}
 .fbar-presets button{border:none;background:transparent;padding:6px 11px;border-radius:6px;font-size:11.5px;font-weight:700;color:var(--ink-secondary);cursor:pointer;transition:all .12s;}
 .fbar-presets button:hover{color:var(--accent-dark);}
-.fbar-presets button.active{background:var(--accent);color:#fff;box-shadow:0 1px 4px rgba(46,107,242,.35);}
+.fbar-presets button.active{background:var(--accent);color:#fff;box-shadow:0 1px 4px var(--color-primary-glow);}
 .fbar-compare{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:var(--ink-secondary);cursor:pointer;user-select:none;padding:7px 4px;}
 .fbar-compare input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;}
 .fbar .spacer{flex:1;}
@@ -425,7 +488,19 @@ table.scp-table tbody td.scp-cell{text-align:right;font-family:Tahoma,Geneva,san
    commas unlike Verdana/JetBrains Mono) + negative letter-spacing for extra
    tightness, per explicit user instruction ("46,000 ye font aisa use karo ki comma
    ke baad space na dikhe"). */
-table.scp-table tbody td.scp-cell.scp-period,
+/* Body-row period/month/year AMOUNT cells (the right-side columns in the Sales +
+   Expense Duration pivots) previously hardcoded a viewport-based clamp() that never
+   multiplied by var(--data-scale) — so clicking A-/A/A+ visibly resized the
+   Category column (inherits font-size:calc(11px * var(--data-scale)) from
+   .scp-cell) but had ZERO effect on these amount columns, per explicit user
+   instruction ("left col chote bade ho rahe hai but right wale jinmein amt aata
+   hai vo chota bda nahi hota"). Wrapping the existing clamp in calc(...*
+   var(--data-scale)) keeps the original anti-wrap shrink-on-narrow-column behavior
+   while ALSO responding to the A-/A/A+ control — and since Sales Duration AND
+   Expense Duration both render this exact class, one fix here covers both reports.
+   The THEAD totals-row variant stays on the plain (unscaled) clamp — headers,
+   like every other header in the app, intentionally do NOT resize with A-/A/A+. */
+table.scp-table tbody td.scp-cell.scp-period{white-space:nowrap;overflow:hidden;text-overflow:clip;font-family:Tahoma,Geneva,sans-serif;font-size:calc(clamp(8px,1.1vw,11px) * var(--data-scale));font-weight:600;letter-spacing:-0.5px;}
 table.scp-table thead tr.scp-totals-row td.scp-period{white-space:nowrap;overflow:hidden;text-overflow:clip;font-family:Tahoma,Geneva,sans-serif;font-size:clamp(8px,1.1vw,11px);font-weight:600;letter-spacing:-0.5px;}
 table.scp-table tbody td.scp-cell.scp-total,
 table.scp-table thead tr.scp-totals-row td.scp-total{white-space:nowrap;font-family:Tahoma,Geneva,sans-serif;font-weight:700;letter-spacing:-0.5px;}
@@ -452,7 +527,7 @@ table.scp-table tbody tr:hover td{filter:brightness(0.95);}
 .map-zoom-controls .map-zoom-btn{width:32px;padding:0;font-size:18px;line-height:1;font-weight:700;}
 .map-reset-btn{min-width:38px;}
 .map-side-toggle{display:inline-flex!important;align-items:center;gap:6px;min-width:82px;justify-content:center;border-color:var(--accent)!important;color:var(--accent-dark)!important;}
-.map-side-toggle:not(.is-open){background:var(--accent)!important;color:#fff!important;box-shadow:0 2px 7px rgba(46,107,242,.24);}
+.map-side-toggle:not(.is-open){background:var(--accent)!important;color:#fff!important;box-shadow:0 2px 7px var(--color-primary-glow);}
 .map-side-toggle b{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:currentColor;font-size:13px;line-height:1;}
 .map-side-toggle b::first-line{color:inherit;}.map-side-toggle:not(.is-open) b{background:rgba(255,255,255,.2);color:#fff;}.map-side-toggle.is-open b{background:var(--accent-tint);color:var(--accent-dark);}
 .map-canvas-wrap{--map-empty-fill:#E8EDF4;--map-state-backdrop:#F8FAFC;--map-state-fallback:#DCEAFE;position:relative;flex:1;min-height:0;display:block;overflow:hidden;padding:0;background:radial-gradient(circle at 50% 42%,rgba(219,234,254,.34),rgba(248,250,252,.76) 58%,rgba(241,245,249,.92));isolation:isolate;}
@@ -941,8 +1016,8 @@ table.dt tbody td.num{font-family:Tahoma,Geneva,sans-serif;text-align:right;lett
 table.dt tbody td.heatmap-cell{transition:background .15s;border-right:1px solid rgba(255,255,255,.4);}
 /* Sales Report expandable master/detail rows. */
 .exp-toggle-cell{text-align:center;padding:0!important;}
-.exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;background:var(--accent);font-size:13px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(46,107,242,.35);transition:all .12s;}
-.exp-toggle:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 3px 8px rgba(46,107,242,.4);}
+.exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;background:var(--accent);font-size:13px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 3px var(--color-primary-glow);transition:all .12s;}
+.exp-toggle:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 3px 8px var(--color-primary-glow);}
 .exp-toggle.open{background:var(--accent-dark);}
 /* Inline expand toggle sits directly to the LEFT of a cell's own value, on the SAME
    line (Sales Report's Invoice No column), instead of stacked above it or taking a
@@ -954,7 +1029,7 @@ table.dt tbody td.heatmap-cell{transition:background .15s;border-right:1px solid
 td.exp-toggle-host{vertical-align:middle;}
 td.exp-toggle-host .exp-toggle-host-inner{display:inline-flex;align-items:center;gap:5px;}
 .exp-toggle-host-val{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
-.exp-toggle-inline{flex:none;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;color:#fff;background:var(--accent);font-size:10px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 2px rgba(46,107,242,.35);transition:all .12s;}
+.exp-toggle-inline{flex:none;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;color:#fff;background:var(--accent);font-size:10px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 2px var(--color-primary-glow);transition:all .12s;}
 .exp-toggle-inline:hover{background:var(--accent-dark);}
 .exp-toggle-inline.open{background:var(--accent-dark);}
 /* The master row that's currently expanded stays visually highlighted while its
@@ -1242,5 +1317,53 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
 
 @media (min-width:981px){
   .bottom-nav{display:none !important;}
+}
+
+/* ============ APPEARANCE SETTINGS MODAL ============ */
+.appearance-trigger{position:relative;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-secondary);flex:none;transition:all .12s;}
+.appearance-trigger:hover{background:var(--accent-tint2);color:var(--accent-dark);border-color:var(--accent);}
+.appearance-trigger svg{width:16px;height:16px;}
+.sidebar-appearance-btn{width:100%;justify-content:center;margin-top:6px;padding:8px;font-size:11.5px;gap:6px;}
+.appearance-overlay{position:fixed;inset:0;background:rgba(10,14,26,.55);z-index:150;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);animation:toast-in .18s cubic-bezier(.2,.8,.4,1);}
+.appearance-modal{background:var(--surface);border-radius:16px;box-shadow:0 40px 90px -20px rgba(0,0,0,.45);width:640px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+.appearance-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line-light);flex:none;}
+.appearance-head h3{font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.appearance-head .sub{font-size:10.5px;color:var(--muted);margin-top:2px;font-weight:500;}
+.appearance-body{padding:20px 22px;overflow-y:auto;flex:1;min-height:0;}
+.appearance-section-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;}
+/* Display mode: 3 segmented tiles with icon + label + subtext */
+.dm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px;}
+.dm-tile{border:1.5px solid var(--line);border-radius:12px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;text-align:center;background:var(--surface);transition:all .14s;position:relative;}
+.dm-tile:hover{border-color:var(--accent);background:var(--accent-tint2);}
+.dm-tile.active{border-color:var(--accent);background:var(--accent-tint);box-shadow:0 0 0 3px var(--color-primary-glow);}
+.dm-tile .dm-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent-tint2);color:var(--accent-dark);}
+.dm-tile.active .dm-ic{background:var(--accent);color:#fff;}
+.dm-tile svg{width:17px;height:17px;}
+.dm-tile .dm-label{font-size:12px;font-weight:700;color:var(--ink);}
+.dm-tile .dm-sub{font-size:9px;color:var(--muted);line-height:1.3;}
+.dm-tile .dm-check{position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;background:var(--accent);color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:900;}
+/* Color scheme grid: Surprise Me card first, then 37 palette swatch cards */
+.cs-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;}
+.cs-card{border:1.5px solid var(--line);border-radius:11px;padding:9px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;background:var(--surface);transition:all .14s;position:relative;}
+.cs-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.08);}
+.cs-card.active{border-color:var(--accent);box-shadow:0 0 0 3px var(--color-primary-glow);}
+.cs-swatch{width:30px;height:30px;border-radius:50%;flex:none;box-shadow:inset 0 -3px 6px rgba(0,0,0,.18),0 2px 5px rgba(0,0,0,.12);}
+.cs-swatch.surprise{background:conic-gradient(from 180deg,#7C3AED,#2563EB,#059669,#F59E0B,#DC2626,#EC4899,#7C3AED);}
+.cs-name{font-size:8.7px;font-weight:700;color:var(--ink-secondary);text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.cs-card.active .cs-name{color:var(--accent-dark);}
+.cs-check{position:absolute;top:4px;right:4px;width:15px;height:15px;border-radius:50%;background:var(--accent);color:#fff;font-size:8.5px;display:flex;align-items:center;justify-content:center;font-weight:900;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+/* Live preview strip */
+.ap-preview{margin-top:22px;padding:16px;border:1.5px dashed var(--line);border-radius:12px;background:var(--bg);}
+.ap-preview-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.ap-preview-btn{background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:12px;cursor:pointer;box-shadow:0 2px 8px var(--color-primary-glow);}
+.ap-preview-badge{background:var(--accent-tint);color:var(--accent-dark);font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;}
+.ap-preview-link{color:var(--accent-dark);font-size:12.5px;font-weight:700;text-decoration:none;border-bottom:2px solid var(--accent);padding-bottom:2px;cursor:pointer;}
+.appearance-foot{padding:13px 22px;border-top:1px solid var(--line-light);display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;background:var(--bg);}
+.appearance-foot .ap-current{font-size:10.5px;color:var(--muted);font-weight:600;}
+.appearance-foot .ap-current b{color:var(--ink-secondary);}
+@media (max-width:600px){
+  .appearance-modal{max-height:94vh;}
+  .cs-grid{grid-template-columns:repeat(4,1fr);}
+  .dm-grid{grid-template-columns:1fr;}
 }
 </style>

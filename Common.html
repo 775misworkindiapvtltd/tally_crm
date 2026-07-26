@@ -90,6 +90,12 @@ let S = {
   lastSync:'', lastSyncAt:0, lastSyncSource:'', cacheLoaded:false,
   ledger:{ search:'', selected:null, detail:null, loading:false },
   darkMode:false, fontSize:100,
+  // Appearance system: displayMode is 'light'|'dark'|'system' (persisted +
+  // resolved into S.darkMode/html.dark on load/change). colorScheme is a
+  // COLOR_SCHEMES[].key or 'surprise' (re-rolled on every load — see
+  // applyAppearance_()/rollSurpriseScheme_() below). appearanceOpen toggles the
+  // settings modal.
+  displayMode:'light', colorScheme:'cobalt-blue', appearanceOpen:false,
   filters:null,
   // Follow Up List: per-CUSTOMER (not per-bill) date+remarks note, keyed by
   // partyName.trim().toLowerCase() — so if the same company appears on 3 rows
@@ -141,7 +147,11 @@ let S = {
   expenseCategoryPage:1, expenseCategoryPageSize:50,
 };
 
-try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
+// Legacy dark-mode-only toggle migrated into the new displayMode system below
+// (initAppearance_() in Appearance.html) — kept here only so S.darkMode has a
+// sane pre-migration value before that script runs (load order: Common.html
+// loads first, per Index.html's comment, so Appearance.html runs right after).
+try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; }catch(e){}
 try{ S.map.sidePanelOpen=localStorage.getItem('tally_map_side_panel_open')==='true'; }catch(e){}
 // Restore every valid incremental size, including values reached by repeated clicks.
 try{
@@ -679,6 +689,7 @@ function renderShell(inner){
       <div class="nav" id="sidebarNav">${navHtml}</div>
       <div class="sidebar-foot">
         <button class="btn sync-btn btn-ghost" data-action="syncnow" style="color:#AAB2C8;border-color:var(--sidebar-line);">${S.syncing?'⟳ Syncing…':'⟳ Sync with Tally'}</button>
+        <button class="btn sidebar-appearance-btn btn-ghost" data-action="open-appearance" style="color:#AAB2C8;border-color:var(--sidebar-line);">🎨 Appearance</button>
         <div class="sync-status" aria-live="polite">
           <span class="sync-state">${S.syncing?'Syncing live data…':'Last updated'}</span>
           <b>${esc(S.lastSync||'No cached data yet')}</b>
@@ -702,7 +713,7 @@ function renderShell(inner){
               return `<button class="${active?'active':''}" data-action="set-fontsize" data-font-command="${control.command}" title="${control.command==='reset'?'Reset content size to 100%':`${control.label} — click repeatedly (${S.fontSize}%)`}" ${disabled?'disabled':''}>${esc(control.label)}</button>`;
             }).join('')}
           </div>
-          <div class="topbar-controls"><button data-action="toggle-theme" title="Toggle dark/light mode">${S.darkMode?'☀️':'🌙'}</button></div>
+          <button class="appearance-trigger" data-action="open-appearance" title="Appearance — display mode &amp; color scheme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="20" r="2.5"/><path d="M12 12a9 9 0 100 9"/></svg></button>
           <div class="topbar-welcome"><b>${esc(S.user.name)}</b><span>${esc(S.user.role||'Team Member')}</span></div>
           <div class="avatar">${initials}</div>
         </div>
