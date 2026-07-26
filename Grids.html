@@ -73,6 +73,15 @@ const FOLLOWUP_COLS=[
     const dateLabel=note.date?fmtDDMMMYYYY(fromISO(note.date)):'';
     const ts=note.timestamp?`<span class="followup-note-ts">${esc(note.timestamp)}</span>`:'';
     return `<div class="followup-note-cell"><span class="followup-note-date">${esc(dateLabel)}</span><span class="followup-note-remarks" title="${esc(note.remarks||'')}">${esc(note.remarks||'')}</span>${ts}</div>`;
+  }},
+  // Promised Amount — reads the same follow-up entry as Follow-up Notes above (the
+  // SALES sheet's own PROMISED AMOUNT column, per the user's screenshot, plus
+  // whatever was most recently logged via the popup). Per explicit user report
+  // that sheet data existing but missing in the panel — this column was entirely
+  // absent from the grid before, so it was never shown regardless of the sheet.
+  {key:'promisedAmount',label:'Promised Amount',width:140,num:true,render:r=>{
+    const note=S.followUpData[followUpDataKey_(r.partyName)];
+    return (note&&note.promisedAmount!=null&&note.promisedAmount!=='')?fmtINR(note.promisedAmount):muted_('—');
   }}
 ];
 const CREDIT_NOTE_COLS=[

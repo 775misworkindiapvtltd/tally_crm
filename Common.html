@@ -97,14 +97,21 @@ let S = {
   // settings modal.
   displayMode:'light', colorScheme:'cobalt-blue', appearanceOpen:false,
   filters:null,
-  // Follow Up List: per-CUSTOMER (not per-bill) date+remarks note, keyed by
+  // Follow Up List: per-CUSTOMER (not per-bill) note, keyed by
   // partyName.trim().toLowerCase() — so if the same company appears on 3 rows
   // (3 overdue bills), saving one popup updates the note shown on ALL 3 rows at
   // once, per explicit user instruction ("agar company name 3 baar hai is table
-  // me teeno me ye update ho jaye"). Client-side only (not persisted to sheet),
-  // same as followUpDone above.
-  followUpData:{},
-  // The currently-open "Mark/Edit Follow Up" popup — {open,party,rowKey,date,remarks}.
+  // me teeno me ye update ho jaye"). PERSISTED to the sheet on every save (see
+  // saveFollowUp() in Code.gs — appends to FOLLOWUP_LOG + writes the latest values
+  // onto SALES) and re-loaded on every sync via the 'followUp' chunk, per explicit
+  // user instruction ("SAVE ALL PREVIOUS FOLLOW UP REMARKS ALSO AND CAN SEE ALSO
+  // WHILE FOLLOW UP"). followUpData = latest entry per party (what the grid's Plan
+  // Date/Follow-up Notes columns show); followUpHistory = EVERY entry per party,
+  // newest first (what the popup's own history list shows). Both are derived from
+  // followUpLegacyMap/followUpHistoryRaw (the raw server payload) via
+  // rebuildFollowUpData_() — never written to directly.
+  followUpData:{}, followUpHistory:{}, followUpLegacyMap:{}, followUpHistoryRaw:[],
+  // The currently-open "Mark/Edit Follow Up" popup — {open,party,rowKey,date,remarks,promisedAmount}.
   followUpPopup:null,
   ageingOpen:false, ageingMode:'all',
   map:{selectedState:'',zoom:1,searchQuery:'',citySortCol:'amount',citySortDir:-1,panX:0,panY:0,sidePanelOpen:false},
@@ -221,7 +228,48 @@ function applyDataPayload_(data){
   S.expenseTrendRows=Array.isArray(data.expenseTrendRows)?data.expenseTrendRows:[];
   S.missingSheets=Array.isArray(data.missingSheets)?data.missingSheets:[];
   S.diagnostics=(data.diagnostics&&typeof data.diagnostics==='object')?data.diagnostics:{};
+  S.followUpLegacyMap=(data.followUpLegacyMap&&typeof data.followUpLegacyMap==='object')?data.followUpLegacyMap:{};
+  S.followUpHistoryRaw=Array.isArray(data.followUpHistoryRaw)?data.followUpHistoryRaw:[];
+  rebuildFollowUpData_();
   return true;
+}
+
+// Merges the two follow-up data sources loaded from the server into the shape the
+// UI actually reads (S.followUpData = latest entry per party, S.followUpHistory =
+// every entry per party, newest first) — per explicit user report/instruction
+// ("I CAN SEE DATA IN SHEET FOR FOLLOW UP BUT SAME MISSING IN PANEL...SAVE ALL
+// PREVIOUS FOLLOW UP REMARKS ALSO AND CAN SEE ALSO WHILE FOLLOW UP"):
+//  1) S.followUpHistoryRaw — every row from the append-only FOLLOWUP_LOG sheet
+//     (oldest-first, one row per save, going forward from now on).
+//  2) S.followUpLegacyMap — whatever DATE/REMARKS/PROMISED AMOUNT is ALREADY sitting
+//     directly on the SALES sheet per party (entries made before this feature
+//     existed, or typed straight into the sheet) — used ONLY as a fallback for a
+//     party with no logged history yet, so it doesn't get silently dropped.
+// Called once after every chunk load AND once right after a fresh save (see
+// followup-save handler in Receivables.html) so the popup's own history list
+// reflects a just-saved entry immediately, without waiting for the next sync.
+function rebuildFollowUpData_(){
+  const byParty={};
+  (S.followUpHistoryRaw||[]).forEach(entry=>{
+    const key=followUpDataKey_(entry.party);
+    if(!key)return;
+    if(!byParty[key])byParty[key]=[];
+    byParty[key].push(entry);
+  });
+  const followUpData={},followUpHistory={};
+  Object.keys(byParty).forEach(key=>{
+    const newestFirst=byParty[key].slice().reverse(); // sheet append order is oldest-first
+    followUpHistory[key]=newestFirst;
+    followUpData[key]=newestFirst[0];
+  });
+  Object.keys(S.followUpLegacyMap||{}).forEach(key=>{
+    if(followUpData[key])return; // logged history (if any) is authoritative for this party
+    const legacy=S.followUpLegacyMap[key];
+    followUpData[key]=legacy;
+    followUpHistory[key]=[legacy];
+  });
+  S.followUpData=followUpData;
+  S.followUpHistory=followUpHistory;
 }
 
 function applyBootstrap(data){
@@ -248,7 +296,8 @@ function markSynced(source,time){
 function dataCachePayload_(){
   return {expense:S.expense,payables:S.payables,receivables:S.receivables,receipt:S.receipt,payment:S.payment,
     balanceParties:S.balanceParties,balanceVouchers:S.balanceVouchers,balanceLedgers:S.balanceLedgers,
-    salesRows:S.salesRows,expenseTrendRows:S.expenseTrendRows,missingSheets:S.missingSheets,diagnostics:S.diagnostics};
+    salesRows:S.salesRows,expenseTrendRows:S.expenseTrendRows,missingSheets:S.missingSheets,diagnostics:S.diagnostics,
+    followUpLegacyMap:S.followUpLegacyMap,followUpHistoryRaw:S.followUpHistoryRaw};
 }
 function dataCacheSnapshot_(){return {version:DATA_CACHE_VERSION,savedAt:S.lastSyncAt||Date.now(),data:dataCachePayload_()};}
 function openDataCache_(){
@@ -362,7 +411,7 @@ async function loadAll(){
 // Load data one tab at a time to stay within the Apps Script response-size limit.
 // The currently rendered cached snapshot stays visible until all live chunks finish;
 // this avoids partial numbers, repeated page movement, and a table changing mid-scroll.
-const CHUNK_KEYS=['receivables','payables','expense','expenseTrend','receipt','payment','sales','balance','diagnostics'];
+const CHUNK_KEYS=['receivables','payables','expense','expenseTrend','receipt','payment','sales','balance','diagnostics','followUp'];
 
 // Page-scoped refresh: clicking the inline "Refresh" button on a specific page only
 // re-fetches the sheet(s) that page actually needs, instead of pulling every
@@ -394,6 +443,7 @@ async function loadChunks(chunkKeys){
         case 'sales':livePayload.salesRows=data||[];break;
         case 'balance':livePayload.balanceParties=data.balanceParties||[];livePayload.balanceVouchers=data.balanceVouchers||[];livePayload.balanceLedgers=data.balanceLedgers||{};break;
         case 'diagnostics':livePayload.diagnostics=data||{};break;
+        case 'followUp':livePayload.followUpLegacyMap=data.legacyMap||{};livePayload.followUpHistoryRaw=data.history||[];break;
       }
       completed++;
     }catch(err){console.error('Chunk load error ['+key+']:',err.message);}

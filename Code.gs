@@ -94,7 +94,15 @@ var SHEETS = {
   receipt:     'Receipt',
   payment:     'PAYMENT',
   balance:     'Balance',
-  sales:       'SALES'
+  sales:       'SALES',
+  // Append-only follow-up history log — auto-created (see ensureFollowUpLogSheet_)
+  // the first time a follow-up is saved. One row per Mark/Edit Follow Up save, per
+  // explicit user instruction ("IS THERE ANY WAY I CAN SAVE ALL PREVIOUS FOLLOW UP
+  // REMARKS ALSO AND CAN SEE ALSO WHILE FOLLOW UP"). Kept separate from the SALES
+  // sheet's own DATE/REMARKS/PROMISED AMOUNT columns (which still get the LATEST
+  // values written for backward-compat / at-a-glance visibility directly on SALES),
+  // so no previous entry is ever overwritten or lost.
+  followUpLog: 'FOLLOWUP_LOG'
 };
 
 function doGet(e) {
@@ -339,6 +347,21 @@ function mapReceivablesRows_(rows) {
 // immune to hidden/inserted columns going forward.
 function findColIndexByHeaderContains_(headerRow, substrings) {
   for (var i = 0; i < headerRow.length; i++) {
+    var h = String(headerRow[i] || '').toUpperCase();
+    for (var j = 0; j < substrings.length; j++) {
+      if (h.indexOf(substrings[j]) !== -1) return i;
+    }
+  }
+  return -1;
+}
+
+// Same header-text search as above, but only considers columns AFTER `afterIdx` —
+// used for the SALES sheet's follow-up DATE/REMARKS/PROMISED AMOUNT columns (which
+// sit near the far right of the sheet, per the user's screenshot), so a generic
+// "DATE" search doesn't accidentally match the sheet's own leading Sale Date column
+// (column A) instead of the follow-up-specific one further right.
+function findColIndexByHeaderContainsAfter_(headerRow, substrings, afterIdx) {
+  for (var i = (afterIdx == null ? 0 : afterIdx) + 1; i < headerRow.length; i++) {
     var h = String(headerRow[i] || '').toUpperCase();
     for (var j = 0; j < substrings.length; j++) {
       if (h.indexOf(substrings[j]) !== -1) return i;
@@ -620,6 +643,19 @@ function getChunk(tabKey) {
     case 'receipt':         return mapReceiptRows_(sheetToRows_(SHEETS.receipt));
     case 'payment':         return mapReceiptRows_(sheetToRows_(SHEETS.payment));
     case 'sales':           return mapSalesRows_(sheetToRows_(SHEETS.sales), getHeaderRow_(SHEETS.sales));
+    // Follow-up data: legacyMap = whatever DATE/REMARKS/PROMISED AMOUNT is already
+    // sitting directly on the SALES sheet per party (see getSalesFollowUpLegacyMap_)
+    // + history = every individually-logged save from FOLLOWUP_LOG (append-only,
+    // oldest-first) — both per explicit user report/instruction ("I CAN SEE DATA IN
+    // SHEET FOR FOLLOW UP BUT SAME MISSING IN PANEL ALSO...SAVE ALL PREVIOUS FOLLOW
+    // UP REMARKS ALSO AND CAN SEE ALSO WHILE FOLLOW UP").
+    case 'followUp': {
+      var salesHeaderRow = getHeaderRow_(SHEETS.sales);
+      return {
+        legacyMap: getSalesFollowUpLegacyMap_(sheetToRows_(SHEETS.sales), salesHeaderRow),
+        history: getFollowUpHistory_()
+      };
+    }
     case 'balance': {
       var rows = mapBalanceRows_(sheetToRows_(SHEETS.balance));
       // balanceLedgers = every party's full statement, precomputed once here so the
@@ -730,11 +766,123 @@ function getLedgerPartyListFromRows_(rows) {
  * balanceLedgers map yet (e.g. a brand-new party added to the sheet after the
  * last "Sync with Tally"). Normal party switching no longer calls this — see
  * buildAllLedgers_() above, which precomputes every party's ledger in one pass.
+// Converts any date-ish value (a real Date object, or a text cell that Sheets left
+// as a string) into a plain 'yyyy-MM-dd' ISO string — the exact format the client's
+// fromISO() expects (see Common.html: `new Date(+p[0],+p[1]-1,+p[2])` on a '-'-split
+// string). Using the display format (fmtDateOnly_, "26-Jul-2026") here instead would
+// silently break every follow-up date shown in the panel, since fromISO() can't
+// parse a month NAME — this bug would look exactly like "sheet has data but panel
+// doesn't show it".
+function fmtDateISO_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  var parsed = new Date(s);
+  return isNaN(parsed.getTime()) ? '' : Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+// Locates the SALES sheet's own DATE / REMARKS / PROMISED AMOUNT follow-up columns
+// by searching header TEXT (same tolerant approach already used for the amount/
+// category/GST columns above), instead of a hardcoded column number. This was the
+// root cause of "sheet mein data hai but panel mein missing": the sheet has 2 HIDDEN
+// columns elsewhere (documented at the top of this file), which silently shifts
+// every fixed column-letter guess — a hardcoded column O/P/Q could easily have been
+// reading/writing the WRONG columns on this specific spreadsheet. DATE is searched
+// only AFTER the CATEGORY column (findColIndexByHeaderContainsAfter_) so it can
+// never accidentally match column A's own Sale Date instead of this follow-up-
+// specific one further right, per the user's screenshot (DESCRIPTION → TOTAL
+// PRICE → CATEGORY → DATE → REMARKS → PROMISED AMOUNT).
+function findSalesFollowUpColumns_(headerRow) {
+  var categoryIdx = findColIndexByHeaderContains_(headerRow, ['CATEG']);
+  var remarksIdx = findColIndexByHeaderContains_(headerRow, ['REMARK']);
+  var promisedIdx = findColIndexByHeaderContains_(headerRow, ['PROMISED']);
+  var dateIdx = findColIndexByHeaderContainsAfter_(headerRow, ['DATE'], categoryIdx === -1 ? 0 : categoryIdx);
+  // Fall back to the ORIGINAL fixed positions (0-indexed 14/15/16 = columns O/P/Q)
+  // only if header text truly can't be found at all, so a sheet with blank/renamed
+  // headers still behaves exactly as it did before this fix.
+  if (dateIdx === -1) dateIdx = 14;
+  if (remarksIdx === -1) remarksIdx = 15;
+  if (promisedIdx === -1) promisedIdx = 16;
+  return { dateIdx: dateIdx, remarksIdx: remarksIdx, promisedIdx: promisedIdx };
+}
+
+// Reads whatever follow-up DATE/REMARKS/PROMISED AMOUNT is ALREADY sitting in the
+// SALES sheet (entries made before this history-log feature existed, or typed
+// directly into the sheet by someone) into a per-party map — per explicit user
+// report ("I CAN SEE DATA IN SHEET FOR FOLLOW UP BUT SAME MISSING IN PANEL"). Only
+// used as a fallback display entry for a party that has NO entries yet in the new
+// append-only FOLLOWUP_LOG sheet (see getFollowUpHistory_ below) — once a party has
+// even one logged entry, the log is authoritative and this legacy snapshot is
+// ignored for that party, since the log will already include everything relevant.
+function getSalesFollowUpLegacyMap_(rows, headerRow) {
+  var partyColIdx = findColIndexByHeaderContains_(headerRow, ['INVOICE TO', 'CUSTOMER NAME', 'PARTY NAME', 'BUYER NAME']);
+  if (partyColIdx === -1) return {};
+  var cols = findSalesFollowUpColumns_(headerRow);
+  var map = {};
+  rows.forEach(function (row) {
+    var party = String(row[partyColIdx] || '').trim();
+    if (!party) return;
+    var dateVal = cols.dateIdx !== -1 ? row[cols.dateIdx] : '';
+    var remarksVal = cols.remarksIdx !== -1 ? row[cols.remarksIdx] : '';
+    var promisedVal = cols.promisedIdx !== -1 ? row[cols.promisedIdx] : '';
+    if (!dateVal && !remarksVal && !promisedVal) return; // nothing entered on this row
+    var key = party.toLowerCase();
+    if (!map[key]) { // first non-blank match wins — every matching row for a party carries the same values anyway
+      map[key] = { party: party, date: fmtDateISO_(dateVal), remarks: fmtValue_(remarksVal), promisedAmount: promisedVal === '' ? null : numOrZero_(promisedVal) };
+    }
+  });
+  return map;
+}
+
+// Append-only follow-up history log (auto-created on first save) — one row per
+// Mark/Edit Follow Up save, EVERY save adds a new row, none is ever overwritten,
+// per explicit user instruction ("SAVE ALL PREVIOUS FOLLOW UP REMARKS ALSO AND CAN
+// SEE ALSO WHILE FOLLOW UP"). Kept as its own sheet (not more columns on SALES)
+// specifically so history can never be capped by "one cell per row" the way the
+// old SALES-column-only approach was.
+function ensureFollowUpLogSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SHEETS.followUpLog);
+  if (!sh) {
+    sh = ss.insertSheet(SHEETS.followUpLog);
+    sh.getRange(1, 1, 1, 5).setValues([['Timestamp', 'Party', 'Follow-up Date', 'Remarks', 'Promised Amount']]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function appendFollowUpLog_(party, date, remarks, promisedAmount, timestamp) {
+  var sh = ensureFollowUpLogSheet_();
+  sh.appendRow([timestamp || new Date(), party || '', date || '', remarks || '', (promisedAmount === undefined || promisedAmount === null || promisedAmount === '') ? '' : promisedAmount]);
+}
+// Rows come back in sheet order (oldest first, since appendRow always adds to the
+// bottom) — the client reverses this itself when grouping by party, so each
+// party's own entries end up newest-first without needing to parse the display-
+// formatted timestamp string back into a sortable value.
+function getFollowUpHistory_() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.followUpLog);
+  if (!sh) return [];
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+  var data = sh.getRange(2, 1, lastRow - 1, 5).getValues();
+  return data.filter(function (row) { return row.some(function (c) { return c !== ''; }); }).map(function (row) {
+    return {
+      timestamp: fmtTimestamp_(row[0]), party: fmtValue_(row[1]),
+      date: fmtDateISO_(row[2]), remarks: fmtValue_(row[3]),
+      promisedAmount: row[4] === '' ? null : numOrZero_(row[4])
+    };
+  });
+}
+
 /**
- * saveFollowUp(data) — persists a follow-up note (date + remarks + auto-timestamp)
- * onto the SALES sheet in columns O (DATE), P (REMARKS), Q (TIMESTAMP).
- * Finds ALL rows where the "Invoice To" / party-name column matches data.party
- * (case-insensitive) and writes the same values into every matching row.
+ * saveFollowUp(data) — persists a follow-up note (date + remarks + promised amount)
+ * TWO ways: (1) writes the LATEST values onto every SALES row matching data.party,
+ * in the sheet's own DATE/REMARKS/PROMISED AMOUNT columns (located by header text —
+ * see findSalesFollowUpColumns_ — not a hardcoded column letter), for at-a-glance
+ * visibility directly in the spreadsheet; AND (2) appends a new row to the
+ * append-only FOLLOWUP_LOG sheet, so this and every PREVIOUS save for this party
+ * remain individually visible — per explicit user instruction ("SAVE ALL PREVIOUS
+ * FOLLOW UP REMARKS ALSO").
  */
 function saveFollowUp(data) {
   if (!data || !data.party) return {ok:false, error:'No party specified'};
@@ -746,24 +894,28 @@ function saveFollowUp(data) {
   var partyColIdx = findColIndexByHeaderContains_(headerRow, ['INVOICE TO', 'CUSTOMER NAME', 'PARTY NAME', 'BUYER NAME']);
   if (partyColIdx === -1) return {ok:false, error:'Party name column not found in SALES header'};
 
-  var dateCol = 15, remarksCol = 16, tsCol = 17;
+  var cols = findSalesFollowUpColumns_(headerRow);
   var lastRow = sh.getLastRow();
-  if (lastRow < 2) return {ok:true, updated:0};
-
-  var partyData = sh.getRange(2, partyColIdx + 1, lastRow - 1, 1).getValues();
-  var target = String(data.party).trim().toLowerCase();
   var updated = 0;
 
-  for (var i = 0; i < partyData.length; i++) {
-    var cellVal = String(partyData[i][0] || '').trim().toLowerCase();
-    if (cellVal === target) {
-      var rowNum = i + 2;
-      sh.getRange(rowNum, dateCol).setValue(data.date || '');
-      sh.getRange(rowNum, remarksCol).setValue(data.remarks || '');
-      sh.getRange(rowNum, tsCol).setValue(data.timestamp || new Date());
-      updated++;
+  if (lastRow >= 2) {
+    var partyData = sh.getRange(2, partyColIdx + 1, lastRow - 1, 1).getValues();
+    var target = String(data.party).trim().toLowerCase();
+    for (var i = 0; i < partyData.length; i++) {
+      var cellVal = String(partyData[i][0] || '').trim().toLowerCase();
+      if (cellVal === target) {
+        var rowNum = i + 2;
+        if (cols.dateIdx !== -1) sh.getRange(rowNum, cols.dateIdx + 1).setValue(data.date || '');
+        if (cols.remarksIdx !== -1) sh.getRange(rowNum, cols.remarksIdx + 1).setValue(data.remarks || '');
+        if (cols.promisedIdx !== -1) sh.getRange(rowNum, cols.promisedIdx + 1).setValue(
+          (data.promisedAmount === undefined || data.promisedAmount === null || data.promisedAmount === '') ? '' : data.promisedAmount
+        );
+        updated++;
+      }
     }
   }
+
+  appendFollowUpLog_(data.party, data.date, data.remarks, data.promisedAmount, data.timestamp);
   return {ok:true, updated:updated};
 }
 
