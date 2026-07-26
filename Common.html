@@ -847,11 +847,12 @@ function renderGrid(tableKey){
     const sortTitle=isActiveSort?(st.dir===1?'Sorted ascending — click for descending':'Sorted descending — click for ascending'):'Sort ascending';
     const fo=st.filterOpen===c.key;
     let filterHtml='';
-    if(fo){
-      if(c.date){
-        const df=(st.dateFilters&&st.dateFilters[c.key])||{from:'',to:''};
-        filterHtml=`<div class="th-filter th-date-filter"><input type="date" aria-label="From date" data-action="date-from" data-table="${tableKey}" data-col="${c.key}" value="${esc(df.from||'')}"><span class="date-sep">to</span><input type="date" aria-label="To date" data-action="date-to" data-table="${tableKey}" data-col="${c.key}" value="${esc(df.to||'')}">${df.from||df.to?`<span class="dr-clear" title="Clear date range" data-action="clear-daterange" data-table="${tableKey}" data-col="${c.key}">✕</span>`:''}</div>`;
-      }else if(c.filterType==='select'){
+    // Date/Timestamp columns no longer get the old inline two-<input type=date>
+    // filter row — they now open the shared calendar popup (see openDateRange()
+    // below), per explicit user instruction with a reference screenshot: every
+    // date/timestamp column across every grid must open the SAME calendar UI.
+    if(fo && !c.date){
+      if(c.filterType==='select'){
         const opts=(c.filterOptions?c.filterOptions(def.data()):[]);
         const cur=st.filters[c.key]||'';
         filterHtml=`<div class="th-filter"><select data-action="filter-select" data-table="${tableKey}" data-col="${c.key}"><option value="">All</option>${opts.map(o=>`<option value="${esc(o)}" ${cur===o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
@@ -862,6 +863,8 @@ function renderGrid(tableKey){
     }
     const searchIcon=c.date?'📅':(c.filterType==='select'||c.filterType==='number-range')?'▾':'⌕';
     const searchTitle=c.date?'Filter by date range':c.filterType==='select'?'Filter this column':c.filterType==='number-range'?'Filter by price range':'Search this column';
+    const searchAction=c.date?'date-icon':'togglesearch';
+    const dateFilterActiveCls=(c.date&&hasActiveColumnFilter_(st,c.key))?' date-filter-active':'';
     const headerTotal=c.headerTotal?(()=>{
       const amounts=rows.map(r=>r[c.key]).filter(v=>v!==null&&v!==undefined&&v!=='');
       if(!amounts.length)return '—';
@@ -873,7 +876,7 @@ function renderGrid(tableKey){
       <div class="th-inner"><div class="th-row">
         <span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${headerLabel}</span>
         <span class="sort-ic${def.showSortArrows?' sort-ready':''}" title="${sortTitle}" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${si2}</span>
-        <span class="search-ic" title="${searchTitle}" data-action="togglesearch" data-table="${tableKey}" data-col="${c.key}">${searchIcon}</span>
+        <span class="search-ic${dateFilterActiveCls}" title="${searchTitle}" data-action="${searchAction}" data-table="${tableKey}" data-col="${c.key}">${searchIcon}</span>
       </div>
       ${filterHtml}
       <div class="resize-handle" data-action="resize" data-table="${tableKey}" data-col="${c.key}"></div>
@@ -1114,11 +1117,11 @@ document.addEventListener('input',e=>{
 document.addEventListener('change',e=>{
   const el=e.target,a=el.getAttribute('data-action');
   if(a==='pagesize'){const t=el.getAttribute('data-table');tableState(t).pageSize=parseInt(el.value,10);tableState(t).page=1;persistGridPrefs_(t);render();return;}
-  if(a==='date-from'||a==='date-to'){
-    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
-    if(!st.dateFilters[c])st.dateFilters[c]={from:'',to:''};
-    st.dateFilters[c][a==='date-from'?'from':'to']=el.value;st.page=1;st.filterOpen=c;render();return;
-  }
+  // date-from/date-to (old two-<input type=date> inline header filter) removed —
+  // every date/timestamp column now opens the shared calendar popup instead (see
+  // DateRange.html's data-action="date-icon"/"dr-apply"), which writes into this
+  // exact same tableState(t).dateFilters structure, so renderGrid()'s own filtering
+  // logic above needed no changes.
   if(a==='filter-select'){
     const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
     st.filters[c]=el.value;st.page=1;render();return;

@@ -844,6 +844,51 @@ html.dark .map-data-note{background:#101E31;border-color:#1E4F73;color:#A6AEC4;}
 /* Applied filters must be obvious without reopening each header control. */
 table.dt thead th.filter-active{background:#2458B8;box-shadow:inset 0 -3px #67E8F9;}
 table.dt thead th.filter-active .search-ic{color:#FFFFFF;}
+/* Date/Timestamp column's 📅 icon turns active-colored once a range is applied,
+   same visual language as filter-active above, but scoped to just the icon since
+   the date column no longer has its own inline th-filter row to also highlight. */
+table.dt thead th .search-ic.date-filter-active{color:#67E8F9;}
+
+/* ---------- CALENDAR DATE-RANGE POPUP (shared across every date/timestamp column) ----------
+ * Appended directly to <body> as #drPopupRoot (see DateRange.html) — position:fixed
+ * so .dt-scroll's overflow and the sticky <thead> can never clip it, and it always
+ * renders above every other panel regardless of which grid/page it was opened from. */
+#drPopupRoot{position:fixed;z-index:200;display:none;}
+.dr-popup-inner{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 20px 60px -10px rgba(15,23,42,.35);overflow:hidden;width:max-content;}
+.dr-body{display:flex;}
+.dr-presets{display:flex;flex-direction:column;min-width:150px;padding:10px 8px;border-right:1px solid var(--line-light);background:var(--bg);gap:2px;}
+.dr-preset{text-align:left;border:none;background:transparent;padding:9px 12px;border-radius:7px;font-size:12px;font-weight:600;color:var(--ink-secondary);cursor:pointer;transition:all .12s;}
+.dr-preset:hover{background:var(--accent-tint2);color:var(--accent-dark);}
+.dr-preset.active{background:var(--accent);color:#fff;}
+.dr-cals{display:flex;padding:14px 16px;gap:22px;}
+.dr-cal{width:230px;}
+.dr-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;}
+.dr-cal-title{font-size:12.5px;font-weight:700;color:var(--ink);flex:1;text-align:center;}
+.dr-nav{border:1px solid var(--line);background:var(--surface);color:var(--ink-secondary);width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;flex:none;}
+.dr-nav:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
+.dr-nav-spacer{width:24px;flex:none;display:inline-block;}
+.dr-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}
+.dr-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.dr-day{display:flex;align-items:center;justify-content:center;height:28px;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--ink-secondary);cursor:pointer;background:transparent;}
+.dr-day:hover{background:var(--accent-tint2);}
+.dr-day-outside{color:var(--muted);opacity:.45;}
+.dr-day-today{box-shadow:inset 0 0 0 1.5px var(--accent);}
+.dr-day-inrange{background:var(--accent-tint);border-radius:0;color:var(--accent-dark);}
+.dr-day-edge{background:var(--accent);color:#fff;font-weight:700;}
+.dr-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 16px;border-top:1px solid var(--line-light);background:var(--bg);}
+.dr-range-text{font-size:11.5px;font-weight:700;color:var(--ink-secondary);white-space:nowrap;}
+.dr-footer-actions{display:flex;gap:8px;flex:none;}
+.dr-footer-actions .btn{padding:6px 14px;font-size:11.5px;}
+html.dark .dr-popup-inner{background:var(--surface);border-color:var(--line);}
+html.dark .dr-presets{background:#0B0F1A;border-color:var(--line);}
+html.dark .dr-footer{background:#0B0F1A;}
+html.dark .dr-nav{background:var(--surface);border-color:var(--line);color:var(--ink-secondary);}
+@media (max-width:700px){
+  .dr-body{flex-direction:column;}
+  .dr-presets{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line-light);}
+  .dr-cals{flex-direction:column;gap:14px;}
+  .dr-cal{width:100%;}
+}
 
 /* .dt-scroll is THE scroll container that makes thead position:sticky work.
    It MUST have a bounded height (flex:1 inside a height-constrained flex parent,
@@ -871,10 +916,9 @@ table.dt thead th .search-ic{margin-left:auto;cursor:pointer;color:#6B7280;flex:
 table.dt thead th .search-ic:hover{color:var(--accent);}
 table.dt thead th .th-filter input{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #2D3552;background:#0A0E1A;color:#E7EAF4;font-size:11.5px;}
 table.dt thead th .th-filter select{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #2D3552;background:#0A0E1A;color:#E7EAF4;font-size:11.5px;cursor:pointer;}
-table.dt thead th .th-date-filter,table.dt thead th .th-num-filter{display:grid;grid-template-columns:1fr 22px 1fr 20px;align-items:center;gap:3px;min-width:245px;}
-table.dt thead th .th-date-filter input[type="date"]{min-width:0;padding:4px 3px;color-scheme:dark;font-size:10px;}
+table.dt thead th .th-num-filter{display:grid;grid-template-columns:1fr 22px 1fr 20px;align-items:center;gap:3px;min-width:245px;}
 table.dt thead th .th-num-filter input[type="number"]{min-width:0;padding:4px 6px;background:#0A0E1A;color:#E7EAF4;border:1px solid #2D3552;border-radius:5px;font-size:11px;}
-table.dt thead th .th-date-filter .date-sep,table.dt thead th .th-num-filter .date-sep{text-align:center;font-size:9px;color:#8992AA;}
+table.dt thead th .th-num-filter .date-sep{text-align:center;font-size:9px;color:#8992AA;}
 table.dt thead th .dr-clear{cursor:pointer;color:#F87171;text-align:center;font-size:11px;font-weight:700;}
 table.dt thead th .th-filter input::placeholder{color:#5A6070;}
 table.dt thead th .resize-handle{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:5;}
