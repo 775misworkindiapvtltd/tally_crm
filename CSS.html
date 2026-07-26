@@ -160,10 +160,13 @@ input,select,button{font-family:inherit;font-size:13px;}
 
 /* ---------- SHELL / NAV ---------- */
 .shell{display:flex;height:100vh;overflow:hidden;}
-.sidebar{width:236px;flex:none;background:var(--sidebar);color:var(--sidebar-sub);display:flex;flex-direction:column;height:100vh;border-right:1px solid var(--sidebar-line);transition:transform .25s ease;}
+.sidebar{width:236px;flex:none;background:var(--sidebar);color:var(--sidebar-sub);display:flex;flex-direction:column;height:100vh;border-right:1px solid var(--sidebar-line);overflow:hidden;transition:transform .25s ease,width .2s ease;}
 .brand{padding:16px 16px 14px;border-bottom:1px solid var(--sidebar-line);display:flex;align-items:flex-start;justify-content:space-between;}
 .brand-inner{display:flex;align-items:center;gap:10px;}
-.brand-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4C5FE0,#7C5CFC);display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:7px;flex:none;}
+/* Tied to the active color scheme (was a hardcoded indigo/purple gradient) so the
+   brand mark visibly changes with Appearance, per explicit user instruction
+   ("apprearance is not working for side bar and header color"). */
+.brand-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:7px;flex:none;}
 .brand-icon span{background:rgba(255,255,255,.85);border-radius:2px;}
 .brand-text .eyebrow{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#F3F5FC;letter-spacing:-.01em;}
 .brand-text .eyebrow sup{font-size:9px;color:#7C87A3;}
@@ -173,8 +176,13 @@ input,select,button{font-family:inherit;font-size:13px;}
 .nav-group-label{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#525C78;font-weight:700;padding:14px 10px 5px 12px;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;color:#AAB2C8;font-size:12.5px;font-weight:600;cursor:pointer;transition:background .12s,color .12s;position:relative;}
 .nav-item .n-ic{width:16px;height:16px;flex:none;display:flex;align-items:center;justify-content:center;opacity:.9;}
-.nav-item:hover{background:var(--sidebar-hover);color:#F0F2FA;}
-.nav-item.active{background:var(--sidebar-active);color:#FFFFFF;}
+/* Sidebar hover/active states blend the active color scheme's accent into the
+   existing dark navy sidebar tint (color-mix), instead of a fixed navy shade that
+   never changed with Appearance — per explicit user instruction ("apprearance is
+   not working for side bar and header color"). The plain --sidebar-hover/-active
+   value stays first as a fallback for browsers without color-mix() support. */
+.nav-item:hover{background:var(--sidebar-hover);background:color-mix(in srgb, var(--accent) 18%, var(--sidebar-hover));color:#F0F2FA;}
+.nav-item.active{background:var(--sidebar-active);background:color-mix(in srgb, var(--accent) 36%, var(--sidebar-active));color:#FFFFFF;}
 .nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--accent);}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9.5px;font-weight:700;border-radius:9px;padding:1px 6px;min-width:16px;text-align:center;}
 .nav-empty{font-size:10.5px;color:#525C78;padding:8px 10px;font-style:italic;}
@@ -188,7 +196,11 @@ input,select,button{font-family:inherit;font-size:13px;}
 .sidebar-overlay{display:none;}
 
 .main{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
-.topbar{background:var(--surface);border-bottom:1px solid var(--line);padding:0 18px;height:56px;display:flex;align-items:center;justify-content:space-between;flex:none;}
+/* box-shadow (not border) carries the color-scheme accent along the header's
+   bottom edge so it visibly reacts to Appearance without fighting the plain
+   border-bottom color the html.dark override below also sets, per explicit user
+   instruction ("apprearance is not working for side bar and header color"). */
+.topbar{background:var(--surface);border-bottom:1px solid var(--line);box-shadow:inset 0 -2px 0 0 var(--accent);padding:0 18px;height:56px;display:flex;align-items:center;justify-content:space-between;flex:none;}
 .topbar-left{display:flex;align-items:center;gap:12px;min-width:0;}
 .hamburger{display:none;border:none;background:transparent;cursor:pointer;color:var(--ink-secondary);font-size:18px;padding:4px 6px;}
 .topbar-left .tb-title h2{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;}
@@ -213,7 +225,10 @@ input,select,button{font-family:inherit;font-size:13px;}
 .topbar-welcome{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;}
 .topbar-welcome b{color:var(--ink);font-weight:700;font-size:12px;}
 .topbar-welcome span{font-size:10px;color:var(--muted);}
-.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
+/* Square (rounded-square) avatar instead of a circle, per explicit user instruction
+   ("instead of circle use square") — radius matches .brand-icon/buttons elsewhere
+   in the shell for a consistent look. */
+.avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
 .content{padding:6px 8px 0;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;overscroll-behavior-x:none;}
 /* Pages with embedded grids that need sticky headers + bottom pagination visible:
    .content-zoom stays a non-scrolling flex column so the grid's own .dt-scroll is
@@ -973,7 +988,11 @@ html.dark .dr-nav{background:var(--surface);border-color:var(--line);color:var(-
 
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
 table.dt thead th{position:sticky;top:0;background:#111729;color:#D7DCEA;z-index:4;padding:0;border-right:1px solid #232C42;overflow:hidden;}
-table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;gap:5px;position:relative;min-height:36px;}
+/* Header cell content is vertically centered top-to-bottom (not just left/right)
+   across every grid on every page, per explicit user instruction ("header top n
+   bottom se center allign karna hai - use for all pages"). justify-content acts on
+   the column flex's main (vertical) axis here. */
+table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;justify-content:center;gap:5px;position:relative;min-height:36px;}
 table.dt thead th .th-row{display:flex;align-items:center;gap:6px;}
 table.dt thead th .th-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;user-select:none;white-space:normal;overflow-wrap:break-word;line-height:1.3;}
 /* Small grey subtitle line under a header label — e.g. Sales Report's "Amount"
@@ -1081,7 +1100,7 @@ html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!importan
    With-GST/W-o-GST subtitle stays but tightened; the resize-handle/search-ic in the
    far-right-most header (where the floating Columns ▾ overlay sits) gets a little
    right padding so the overlay button doesn't visually collide with them. */
-.dt-table-wrap.sub-grid table.dt thead th .th-inner{padding:3px 8px;gap:0;min-height:24px;}
+.dt-table-wrap.sub-grid table.dt thead th .th-inner{padding:3px 8px;gap:0;min-height:24px;justify-content:center;}
 .dt-table-wrap.sub-grid table.dt thead th .th-label{color:var(--accent-dark);font-size:9px;font-weight:700;line-height:1.1;letter-spacing:.03em;}
 .dt-table-wrap.sub-grid table.dt thead th .th-sub{display:block;margin-top:0;color:#7894C8;font-size:7.5px;font-weight:700;line-height:1;letter-spacing:0;text-transform:none;}
 .dt-table-wrap.sub-grid table.dt thead th .th-total{display:block;margin-top:0;color:#94A4C6;font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;line-height:1;letter-spacing:0;text-transform:none;}
@@ -1317,6 +1336,21 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
 
 @media (min-width:981px){
   .bottom-nav{display:none !important;}
+  /* Desktop-only collapsible sidebar: shrinks to an icon rail when the main table/
+     content area is clicked, and returns to full width as soon as the header
+     (topbar) is clicked — see setSidebarCollapsed_()/the dedicated click listener
+     in Common.html. Scoped to desktop only so the existing mobile off-canvas
+     open/close behavior (.sidebar.open / transform) is completely unaffected. */
+  .sidebar.collapsed{width:64px;}
+  .sidebar.collapsed .brand{padding:16px 8px 14px;justify-content:center;}
+  .sidebar.collapsed .brand-inner{gap:0;}
+  .sidebar.collapsed .brand-text{display:none;}
+  .sidebar.collapsed .nav{padding:10px 6px;}
+  .sidebar.collapsed .nav-group-label{display:none;}
+  .sidebar.collapsed .nav-item{justify-content:center;padding:9px 6px;gap:0;}
+  .sidebar.collapsed .nav-item span:not(.n-ic){display:none;}
+  .sidebar.collapsed .nav-children{display:none;}
+  .sidebar.collapsed .sidebar-foot{display:none;}
 }
 
 /* ============ APPEARANCE SETTINGS MODAL ============ */
