@@ -9,7 +9,7 @@
  * shown in your app doesn't match the one below, that's why a fix "isn't
  * working" — it simply hasn't been deployed yet.
  */
-const APP_BUILD = "2026-07-24.2 (Receipt List viewport-fit prototype, compact pagination, incremental text scaling)";
+const APP_BUILD = "2026-07-26.1 (Fixed sidebar collapse: hover-to-expand + icon-with-caption rail; avatar/brand-icon now follow Appearance in dark mode too)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
 // Repeatable content-size controls. A-/A+ move one 5% step on every click while
@@ -662,12 +662,20 @@ function renderShell(inner){
     if(n.group!==lastGroup){ if(n.group) navHtml+=`<div class="nav-group-label">${esc(n.group.toUpperCase())}</div>`; lastGroup=n.group; }
     if(n.parent){
       const childActive=S.page==='ageingRecv'||S.page==='ageingPay';
-      navHtml+=`<div class="nav-item nav-parent ${childActive?'active':''}" data-action="ageing-nav-toggle"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}<span class="nav-chevron">${S.ageingOpen?'▾':'›'}</span></div>`;
-      if(S.ageingOpen||childActive)navHtml+=`<div class="nav-children"><div class="nav-item ${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv"><span class="n-ic">${NAV_ICONS.in}</span>Receivables</div><div class="nav-item ${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay"><span class="n-ic">${NAV_ICONS.out}</span>Payables</div></div>`;
+      // BUG FIX: the label used to be a bare text node sitting directly inside
+      // .nav-item (never wrapped in a <span>) — so the collapsed-sidebar CSS rule
+      // that was meant to hide it (`.nav-item span:not(.n-ic){display:none;}`) could
+      // only ever match the OTHER spans (.nav-chevron/.nav-badge), never the label
+      // text itself. That's exactly why the icon-only rail showed garbled/overlapping
+      // full label text squeezed into 64px — the label was never actually hidden.
+      // Wrapping it in <span class="n-lbl"> lets the collapsed CSS target it
+      // precisely, per explicit user instruction with a reference screenshot.
+      navHtml+=`<div class="nav-item nav-parent ${childActive?'active':''}" data-action="ageing-nav-toggle"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${S.ageingOpen?'▾':'›'}</span></div>`;
+      if(S.ageingOpen||childActive)navHtml+=`<div class="nav-children"><div class="nav-item ${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv"><span class="n-ic">${NAV_ICONS.in}</span><span class="n-lbl">Receivables</span></div><div class="nav-item ${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay"><span class="n-ic">${NAV_ICONS.out}</span><span class="n-lbl">Payables</span></div></div>`;
       return;
     }
     const badge=n.badge?n.badge():0;
-    navHtml+=`<div class="nav-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}${badge?`<span class="nav-badge">${badge}</span>`:''}</div>`;
+    navHtml+=`<div class="nav-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span>${badge?`<span class="nav-badge">${badge}</span>`:''}</div>`;
   });
   const bottomItems=[items.find(n=>n.key==='dashboard'),items.find(n=>n.group==='Receivables'),items.find(n=>n.group==='Payables'),items.find(n=>n.key==='mapView'),items.find(n=>n.key==='alerts')].filter(Boolean);
   const bottomNav=bottomItems.length?`<div class="bottom-nav">${bottomItems.map(n=>`<div class="bn-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span style="width:18px;height:18px;display:inline-block;">${NAV_ICONS[n.icon]||''}</span>${esc(n.label.split(' ')[0])}</div>`).join('')}</div>`:'';
