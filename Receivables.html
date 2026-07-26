@@ -230,12 +230,24 @@ function renderAgeing(kind){
   // flat grid, which has its own per-column search built in); for Payables the
   // pivot is shown in BOTH tabs, so its search stays visible either way.
   const pivotVisible=mode==='ageing';
+  // Reset Filters — the Ageing Party Pivot doesn't use the generic renderGrid()
+  // toolbar (it's a bespoke table), so its own party-name search filter needs its
+  // own explicit reset control here, per explicit user instruction ("JHA JHA FILTER
+  // HAI ADD RESET FILTER PLS" — every filter in the app, not just generic grids).
+  const pivotFilterActive=!!(pivotSt.filters.partyName||'').trim();
   const searchBox=pivotVisible?`<div class="apv-searchbar">
       <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(pivotSt.filters.partyName||'')}">
       <span class="apv-count">${pivotCount} parties</span>
+      <button class="btn btn-ghost" data-action="reset-grid-filters" data-table="${tableKey}" ${pivotFilterActive?'':'disabled'} title="Clear the party name search" style="padding:5px 10px;font-size:11px;">↺ Reset Filters</button>
     </div>`:'';
   const dashGridKey=isRecv?'receivablesDashboard':'payablesDashboard';
-  const dashboardControls=(mode==='all')?`<div class="ageing-dash-controls">${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_(dashGridKey)}</div>`:'';
+  // The embedded receivablesDashboard/payablesDashboard grid IS the generic engine
+  // (renderGrid) but is set noToolbar:true (its Refresh/Columns are folded in here
+  // instead) — so its own Reset Filters button needs to be added to this same
+  // control row too, using the exact same reset-grid-filters action/handler in
+  // Common.html that every other grid's toolbar button already uses.
+  const dashGridSt=tableState(dashGridKey);
+  const dashboardControls=(mode==='all')?`<div class="ageing-dash-controls"><button class="btn btn-ghost" data-action="reset-grid-filters" data-table="${dashGridKey}" ${hasAnyActiveColumnFilter_(dashGridSt)?'':'disabled'} title="Clear every column filter on this table">↺ Reset Filters</button>${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_(dashGridKey)}</div>`:'';
   // All controls on ONE single row: Kind tabs (Receivable/Payable) → Mode tabs
   // (All Data/Ageing Wise) → Search → Dashboard controls — saves a full row of
   // vertical space so more data rows are visible, per explicit user instruction.

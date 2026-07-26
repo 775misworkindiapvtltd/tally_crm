@@ -1021,7 +1021,13 @@ function renderGrid(tableKey){
 
   const colMenuBtnHtml=renderColMenuBtnHtml_(tableKey);
   const refreshBtnHtml=renderRefreshBtnHtml_();
-  const resetFiltersBtnHtml=receiptLayout?`<button class="btn btn-ghost receipt-reset-filters" data-action="reset-grid-filters" data-table="${tableKey}" ${hasAnyActiveColumnFilter_(st)?'':'disabled'} title="Clear all Receipt List column filters">Reset Filters</button>`:'';
+  // Reset Filters — available on EVERY grid now (was Receipt List only), per explicit
+  // user instruction ("JHA JHA FILTER HAI ADD RESET FILTER PLS"). Clears every
+  // column's text/date/number filter + closes any open filter editor + returns to
+  // page 1, WITHOUT touching persisted layout prefs (hidden columns, column order,
+  // widths, sort, rows-per-page) — same one-click behavior the Receipt List variant
+  // already had, just generalized to any tableKey instead of hardcoding 'receipt'.
+  const resetFiltersBtnHtml=`<button class="btn btn-ghost${receiptLayout?' receipt-reset-filters':''}" data-action="reset-grid-filters" data-table="${tableKey}" ${hasAnyActiveColumnFilter_(st)?'':'disabled'} title="Clear every column filter on this table" style="padding:5px 12px;font-size:11.5px;">↺ Reset Filters</button>`;
 
   // Report-switcher grids (Customer List/Receipt List/Collection Analysis/Follow Up
   // List/Credit Notes — see def.reportTabs, wired in Grids.html) get a different
@@ -1055,6 +1061,7 @@ function renderGrid(tableKey){
     <div class="dt-toolbar dt-toolbar-plain">
       ${def.toolbarExtra?def.toolbarExtra():''}
       <div class="report-switcher-right">
+        ${resetFiltersBtnHtml}
         ${refreshBtnHtml}
         ${colMenuBtnHtml}
       </div>
@@ -1212,12 +1219,12 @@ document.addEventListener('click',e=>{
   if(a==='refreshpage'){refreshCurrentPage();return;} // per-page "Refresh" button — scoped when PAGE_CHUNK_KEYS has an entry for the current page
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
   if(a==='reset-grid-filters'){
+    // Now works for EVERY grid (was Receipt-List-only), per explicit user
+    // instruction ("JHA JHA FILTER HAI ADD RESET FILTER PLS"). Clears transient
+    // column filters only — persisted hidden columns/order/widths/sort/rows-per-page
+    // preference are left untouched, same as before.
     const t=el.getAttribute('data-table');
-    // Receipt-only prototype: clear transient column filters without touching the
-    // persisted hidden columns, order, widths, sort, or rows-per-page preference.
-    if(t==='receipt'){
-      const st=tableState(t);st.filters={};st.dateFilters={};st.numFilters={};st.filterOpen=null;st.page=1;render();
-    }
+    const st=tableState(t);st.filters={};st.dateFilters={};st.numFilters={};st.filterOpen=null;st.page=1;render();
     return;
   }
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;persistGridPrefs_(t);render();return;}

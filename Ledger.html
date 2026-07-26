@@ -82,7 +82,31 @@ function renderLedgerPage(){
       </div>
       <div class="ledger-scroll">
         <table class="ledger-table">
-          <thead><tr>
+          <thead>
+            <!-- Print-only company/party header row — lives INSIDE <thead> (not the
+                 .ledger-toolbar above, which print CSS can't repeat across pages) so
+                 the browser's own native "repeat thead on every printed page" behavior
+                 carries the party name + address onto EVERY page automatically, per
+                 explicit user instruction ("PRINT MEIN PARTY NAME NAHI AA RHA HAI JAISE
+                 LEDGER MEIN AA RHA HAI SAME AANA CHAHIYE TOP MEIN ALSO AGLE PAGE PE JO
+                 DATA AAYE USMEIN BHI TOP HEADER AND COMP NAME LIKHA AAYE"). Hidden on
+                 screen (the on-screen .ledger-toolbar-info above already shows this) —
+                 only switched on for print via @media print in CSS.html. -->
+            <tr class="ledger-print-header-row">
+              <td colspan="7">
+                <div class="ledger-print-header">
+                  <div class="ledger-print-co-name">${esc(h.name)}</div>
+                  <div class="ledger-print-co-sub">${esc(h.address||'')}${h.state?', '+esc(h.state):''}${h.pincode&&h.pincode!=='NA'?' - '+esc(h.pincode):''}</div>
+                  <div class="ledger-print-co-meta">
+                    ${h.mobile?`<span>Mobile: ${esc(h.mobile)}</span>`:''}
+                    ${h.email&&h.email!=='NA'?`<span>Email: ${esc(h.email)}</span>`:''}
+                    <span>Group: ${esc(h.group)}${h.subgroup?' ('+esc(h.subgroup)+')':''}</span>
+                    ${h.contactPerson?`<span>Contact: ${esc(h.contactPerson)}</span>`:''}
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
             <th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No</th>
             <th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th>
           </tr></thead>

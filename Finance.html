@@ -241,12 +241,21 @@ function renderSalesCategoryPivot(){
       </div>`:''}
     </div>`;
 
+  // Reset Filters — clears the cross-filter (Category/Party Name/State) and the
+  // pivot's own Custom FY selection, back to the unfiltered default. Per explicit
+  // user instruction ("JHA JHA FILTER HAI ADD RESET FILTER PLS") — every filter
+  // control in the app should have a one-click reset, and this Duration pivot's
+  // cross-filter + FY picker live outside the generic renderGrid() toolbar (it's a
+  // bespoke table), so it needs its own explicit reset action here.
+  const salesCatFiltersActive=!!(crossFilter.length||customFYs.length);
+  const salesResetFiltersBtn=`<button class="btn btn-ghost" data-action="sales-cat-reset-filters" ${salesCatFiltersActive?'':'disabled'} title="Clear the cross-filter and custom financial year selection">↺ Reset Filters</button>`;
   const catToolbar=`<div class="dt-toolbar sales-cat-toolbar">
       ${renderSalesReportViewToggle_()}
       ${modeBar}
       ${crossDropdown}
       <div class="report-switcher-right">
         <span class="count">${rows.length} ${esc(dimMeta.plural)}</span>
+        ${salesResetFiltersBtn}
         <button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
       </div>
     </div>`;
@@ -298,6 +307,7 @@ document.addEventListener('click',e=>{
       render();return;
     }
     if(a==='sales-cross-clear'){S.salesCrossFilter=[];render();return;}
+    if(a==='sales-cat-reset-filters'){S.salesCrossFilter=[];S.salesCategoryCustomFYs=[];S.salesCategoryPage=1;render();return;}
     if(a==='sales-cat-sort'){
       // Skip sort if a column resize just completed — the mouseup event from the
       // resize handle bubbles up as a click on the parent <th> which also has
@@ -751,12 +761,18 @@ function renderExpenseCategoryPivot(){
       </div>`:''}
     </div>`;
 
+  // Reset Filters — same reasoning as the Sales Duration pivot above ("JHA JHA
+  // FILTER HAI ADD RESET FILTER PLS"): clears the cross-filter (Group/Sub Group)
+  // and the Custom FY selection for THIS (Expense) pivot.
+  const expenseCatFiltersActive=!!(crossFilter.length||customFYs.length);
+  const expenseResetFiltersBtn=`<button class="btn btn-ghost" data-action="expense-cat-reset-filters" ${expenseCatFiltersActive?'':'disabled'} title="Clear the cross-filter and custom financial year selection">↺ Reset Filters</button>`;
   const catToolbar=`<div class="dt-toolbar expense-cat-toolbar">
       ${renderExpenseReportViewToggle_()}
       ${modeBar}
       ${crossDropdown}
       <div class="report-switcher-right">
         <span class="count">${rows.length} ${esc(dimMeta.plural)}</span>
+        ${expenseResetFiltersBtn}
         <button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
       </div>
     </div>`;
@@ -808,6 +824,7 @@ document.addEventListener('click',e=>{
       render();return;
     }
     if(a==='expense-cross-clear'){S.expenseCrossFilter=[];render();return;}
+    if(a==='expense-cat-reset-filters'){S.expenseCrossFilter=[];S.expenseCategoryCustomFYs=[];S.expenseCategoryPage=1;render();return;}
     if(a==='expense-cat-sort'){
       if(expenseCatResizedRecently)return;
       const col=el.getAttribute('data-col');

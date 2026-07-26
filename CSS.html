@@ -1260,6 +1260,15 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
    me header and footer should freeze...currently when i am scrolling they are
    also gets scrolled. freeze it."). */
 .ledger-empty{padding:70px 20px;text-align:center;color:var(--muted);}
+/* Print-only company/party header row — sits inside <thead> (see Ledger.html) so it
+   repeats on every printed page automatically; hidden entirely on screen since the
+   on-screen .ledger-toolbar-info above already shows the same info there. */
+.ledger-print-header-row{display:none;}
+.ledger-print-header{padding:2px 0 10px;}
+.ledger-print-co-name{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:800;color:var(--ink);}
+.ledger-print-co-sub{font-size:11px;color:var(--ink-secondary);margin-top:2px;}
+.ledger-print-co-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;font-size:10.5px;color:var(--ink-secondary);}
+.ledger-print-co-meta span b{font-weight:700;}
 
 /* ---------- PLACEHOLDER / SIMPLE PAGES ---------- */
 .simple-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;}
@@ -1316,10 +1325,26 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
    toolbar CONTROLS are display:none'd individually below. */
 @media print{
   body *{visibility:hidden;}
-  .ledger-scroll,.ledger-scroll *,.ledger-toolbar-info,.ledger-toolbar-info *{visibility:visible;}
+  .ledger-scroll,.ledger-scroll *{visibility:visible;}
   .ledger-scroll{position:absolute;left:0;top:0;width:100%;padding:0;overflow:visible;max-height:none;}
+  /* .ledger-toolbar-info (screen-only party name/company header) is now visibility:
+     hidden along with the rest of the page chrome — it lived OUTSIDE .ledger-scroll,
+     so it was never actually part of what got printed (this was the root cause of
+     "PRINT MEIN PARTY NAME NAHI AA RHA HAI" — the toolbar it lived in sits above
+     .ledger-scroll, which position:absolute here effectively covers/replaces).
+     The .ledger-print-header-row inside <thead> below (see Ledger.html) is the
+     replacement — company name + address + Group/Contact, positioned INSIDE the
+     table's own <thead> instead, so it participates in print pagination directly. */
   table.ledger-table thead th,table.ledger-table tfoot td{position:static;}
-  .sidebar,.topbar,.dt-pagination,.ledger-party-list,.fbar,.bottom-nav,.ledger-toolbar .btn,.ledger-toolbar .spacer{display:none !important;}
+  /* Standard CSS table print behavior: a <thead> repeats automatically at the top
+     of every printed page a table spans — this is what carries the company/party
+     name onto page 2, 3, etc, per explicit user instruction ("agle page pe jo data
+     aaye usmein bhi top header and comp name likha aaye"). display:table-header-group
+     makes that behavior explicit or Chrome can otherwise skip repeating it. */
+  table.ledger-table thead{display:table-header-group;}
+  .ledger-print-header-row{display:table-row;}
+  .ledger-print-header-row td{border:none;padding:0 10px 12px;background:var(--surface);}
+  .sidebar,.topbar,.dt-pagination,.ledger-party-list,.fbar,.bottom-nav,.ledger-toolbar,.ledger-toolbar *{display:none !important;}
 }
 
 /* =============================================================

@@ -182,15 +182,42 @@ function getDistrictGeoJson(stateName) {
 }
 
 /* ============================= GENERIC SHEET READ ============================= */
+// Detects a data row that is ACTUALLY a duplicate/repeated header row (e.g. a frozen
+// label row re-pasted into the data range, or an accidental second header row) —
+// per explicit user report with a screenshot: Receipt List's very first data row was
+// showing the column header text itself ("Timestamp", "Voucher_Number", "Ledger_Name"
+// etc) instead of real values. Compares each cell against that column's own header
+// text (ignoring case/spaces/underscores) and requires BOTH: at least 3 matching
+// cells, AND those matches covering most (60%+) of the non-blank cells in the row —
+// this is deliberately strict so a genuine data row that happens to repeat one
+// header-like word (e.g. a party literally named "Date") is never mistaken for a
+// duplicate header and silently dropped.
+function looksLikeHeaderRow_(row, headers) {
+  if (!headers || !headers.length) return false;
+  var nonEmpty = 0, matches = 0;
+  var n = Math.min(headers.length, row.length);
+  for (var i = 0; i < n; i++) {
+    var h = String(headers[i] == null ? '' : headers[i]).replace(/[\s_]+/g, '').trim().toUpperCase();
+    if (!h) continue;
+    var v = String(row[i] == null ? '' : row[i]).replace(/[\s_]+/g, '').trim().toUpperCase();
+    if (!v) continue;
+    nonEmpty++;
+    if (v === h) matches++;
+  }
+  return nonEmpty > 0 && matches >= 3 && (matches / nonEmpty) >= 0.6;
+}
+
 function sheetToObjects_(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(name);
   if (!sh) return [];
   var data = sh.getDataRange().getValues();
   if (data.length < 2) return [];
-  var headers = data[0].map(function (h) { return String(h).replace(/\s+/g, ' ').trim(); });
+  var headerRow = data[0];
+  var headers = headerRow.map(function (h) { return String(h).replace(/\s+/g, ' ').trim(); });
   return data.slice(1)
     .filter(function (row) { return row.some(function (c) { return c !== ''; }); })
+    .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); })
     .map(function (row) {
       var obj = {};
       headers.forEach(function (h, i) { obj[h] = row[i]; });
@@ -206,7 +233,10 @@ function sheetToRows_(name) {
   if (!sh) return [];
   var data = sh.getDataRange().getValues();
   if (data.length < 2) return [];
-  return data.slice(1).filter(function (row) { return row.some(function (c) { return c !== ''; }); });
+  var headerRow = data[0];
+  return data.slice(1)
+    .filter(function (row) { return row.some(function (c) { return c !== ''; }); })
+    .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); });
 }
 
 function fmtTimestamp_(v) {
