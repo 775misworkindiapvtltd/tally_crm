@@ -64,6 +64,43 @@ const AGEING_PIVOT_COLS=[
   {key:'total',label:'Total Amount',side:'total',width:120}
 ];
 
+// Heatmap for the overdue (left/red) and not-yet-due (right/green) bucket cells —
+// bigger amount = darker shade, smaller amount = lighter shade, per explicit user
+// instruction ("red color dikhaya hai usmein bhi heatmap type lga do jasie aapne
+// sales report mein dikhaya hai bda number dardk color chota number light color
+// left wala red mein right wala green mein"). Mirrors heatmapCellStyle_() in
+// Common.html (used for Sales Report's Amount column) but with two color ramps
+// instead of one, and the min/max range is shared across ALL FOUR buckets on that
+// side (not per individual column) so the shade genuinely reflects "how big is
+// this amount compared to every other overdue/not-yet-due amount on screen" rather
+// than just within its own narrow bucket column. Zero-value cells are left alone
+// (handled by the existing .apv-zero CSS rule) — a heatmap tint on an empty "₹0"
+// cell would be meaningless.
+const AGEING_OD_KEYS=['od90','od6190','od3160','od030'];
+const AGEING_ND_KEYS=['nd030','nd3160','nd6190','nd90'];
+function ageingSideRange_(rows,keys){
+  let min=Infinity,max=-Infinity;
+  rows.forEach(r=>keys.forEach(k=>{
+    const v=Number(r[k])||0;
+    if(v>0){ if(v<min)min=v; if(v>max)max=v; }
+  }));
+  if(min===Infinity){min=0;max=0;}
+  return {min,max};
+}
+function ageingHeatmapStyle_(v,range,tone){
+  const num=Number(v)||0;
+  if(num<=0)return ''; // keep the plain "₹0"/.apv-zero look — nothing to shade
+  const span=range.max-range.min;
+  const t=span>0?(num-range.min)/span:1; // 0..1, share of the range on THIS side
+  // Light-tint (low) -> saturated dark (high) ramp, one for each side.
+  const ramp=tone==='red'
+    ? {r0:254,g0:238,b0:236,r1:168,g1:26,b1:20}   // #FEEEEC -> #A81A14
+    : {r0:232,g0:250,b0:240,r1:11,g1:107,b1:57};  // #E8FAF0 -> #0B6B39
+  const r=Math.round(ramp.r0+(ramp.r1-ramp.r0)*t),g=Math.round(ramp.g0+(ramp.g1-ramp.g0)*t),b=Math.round(ramp.b0+(ramp.b1-ramp.b0)*t);
+  const textColor=t>0.55?'#fff':(tone==='red'?'#8C1A15':'#0B6B39');
+  return `background:rgb(${r},${g},${b});color:${textColor};`;
+}
+
 // Renders just the pivot <table> itself — the party-name search box used to live
 // inline here, but it's now built by renderAgeing() and placed on the SAME row as
 // the All Data/Ageing Wise tabs (see .ageing-mode-bar), per explicit user
@@ -109,11 +146,13 @@ function renderAgeingPivot(kind){
     return `<td class="apv-tot apv-${c.side}" style="${style}">${fmtINR(totals[c.key]||0)}</td>`;
   }).join('');
 
+  const odRange=ageingSideRange_(rows,AGEING_OD_KEYS),ndRange=ageingSideRange_(rows,AGEING_ND_KEYS);
   const body=rows.length?rows.map(r=>`<tr>${AGEING_PIVOT_COLS.map(c=>{
       const w=colW(c);const style=`width:${w}px;min-width:${w}px;max-width:${w}px;`;
       if(c.key==='partyName') return `<td class="apv-name" style="${style}">${esc(r.partyName)}</td>`;
       const v=Number(r[c.key])||0;
-      return `<td class="apv-cell apv-${c.side}${v===0?' apv-zero':''}" style="${style}">${fmtINR(v)}</td>`;
+      const heat=c.side==='od'?ageingHeatmapStyle_(v,odRange,'red'):c.side==='nd'?ageingHeatmapStyle_(v,ndRange,'green'):'';
+      return `<td class="apv-cell apv-${c.side}${v===0?' apv-zero':''}" style="${style}${heat}">${fmtINR(v)}</td>`;
     }).join('')}</tr>`).join(''):`<tr><td colspan="${AGEING_PIVOT_COLS.length}"><div class="empty-state"><div class="big">No matching parties</div></div></td></tr>`;
 
   return `

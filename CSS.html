@@ -335,8 +335,17 @@ table.apv-table thead .apv-sort-ic{font-size:8.5px;flex:none;}
    section to be left aligned"), while the header above stays centered (unchanged). */
 table.apv-table tbody td.apv-name{font-weight:700;color:var(--ink);text-align:left;padding:6px 10px;background:var(--accent-tint2);border-left:1px solid var(--line);border-right:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 table.apv-table tbody td.apv-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:calc(11px * var(--data-scale));padding:6px 8px;letter-spacing:-0.5px;}
-table.apv-table tbody td.apv-cell.apv-od{color:#B4231E;background:#FEF4F3;}
-table.apv-table tbody td.apv-cell.apv-nd{color:#0E7C3F;background:#F2FBF6;}
+/* Base red/green tint below is now only a FALLBACK for zero-value cells (the
+   .apv-zero rule further down always wins there) — every non-zero overdue/
+   not-yet-due cell gets its actual heatmap shade from an inline style instead
+   (see ageingHeatmapStyle_() in Receivables.html: bigger amount = darker red on
+   the left / darker green on the right, smaller amount = lighter, per explicit
+   user instruction "bda number dardk color chota number light color left wala red
+   mein right wala green mein"). transition+border mirror the Sales Report heatmap
+   cell treatment (.heatmap-cell below) so adjacent shaded cells stay visually
+   separated. */
+table.apv-table tbody td.apv-cell.apv-od{color:#B4231E;background:#FEF4F3;transition:background .15s;border-right:1px solid rgba(255,255,255,.5);}
+table.apv-table tbody td.apv-cell.apv-nd{color:#0E7C3F;background:#F2FBF6;transition:background .15s;border-right:1px solid rgba(255,255,255,.5);}
 table.apv-table tbody td.apv-cell.apv-total{color:var(--ink);font-weight:700;background:var(--accent-tint2);}
 table.apv-table tbody td.apv-cell.apv-zero{color:#C7CCDA;background:transparent;}
 table.apv-table tbody tr:hover td{filter:brightness(0.97);}
