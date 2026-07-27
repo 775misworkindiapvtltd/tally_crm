@@ -846,6 +846,17 @@ function hasAnyActiveColumnFilter_(st){
   return Array.from(keys).some(key=>hasActiveColumnFilter_(st,key));
 }
 
+// Previous/Next pagination glyphs — inline SVG chevrons instead of the ‹ › text
+// characters (U+2039/U+203A), per explicit user report ("there is no button to go
+// to previous page"): those specific characters are missing from some system/
+// browser fonts and can render as a blank box, making the button look absent even
+// though it's there and clickable. « » (First/Last) use much more common
+// punctuation glyphs and were rendering fine, so only Prev/Next needed this fix.
+const PAGINATION_ICONS={
+  prev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
+  next:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>'
+};
+
 // GRID_DEFS is populated in Grids.html: { key: {cols:[{key,label,width,pill,num,date}], data:()=>[...] } }
 function renderGrid(tableKey){
   const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
@@ -1122,9 +1133,9 @@ function renderGrid(tableKey){
       <div class="page-range" aria-live="polite">${total===0?'0':`${rf}–${rt}`} of ${total}</div>
       <div class="nav" aria-label="Pagination">
         <button data-action="pagefirst" data-table="${tableKey}" title="First page" aria-label="First page" ${st.page<=1?'disabled':''}>«</button>
-        <button data-action="pageprev" data-table="${tableKey}" title="Previous page" aria-label="Previous page" ${st.page<=1?'disabled':''}>‹</button>
+        <button data-action="pageprev" data-table="${tableKey}" title="Previous page" aria-label="Previous page" ${st.page<=1?'disabled':''}>${PAGINATION_ICONS.prev}</button>
         <span class="pageinfo" aria-label="Page ${st.page} of ${tp}">${st.page} / ${tp}</span>
-        <button data-action="pagenext" data-table="${tableKey}" title="Next page" aria-label="Next page" ${st.page>=tp?'disabled':''}>›</button>
+        <button data-action="pagenext" data-table="${tableKey}" title="Next page" aria-label="Next page" ${st.page>=tp?'disabled':''}>${PAGINATION_ICONS.next}</button>
         <button data-action="pagelast" data-table="${tableKey}" title="Last page" aria-label="Last page" ${st.page>=tp?'disabled':''}>»</button>
       </div>
     </div>`;

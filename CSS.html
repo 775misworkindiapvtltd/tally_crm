@@ -991,6 +991,7 @@ table.dt thead th .search-ic.date-filter-active{color:rgba(255,255,255,.9);}
 .dr-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;}
 .dr-cal-title{font-size:12.5px;font-weight:700;color:var(--ink);flex:1;text-align:center;}
 .dr-nav{border:1px solid var(--line);background:var(--surface);color:var(--ink-secondary);width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;flex:none;}
+.dr-nav svg{width:11px;height:11px;display:block;}
 .dr-nav:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
 .dr-nav-spacer{width:24px;flex:none;display:inline-block;}
 .dr-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}
@@ -1052,8 +1053,16 @@ table.dt thead th .sort-ic{font-size:9px;color:#fff;width:10px;flex:none;opacity
    unsorted columns, and the arrow is clickable just like the header label. */
 table.dt thead th .sort-ic.sort-ready{cursor:pointer;color:rgba(255,255,255,.78);opacity:.9;}
 table.dt thead th .sort-ic.sort-ready:hover{color:#FFF;opacity:1;}
-table.dt thead th .search-ic{margin-left:auto;cursor:pointer;color:#6B7280;flex:none;font-size:11px;transition:color .15s;}
-table.dt thead th .search-ic:hover{color:var(--accent);}
+/* BUG FIX: this was a fixed medium-grey (#6B7280) — legible against the OLD fixed
+   dark-navy header, but once every header background became the Appearance accent
+   color (table.dt thead th{background:var(--accent);} above), this grey often
+   washed out to near-invisible against many accent colors, making the search icon
+   look like it had disappeared entirely — per explicit user report ("seach option
+   abhi bhi nahi aayi...jise phele tha, har table ke header ke pass"). Switched to
+   translucent white, matching the .sort-ic treatment right above, so it stays
+   clearly visible against ANY accent color. */
+table.dt thead th .search-ic{margin-left:auto;cursor:pointer;color:rgba(255,255,255,.78);flex:none;font-size:11px;transition:color .15s;opacity:.9;}
+table.dt thead th .search-ic:hover{color:#fff;opacity:1;}
 table.dt thead th .th-filter input{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #2D3552;background:#0A0E1A;color:#E7EAF4;font-size:11.5px;}
 table.dt thead th .th-filter select{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #2D3552;background:#0A0E1A;color:#E7EAF4;font-size:11.5px;cursor:pointer;}
 table.dt thead th .th-num-filter{display:grid;grid-template-columns:1fr 22px 1fr 20px;align-items:center;gap:3px;min-width:245px;}
@@ -1183,7 +1192,18 @@ html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!importan
 .dt-pagination select{padding:5px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;color:var(--ink);}
 .dt-pagination .page-range{white-space:nowrap;}
 .dt-pagination .nav{display:flex;flex:none;align-items:center;gap:4px;margin-left:auto;padding:0;overflow:visible;}
-.dt-pagination .nav button{border:1.5px solid var(--line);background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:600;color:var(--ink-secondary);font-size:12px;transition:all .12s;}
+.dt-pagination .nav button{border:1.5px solid var(--line);background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:600;color:var(--ink-secondary);font-size:12px;transition:all .12s;display:inline-flex;align-items:center;justify-content:center;line-height:1;}
+/* BUG FIX: the Prev/Next glyphs (‹ ›, U+2039/U+203A "single angle quotation marks")
+   are NOT reliably included in every font's character set the way the First/Last
+   glyphs (« », U+00AB/U+00BB "double angle quotation marks" — much more common
+   punctuation) are — on some systems/fonts they silently render as a blank/invisible
+   box, making the Previous/Next buttons look like they don't exist at all even
+   though they're present and clickable, per explicit user report ("there is no
+   button to go to previous page"). Replaced with small inline SVG chevrons (same
+   approach already used for every other icon in this app — see NAV_ICONS in
+   Common.html) so they render identically and reliably in every browser, matching
+   First/Last's already-reliable plain-text glyphs which are left as-is. */
+.dt-pagination .nav button svg{width:11px;height:11px;display:block;}
 .dt-pagination .nav button:disabled{opacity:.35;cursor:default;}
 .dt-pagination .nav button:not(:disabled):hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
 .dt-pagination .pageinfo{font-weight:600;color:var(--ink-secondary);white-space:nowrap;}

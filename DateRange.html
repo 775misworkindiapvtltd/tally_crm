@@ -111,11 +111,14 @@ function renderDrPopup_(){
   const nextD=new Date(drState.baseYear,drState.baseMonth+1,1);
   const rightCal=buildCalMonth_(nextD.getFullYear(),nextD.getMonth());
   const presetsHtml=DR_PRESETS.map(p=>`<button type="button" class="dr-preset${drState.preset===p.key?' active':''}" data-action="dr-preset" data-preset="${p.key}">${esc(p.label)}</button>`).join('');
+  // Same fix/reasoning as the main grid pagination's Prev/Next buttons (see
+  // PAGINATION_ICONS in Common.html): the ‹ › text glyphs can render as a blank box
+  // on some fonts — switched to the same reliable inline SVG chevrons.
   const calHtml=(cal,side)=>`<div class="dr-cal">
     <div class="dr-cal-head">
-      ${side==='left'?`<button type="button" class="dr-nav" data-action="dr-prev" title="Previous month">‹</button>`:'<span class="dr-nav-spacer"></span>'}
+      ${side==='left'?`<button type="button" class="dr-nav" data-action="dr-prev" title="Previous month">${PAGINATION_ICONS.prev}</button>`:'<span class="dr-nav-spacer"></span>'}
       <span class="dr-cal-title">${esc(DR_MONTH_NAMES[cal.month])} ${cal.year}</span>
-      ${side==='right'?`<button type="button" class="dr-nav" data-action="dr-next" title="Next month">›</button>`:'<span class="dr-nav-spacer"></span>'}
+      ${side==='right'?`<button type="button" class="dr-nav" data-action="dr-next" title="Next month">${PAGINATION_ICONS.next}</button>`:'<span class="dr-nav-spacer"></span>'}
     </div>
     <div class="dr-weekdays">${DR_WEEKDAY_LABELS.map(w=>`<span>${w}</span>`).join('')}</div>
     <div class="dr-days">${cal.cells.map(c=>`<span class="${drDayClass_(c.iso,c.inMonth)}${c.isToday?' dr-day-today':''}" data-action="dr-day" data-iso="${c.iso}">${c.day}</span>`).join('')}</div>
