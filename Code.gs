@@ -806,6 +806,17 @@ function getDiagnostics_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var out = {};
   Object.keys(SHEETS).forEach(function (key) {
+    // FOLLOWUP_LOG is NOT a sheet the user needs to create themselves — it's an
+    // app-managed log that gets auto-created the first time anyone saves a
+    // follow-up (see ensureFollowUpLogSheet_ above). Right after this feature
+    // shipped, it correctly doesn't exist yet on a sheet where no follow-up has
+    // ever been saved — but getDiagnostics_() was checking it exactly like every
+    // OTHER required sheet (LOGIN PAGE, EXPENSE, etc), so it incorrectly showed
+    // the scary "Tab not found" Data Diagnostics banner for something that isn't
+    // actually a problem at all. Per explicit user report ("aise koi tab mene add
+    // nahi ki thi kabhi, why this is comig") — skipped here so it's never flagged;
+    // saveFollowUp() will silently create it whenever it's actually needed.
+    if (key === 'followUpLog') return;
     var tabName = SHEETS[key];
     var sh = ss.getSheetByName(tabName);
     if (!sh) {
@@ -871,6 +882,21 @@ function getLedgerPartyListFromRows_(rows) {
  * balanceLedgers map yet (e.g. a brand-new party added to the sheet after the
  * last "Sync with Tally"). Normal party switching no longer calls this — see
  * buildAllLedgers_() above, which precomputes every party's ledger in one pass.
+ */
+// BUG FIX: the block comment above this line used to be left UNCLOSED (no closing
+// `*/`) — everything below it (fmtDateISO_, findSalesFollowUpColumns_,
+// getSalesFollowUpLegacyMap_, ensureFollowUpLogSheet_, appendFollowUpLog_,
+// getFollowUpHistory_, and the doc-comment text of saveFollowUp) was silently
+// swallowed as COMMENT TEXT instead of being real, executable function
+// definitions — none of those 6 functions actually existed at runtime. This is the
+// exact root cause of the reported "ReferenceError: findSalesFollowUpColumns_ is
+// not defined" (thrown from saveFollowUp(), which does exist as a real function
+// declaration further down, but calls a function that was never really defined).
+// The file still PARSED as valid JavaScript throughout (a comment swallowing code
+// is syntactically legal), which is why this slipped past a plain parse check —
+// only a runtime call surfaces it. Added the missing `*/` above to close the
+// comment at its intended point, restoring every function below to real code.
+
 // Converts any date-ish value (a real Date object, or a text cell that Sheets left
 // as a string) into a plain 'yyyy-MM-dd' ISO string — the exact format the client's
 // fromISO() expects (see Common.html: `new Date(+p[0],+p[1]-1,+p[2])` on a '-'-split
@@ -1111,6 +1137,10 @@ function runDiagnosticsNow() {
   Logger.log('================================================================');
 
   Object.keys(SHEETS).forEach(function (key) {
+    // Same reasoning as getDiagnostics_() above: FOLLOWUP_LOG is app-managed and
+    // auto-created on first follow-up save — it's expected/normal for it to not
+    // exist yet, so this manual diagnostic tool shouldn't report it as an error.
+    if (key === 'followUpLog') return;
     var tabName = SHEETS[key];
     var sh = ss.getSheetByName(tabName);
     Logger.log('');
