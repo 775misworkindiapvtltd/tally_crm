@@ -29,7 +29,14 @@ const FONT_SIZE_CONTROLS = [
 // visually highlighted after the user interacts with it — e.g. Follow Up List's
 // "Mark Followed Up"/"Edit Follow Up" popup, per explicit user instruction ("jab
 // click karen to jo row click ke hai vo highlight ho jaye").
-function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50,expanded:new Set(),highlightedRowKey:null};}
+function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50,expanded:new Set(),highlightedRowKey:null,
+  // _autoWidthCol/_autoWidthOrig track a column that's been TEMPORARILY widened
+  // because its number-range filter editor (operator + up to 2 value inputs) needs
+  // more room than the column's own configured/resized width — see
+  // applyNumFilterAutoWidth_()/revertNumFilterAutoWidth_() below. Never persisted
+  // (persistGridPrefs_() never touches these), so it can't leak into the user's
+  // saved column-width preference.
+  _autoWidthCol:null,_autoWidthOrig:undefined};}
 // Table state is created lazily per grid the first time it's viewed. Whenever a fresh
 // dtState() is created, immediately re-apply this user's remembered column
 // hide/order/width/sort/page-size (see GRID_PREFS below) so a page always opens
@@ -886,6 +893,50 @@ const NUM_FILTER_OPS=[
   {key:'between',label:'⇔ Between'}
 ];
 
+/* ---- Auto-widen a column while its number-range filter is open ----
+ * The header <th> has overflow:hidden (needed for sticky headers to clip cleanly),
+ * so if a column's own width is narrower than what the operator-select + 1-2 value
+ * inputs actually need, the second "Between" input gets visually CLIPPED rather
+ * than wrapped — per explicit user report with a screenshot ("second box is half
+ * visible, i want it to auto adjust the col width, when filter is closed, it should
+ * resume back to whats it was originally"). Rather than reflowing content inside a
+ * fixed-width column, the column's OWN width is temporarily bumped up (same
+ * mechanism as a manual drag-resize — st.widths[key] — so no new rendering path is
+ * needed), and restored to its pre-filter width the moment the filter closes or the
+ * user switches to a different column's filter. Never touches persistGridPrefs_(),
+ * so this temporary widening can never leak into the user's saved column width. */
+const NUM_FILTER_MIN_WIDTH={single:160,between:205};
+function numFilterNeededWidth_(op){ return op==='between'?NUM_FILTER_MIN_WIDTH.between:NUM_FILTER_MIN_WIDTH.single; }
+function applyNumFilterAutoWidth_(st,tableKey,colKey){
+  const def=GRID_DEFS[tableKey];if(!def)return;
+  const col=(def.cols||[]).find(c=>c.key===colKey);
+  if(!col||col.filterType!=='number-range')return;
+  const nf=(st.numFilters&&st.numFilters[colKey])||{op:'gte'};
+  const needed=numFilterNeededWidth_(nf.op||'gte');
+  const currentWidth=st.widths[colKey]||col.width||150;
+  if(currentWidth>=needed)return; // already wide enough — leave the user's own width alone
+  st._autoWidthCol=colKey;st._autoWidthOrig=currentWidth;
+  st.widths[colKey]=needed;
+}
+function revertNumFilterAutoWidth_(st){
+  if(!st._autoWidthCol)return;
+  if(st._autoWidthOrig!==undefined)st.widths[st._autoWidthCol]=st._autoWidthOrig;
+  else delete st.widths[st._autoWidthCol];
+  st._autoWidthCol=null;st._autoWidthOrig=undefined;
+}
+// Single entry point for changing which column's filter editor is open — ALWAYS
+// reverts any previous auto-widened column first, then (if the newly-opened column
+// is itself a number-range filter) applies the auto-width for it. This one function
+// is what every filterOpen-changing action below goes through, so "opened a
+// different filter" / "closed this filter" / "changed Between<->single operator on
+// the same open filter" all correctly restore-then-reapply without needing special-
+// case logic at each call site.
+function setFilterOpen_(st,tableKey,newCol){
+  revertNumFilterAutoWidth_(st);
+  st.filterOpen=newCol;
+  if(newCol)applyNumFilterAutoWidth_(st,tableKey,newCol);
+}
+
 // Previous/Next pagination glyphs — inline SVG chevrons instead of the ‹ › text
 // characters (U+2039/U+203A), per explicit user report ("there is no button to go
 // to previous page"): those specific characters are missing from some system/
@@ -1302,14 +1353,14 @@ document.addEventListener('change',e=>{
     if(!st.numFilters)st.numFilters={};
     if(!st.numFilters[c])st.numFilters[c]={op:'gte',val1:'',val2:''};
     st.numFilters[c].op=el.value;
-    st.page=1;st.filterOpen=c;render();return;
+    st.page=1;setFilterOpen_(st,t,c);render();return;
   }
   if(a==='num-val1'||a==='num-val2'){
     const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
     if(!st.numFilters)st.numFilters={};
     if(!st.numFilters[c])st.numFilters[c]={op:'gte',val1:'',val2:''};
     st.numFilters[c][a==='num-val1'?'val1':'val2']=el.value===''?'':Number(el.value);
-    st.page=1;st.filterOpen=c;render();return;
+    st.page=1;setFilterOpen_(st,t,c);render();return;
   }
 });
 
@@ -1370,7 +1421,7 @@ document.addEventListener('click',e=>{
     // column filters only — persisted hidden columns/order/widths/sort/rows-per-page
     // preference are left untouched, same as before.
     const t=el.getAttribute('data-table');
-    const st=tableState(t);st.filters={};st.dateFilters={};st.numFilters={};st.filterOpen=null;st.page=1;render();
+    const st=tableState(t);st.filters={};st.dateFilters={};st.numFilters={};revertNumFilterAutoWidth_(st);st.filterOpen=null;st.page=1;render();
     return;
   }
   if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;persistGridPrefs_(t);render();return;}
@@ -1391,9 +1442,9 @@ document.addEventListener('click',e=>{
   if(a==='pagenext'){tableState(el.getAttribute('data-table')).page++;render();return;}
   if(a==='pagelast'){tableState(el.getAttribute('data-table')).page=999999;render();return;}
   if(a==='togglesearch'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);
-    st.filterOpen=st.filterOpen===c?null:c;render();if(st.filterOpen){const inp=document.querySelector(`input[data-table="${t}"][data-col="${c}"]`);if(inp)inp.focus();}return;}
-  if(a==='clear-daterange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);delete st.dateFilters[c];st.page=1;st.filterOpen=c;render();return;}
-  if(a==='clear-numrange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);if(st.numFilters)delete st.numFilters[c];st.page=1;st.filterOpen=c;render();return;}
+    setFilterOpen_(st,t,st.filterOpen===c?null:c);render();if(st.filterOpen){const inp=document.querySelector(`input[data-table="${t}"][data-col="${c}"]`);if(inp)inp.focus();}return;}
+  if(a==='clear-daterange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);delete st.dateFilters[c];st.page=1;setFilterOpen_(st,t,c);render();return;}
+  if(a==='clear-numrange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);if(st.numFilters)delete st.numFilters[c];st.page=1;setFilterOpen_(st,t,c);render();return;}
   if(a==='togglecolmenu'){const t=el.getAttribute('data-table');S.colMenuOpen=S.colMenuOpen===t?null:t;render();return;}
   if(a==='togglecol'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.hidden.has(c))st.hidden.delete(c);else st.hidden.add(c);persistGridPrefs_(t);render();S.colMenuOpen=t;return;}
   if(a==='movecol-left'||a==='movecol-right'){
