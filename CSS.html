@@ -1494,10 +1494,19 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
      content"), and expands to full width the instant the cursor moves over it (no
      click needed) — collapsing back again the moment the cursor leaves — per
      explicit user instruction ("left bar sab chota ho to...jaise hi curson side bar
-     pe jaye to expank ho jaye"). Pure CSS :hover — no JS state needed, so it can
-     never get stuck in the wrong visual state. Scoped to desktop only so the
-     existing mobile off-canvas open/close behavior (.sidebar.open / transform) is
-     completely unaffected.
+     pe jaye to expank ho jaye"). Scoped to desktop only so the existing mobile
+     off-canvas open/close behavior (.sidebar.open / transform) is completely
+     unaffected.
+     Driven by the .sidebar-expanded CLASS (toggled via JS — see S.sidebarHovered
+     and the mouseover/mouseout listeners in Common.html), NOT a plain CSS :hover
+     pseudo-class. A plain :hover was tried first but broke the instant you clicked
+     any nav item: render() replaces the WHOLE .sidebar DOM node on every click, and
+     browsers never re-apply :hover to a brand-new element without an actual
+     mousemove — so the sidebar would immediately snap back to collapsed right after
+     a click, hiding whatever submenu had just been opened, per explicit user
+     report ("clicked, it shows no option...i have to go back"). The JS-tracked
+     class survives that DOM replacement because render() re-applies it explicitly
+     every time from S.sidebarHovered.
      BUG FIX: the label text used to be a bare text node directly inside .nav-item
      (never wrapped in its own <span>), so the old hide-on-collapse selector
      (`.nav-item span:not(.n-ic)`) could only ever match the OTHER spans
@@ -1508,25 +1517,25 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
      Common.html) so it can be targeted precisely and reflowed into a small caption
      under the icon instead. */
   .sidebar{width:64px;}
-  .sidebar:hover{width:236px;}
-  .sidebar:not(:hover) .brand{padding:14px 4px;justify-content:center;}
-  .sidebar:not(:hover) .brand-inner{gap:0;flex-direction:column;}
-  .sidebar:not(:hover) .brand-text{display:none;}
-  .sidebar:not(:hover) .nav{padding:8px 4px;}
-  .sidebar:not(:hover) .nav-group-label{display:none;}
+  .sidebar.sidebar-expanded{width:236px;}
+  .sidebar:not(.sidebar-expanded) .brand{padding:14px 4px;justify-content:center;}
+  .sidebar:not(.sidebar-expanded) .brand-inner{gap:0;flex-direction:column;}
+  .sidebar:not(.sidebar-expanded) .brand-text{display:none;}
+  .sidebar:not(.sidebar-expanded) .nav{padding:8px 4px;}
+  .sidebar:not(.sidebar-expanded) .nav-group-label{display:none;}
   /* Stack icon above label, both centered — a small icon rail with a caption under
      each icon, instead of hiding the label entirely. */
-  .sidebar:not(:hover) .nav-item{flex-direction:column;justify-content:center;padding:7px 2px;gap:3px;border-radius:8px;text-align:center;}
-  .sidebar:not(:hover) .nav-item .n-lbl{display:block;font-size:7.5px;font-weight:600;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58px;letter-spacing:0;}
-  .sidebar:not(:hover) .nav-item .nav-badge{position:absolute;top:2px;right:6px;margin-left:0;}
-  .sidebar:not(:hover) .nav-item .nav-chevron{display:none;}
-  .sidebar:not(:hover) .nav-item.active::before{display:none;} /* the left accent bar has no room on a centered icon rail */
-  .sidebar:not(:hover) .nav-children{display:none;}
-  .sidebar:not(:hover) .sidebar-foot{display:none;}
+  .sidebar:not(.sidebar-expanded) .nav-item{flex-direction:column;justify-content:center;padding:7px 2px;gap:3px;border-radius:8px;text-align:center;}
+  .sidebar:not(.sidebar-expanded) .nav-item .n-lbl{display:block;font-size:7.5px;font-weight:600;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58px;letter-spacing:0;}
+  .sidebar:not(.sidebar-expanded) .nav-item .nav-badge{position:absolute;top:2px;right:6px;margin-left:0;}
+  .sidebar:not(.sidebar-expanded) .nav-item .nav-chevron{display:none;}
+  .sidebar:not(.sidebar-expanded) .nav-item.active::before{display:none;} /* the left accent bar has no room on a centered icon rail */
+  .sidebar:not(.sidebar-expanded) .nav-children{display:none;}
+  .sidebar:not(.sidebar-expanded) .sidebar-foot{display:none;}
   /* Expanding pushes .main over via the flex layout (same width-transition
      mechanism as before); a slightly elevated shadow while hovered makes that
      motion read as an intentional "flyout" rather than a layout glitch. */
-  .sidebar:hover{box-shadow:6px 0 24px rgba(0,0,0,.18);z-index:65;}
+  .sidebar.sidebar-expanded{box-shadow:6px 0 24px rgba(0,0,0,.18);z-index:65;}
 }
 
 /* ============ APPEARANCE SETTINGS MODAL ============ */

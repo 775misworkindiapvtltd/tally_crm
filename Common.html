@@ -121,6 +121,15 @@ let S = {
   // The currently-open "Mark/Edit Follow Up" popup — {open,party,rowKey,date,remarks,promisedAmount}.
   followUpPopup:null,
   ageingOpen:false, ageingMode:'all',
+  // Desktop-only sidebar hover-expand state — set true/false directly by the
+  // mouseover/mouseout listeners near the bottom of this file (NOT via a full
+  // render()), and re-applied as the .sidebar-expanded class every time render()
+  // DOES run for some other reason (e.g. a nav click). This JS-tracked state is
+  // what makes the sidebar survive render() replacing the whole .sidebar DOM node —
+  // a plain CSS :hover pseudo-class does NOT survive that DOM replacement, which
+  // was the root cause of "clicked Ageing Summary, it collapsed back" (see the
+  // detailed BUG FIX comment above the .sidebar-expanded rules in CSS.html).
+  sidebarHovered:false,
   map:{selectedState:'',zoom:1,searchQuery:'',citySortCol:'amount',citySortDir:-1,panX:0,panY:0,sidePanelOpen:false},
   // Sales Report top toggle: 'sales' = existing invoice-wise master/detail grid
   // (unchanged), 'category' = the Category-wise Monthly/Yearly/Custom pivot below
@@ -765,7 +774,7 @@ function renderShell(inner){
   return `
   <div class="shell">
     <div class="sidebar-overlay ${S.sidebarOpen?'show':''}" data-action="close-sidebar"></div>
-    <div class="sidebar ${S.sidebarOpen?'open':''}">
+    <div class="sidebar ${S.sidebarOpen?'open':''} ${S.sidebarHovered?'sidebar-expanded':''}">
       <div class="brand">
         <div class="brand-inner">
           <div class="brand-icon"><span></span><span></span><span></span><span></span></div>
@@ -1455,10 +1464,37 @@ document.addEventListener('click',e=>{
   if(a==='ledger-print'){window.print();return;}
 });
 document.addEventListener('click',e=>{if(!e.target.closest('.dt-colmenu-wrap')&&S.colMenuOpen){S.colMenuOpen=null;render();}});
-/* Note: the desktop sidebar's collapse/expand is handled entirely in CSS now
- * (.sidebar / .sidebar:hover under @media (min-width:981px) in CSS.html) — it
- * rests as an icon-only rail and expands on hover, no JS state needed. See that
- * rule's comment for the full explicit-user-instruction reasoning. */
+/* Desktop sidebar hover-expand — icon-only rail that expands to full width while
+ * the cursor is over it (see .sidebar/.sidebar-expanded under
+ * @media (min-width:981px) in CSS.html). Driven by S.sidebarHovered + the
+ * .sidebar-expanded class (NOT a plain CSS :hover pseudo-class) specifically so it
+ * survives render() replacing the whole .sidebar DOM node on every click — see the
+ * detailed BUG FIX comment above the CSS rules for the full explanation of why a
+ * plain :hover broke this ("clicked Ageing Summary, it collapsed back").
+ * mouseover/mouseout (not mouseenter/mouseleave) are used because they support
+ * event delegation on `document` — mouseenter/mouseleave don't bubble, so they
+ * can't be attached once here and still fire for a .sidebar that gets replaced by
+ * every render(). Toggling the class directly on the CURRENT .sidebar element
+ * (rather than always calling render()) avoids an unnecessary full re-render on
+ * every single mouse movement in/out of the sidebar. */
+document.addEventListener('mouseover',e=>{
+  if(S.sidebarHovered)return; // already expanded — nothing to do
+  if(!e.target.closest('.sidebar'))return;
+  S.sidebarHovered=true;
+  const sb=document.querySelector('.sidebar');
+  if(sb)sb.classList.add('sidebar-expanded');
+});
+document.addEventListener('mouseout',e=>{
+  if(!S.sidebarHovered)return; // already collapsed — nothing to do
+  if(!e.target.closest('.sidebar'))return; // this mouseout isn't even about the sidebar
+  // relatedTarget is where the cursor is MOVING TO — only collapse once it has
+  // actually left the sidebar entirely (not just moved between two child elements
+  // both still inside it, which also fires mouseout on the inner element).
+  if(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.sidebar'))return;
+  S.sidebarHovered=false;
+  const sb=document.querySelector('.sidebar');
+  if(sb)sb.classList.remove('sidebar-expanded');
+});
 
 document.addEventListener('mousedown',e=>{
   const el=e.target.closest('[data-action="resize"]');if(!el)return;
