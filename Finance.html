@@ -587,18 +587,26 @@ function renderBalanceSheet(){
 }
 registerPage('balanceSheet',renderBalanceSheet);
 
-// Reports page — simplified down to just two big clickable KPI-style cards (Sales
-// Report, Expense Report), per explicit user instruction ("abhi me bahut bada page
-// dikh raha hai...i just want to see sales report,, exense report section ,
-// clickable kpi cards....as of now"). The previous "All Reports"/"More Reports"
-// grid of 30 tiles (every report in the app — Ageing/Customer List/Collection
-// Analysis/Follow Up/Credit Notes/etc, plus the 13 ReportsExtra.html reports) is
-// NOT deleted — every one of those pages still exists and is still reachable from
-// its own spot in the sidebar (Receivables/Payables groups) exactly as before.
-// This page is just no longer the single giant hub linking ALL of them; it's
-// scoped down to the two reports the user actually wants front-and-center here.
-// If more reports should be added to this page later, they can be appended to the
-// `cards` array below — the user explicitly said "for now" this is the target set.
+// Reports page — two large, professional, obviously-clickable panels (Sales
+// Report, Expense Report), per explicit user instruction ("i just want to see
+// sales report,, exense report section , clickable kpi cards" — then, on the plain
+// .card version, "this does not looks prefessional , neither it looks thery are
+// clickble....make it look professional"). Restyled using the exact same
+// .ageing-panel / .ageing-panel-actions look already built for the Ageing Summary
+// landing page (colored left accent bar, a clear primary "Open Report" action
+// button with an icon) so both hub-style landing pages in the app read
+// consistently, instead of a plain hover-only .card that gave no visual cue it
+// was clickable. Sidebar-side, "Reports" now also cascades into Sales Report/
+// Expense Report exactly like "Ageing Summary" cascades into Receivables/Payables
+// (see NAV_PARENTS in Common.html), per explicit user instruction ("ye teeni
+// button left side wale bar me cascade ho jaaye jaiseke ageing report pe click
+// karne pe dikta hai"). The previous "All Reports"/"More Reports" grid of 30 tiles
+// is NOT deleted — every one of those pages still exists and is still reachable
+// from its own spot in the sidebar (Receivables/Payables groups) exactly as
+// before; this page/cascade is scoped to just these two reports "for now" — more
+// can be appended to `cards` below AND to NAV_PARENTS.reports.children in
+// Common.html later, per explicit user note ("baaki baad me aur koi report ho
+// jaaye to vo bhi baadme add kar denge").
 function renderReports(){
   const salesRows=voucherSales_();
   const salesCur=periodMetrics();
@@ -606,16 +614,24 @@ function renderReports(){
   const expTotal=sumBy(expRows,'amount');
   const fyLabel=selectedFYLabel();
   const cards=[
-    {key:'salesReport',label:'Sales Report',icon:'sales',cls:'c-green',
-      value:fmtINR(salesCur.sales),sub:`${salesRows.length} vouchers — ${esc(fyLabel)}`},
-    {key:'expense',label:'Expense Report',icon:'wallet',cls:'c-orange',
-      value:fmtINR(expTotal),sub:`${expRows.length} voucher lines — ${esc(fyLabel)}`},
+    {key:'salesReport',label:'Sales Report',icon:'sales',tone:'recv',
+      value:fmtINR(salesCur.sales),sub:`${salesRows.length} vouchers`},
+    {key:'expense',label:'Expense Report',icon:'wallet',tone:'pay',
+      value:fmtINR(expTotal),sub:`${expRows.length} voucher lines`},
   ];
-  return `<div class="dash-grid" style="grid-template-columns:repeat(2,1fr);max-width:640px;">
-    ${cards.map(c=>`<div class="card" data-action="goto" data-page="${c.key}">
-      <div class="card-top"><span class="card-label">${esc(c.label)}</span><div class="card-icon ${c.cls}">${NAV_ICONS[c.icon]}</div></div>
-      <div class="card-value">${c.value}</div>
-      <div class="card-sub">${c.sub}</div>
+  return `<div class="ageing-panels-grid">
+    ${cards.map(c=>`<div class="ageing-panel ageing-panel-${c.tone}">
+      <div class="ageing-panel-head" data-action="goto" data-page="${c.key}" style="cursor:pointer;">
+        <div class="ageing-panel-icon ${c.tone}">${NAV_ICONS[c.icon]}</div>
+        <div class="ageing-panel-head-text">
+          <div class="ageing-panel-title">${esc(c.label)}</div>
+          <div class="ageing-panel-sub">${esc(c.sub)} — ${esc(fyLabel)}</div>
+        </div>
+        <div class="ageing-panel-total">${c.value}</div>
+      </div>
+      <div class="ageing-panel-actions">
+        <button class="ageing-action-btn primary" data-action="goto" data-page="${c.key}"><span class="aa-ic">${NAV_ICONS.reports}</span>Open ${esc(c.label)}</button>
+      </div>
     </div>`).join('')}
   </div>`;
 }

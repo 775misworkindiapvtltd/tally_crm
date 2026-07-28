@@ -121,6 +121,12 @@ let S = {
   // The currently-open "Mark/Edit Follow Up" popup — {open,party,rowKey,date,remarks,promisedAmount}.
   followUpPopup:null,
   ageingOpen:false, ageingMode:'all',
+  // Reports sidebar cascade (Reports -> Sales Report/Expense Report), mirroring
+  // the Ageing Summary parent/children pattern above — per explicit user
+  // instruction ("only 3 report...ye teeni button left side wale bar me cascade ho
+  // jaaye jaiseke ageing report pe click karne pe dikta hai"). See NAV_PARENTS
+  // below for the actual parent->children wiring.
+  reportsOpen:false,
   // Desktop-only sidebar hover-expand state — set true/false directly by the
   // mouseover/mouseout listeners near the bottom of this file (NOT via a full
   // render()), and re-applied as the .sidebar-expanded class every time render()
@@ -652,7 +658,7 @@ const NAV_ITEMS=[
   {key:'cashFlow',       label:'Cash Flow',            group:'Finance', icon:'cashflow'},
   {key:'profitLoss',     label:'Profit & Loss',        group:'Finance', icon:'pl'},
   {key:'balanceSheet',   label:'Balance Sheet',        group:'Finance', icon:'balance'},
-  {key:'reports',        label:'Reports',              group:'Finance', icon:'reports'},
+  {key:'reports',        label:'Reports',              group:'Finance', icon:'reports', parent:true},
 
   {key:'ledger',         label:'Party Ledger',         group:'Finance', icon:'book'},
 
@@ -726,6 +732,27 @@ const NAV_ICONS={
   settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.44.57.78 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
 };
 
+// Sidebar parent->children cascade config — each entry describes a NAV_ITEMS entry
+// flagged `parent:true`: which S state key tracks whether it's manually pinned
+// open (openKey), and its list of {key,label,icon} children shown directly below
+// it when expanded. Originally built just for "Ageing Summary" (-> Receivables/
+// Payables); "Reports" (-> Sales Report/Expense Report) reuses the exact same
+// mechanism, per explicit user instruction ("only 3 report...ye teeni button left
+// side wale bar me cascade ho jaaye jaiseke ageing report pe click karne pe dikta
+// hai"). Adding a future report here just means adding one more entry to
+// reports.children, per explicit user note ("baaki baad me aur koi report ho
+// jaaye to vo bhi baadme add kar denge").
+const NAV_PARENTS={
+  ageingSummary:{openKey:'ageingOpen',children:[
+    {key:'ageingRecv',label:'Receivables',icon:'in'},
+    {key:'ageingPay',label:'Payables',icon:'out'}
+  ]},
+  reports:{openKey:'reportsOpen',children:[
+    {key:'salesReport',label:'Sales Report',icon:'sales'},
+    {key:'expense',label:'Expense Report',icon:'wallet'}
+  ]}
+};
+
 function alertCount(){
   const overdueRecv=dataForFY('receivables').filter(r=>Number(r.overdueDays)>0).length;
   const overduePay=dataForFY('payables').filter(r=>Number(r.overdueDays)>0).length;
@@ -741,36 +768,31 @@ function renderShell(inner){
   items.forEach(n=>{
     if(n.group!==lastGroup){ if(n.group) navHtml+=`<div class="nav-group-label">${esc(n.group.toUpperCase())}</div>`; lastGroup=n.group; }
     if(n.parent){
-      // 'ageingSummary' included here too now that it's a real landing page of its
-      // own (not just a toggle label) — landing on it (directly, or via this nav
-      // click) correctly shows it as the active item AND auto-expands the
-      // Receivables/Payables children below it, per the redesigned Ageing Summary
-      // overview (see renderAgeingSummaryLanding() in Receivables.html).
-      const childActive=S.page==='ageingSummary'||S.page==='ageingRecv'||S.page==='ageingPay';
-      // BUG FIX: the label used to be a bare text node sitting directly inside
-      // .nav-item (never wrapped in a <span>) — so the collapsed-sidebar CSS rule
-      // that was meant to hide it (`.nav-item span:not(.n-ic){display:none;}`) could
-      // only ever match the OTHER spans (.nav-chevron/.nav-badge), never the label
-      // text itself. That's exactly why the icon-only rail showed garbled/overlapping
-      // full label text squeezed into 64px — the label was never actually hidden.
-      // Wrapping it in <span class="n-lbl"> lets the collapsed CSS target it
-      // precisely, per explicit user instruction with a reference screenshot.
-      // BUG FIX #2: the submenu's actual visibility already correctly used
-      // (S.ageingOpen||childActive) below, but the CHEVRON symbol only ever looked
-      // at S.ageingOpen on its own — so if you landed on ageingRecv/ageingPay
-      // WITHOUT first clicking the parent to open it (childActive alone was
-      // showing the children), the chevron still displayed the "collapsed" ›
-      // glyph even while the children were visibly expanded right below it. Fixed
-      // to use the same combined condition as the children themselves, so the
-      // arrow always accurately reflects what's actually on screen.
-      const ageingExpanded=S.ageingOpen||childActive;
-      // Clicking the parent label now NAVIGATES to the new 'ageingSummary' landing
-      // page (data-action="nav") instead of only toggling the submenu open/closed
-      // with nowhere for the parent itself to go — per explicit user request to
-      // give Ageing Summary its own real overview page, matched to the two
-      // Receivables/Payables children it sits above.
-      navHtml+=`<div class="nav-item nav-parent ${S.page==='ageingSummary'?'active':''}" data-action="nav" data-page="ageingSummary"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${ageingExpanded?'▾':'›'}</span></div>`;
-      if(ageingExpanded)navHtml+=`<div class="nav-children"><div class="nav-item ${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv"><span class="n-ic">${NAV_ICONS.in}</span><span class="n-lbl">Receivables</span></div><div class="nav-item ${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay"><span class="n-ic">${NAV_ICONS.out}</span><span class="n-lbl">Payables</span></div></div>`;
+      // Generic parent/children sidebar cascade — originally built just for
+      // "Ageing Summary" (-> Receivables/Payables) but now reused for "Reports"
+      // (-> Sales Report/Expense Report) too, per explicit user instruction
+      // ("only 3 report...ye teeni button left side wale bar me cascade ho jaaye
+      // jaiseke ageing report pe click karne pe dikta hai"). See NAV_PARENTS
+      // above for each parent's own open-state key + children list.
+      // BUG FIX (kept from the original ageingSummary-only version): the label
+      // used to be a bare text node sitting directly inside .nav-item (never
+      // wrapped in a <span>) — so the collapsed-sidebar CSS rule that was meant to
+      // hide it (`.nav-item span:not(.n-ic){display:none;}`) could only ever
+      // match the OTHER spans (.nav-chevron/.nav-badge), never the label text
+      // itself. Wrapping it in <span class="n-lbl"> lets the collapsed CSS target
+      // it precisely, per explicit user instruction with a reference screenshot.
+      // Also: the chevron symbol always uses the SAME combined condition
+      // (openKey-state OR childActive) as the children's own visibility below, so
+      // the arrow never shows "collapsed" while the children are plainly expanded.
+      const cfg=NAV_PARENTS[n.key]||{openKey:null,children:[]};
+      const childKeys=cfg.children.map(c=>c.key);
+      // Clicking the parent label NAVIGATES to its own landing page (data-action
+      // "nav") instead of only toggling the submenu open/closed with nowhere for
+      // the parent itself to go — per explicit user request/instruction.
+      const childActive=S.page===n.key||childKeys.indexOf(S.page)!==-1;
+      const expanded=(cfg.openKey&&S[cfg.openKey])||childActive;
+      navHtml+=`<div class="nav-item nav-parent ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${expanded?'▾':'›'}</span></div>`;
+      if(expanded)navHtml+=`<div class="nav-children">${cfg.children.map(c=>`<div class="nav-item ${S.page===c.key?'active':''}" data-action="nav" data-page="${c.key}"><span class="n-ic">${NAV_ICONS[c.icon]||''}</span><span class="n-lbl">${esc(c.label)}</span></div>`).join('')}</div>`;
       return;
     }
     const badge=n.badge?n.badge():0;
@@ -847,17 +869,17 @@ function renderShell(inner){
 // ever closes once the user has moved to a page OUTSIDE the Ageing Summary section
 // — navigating to either of its own two children keeps it open.
 function shouldAgeingStayOpenOnNav_(pageKey){
-  // 'ageingSummary' (the new combined landing page) added to this list per
-  // explicit user request to redesign that landing page — clicking the "Ageing
-  // Summary" parent nav item now navigates straight to this overview page (see
-  // renderAgeingSummaryLanding() in Receivables.html) AND keeps the submenu open,
-  // instead of the parent being a pure toggle-only label with nowhere of its own
-  // to go.
   return pageKey==='ageingSummary'||pageKey==='ageingRecv'||pageKey==='ageingPay';
+}
+// Same reasoning as shouldAgeingStayOpenOnNav_ above, for the "Reports" sidebar
+// cascade (-> Sales Report/Expense Report) — per explicit user instruction.
+function shouldReportsStayOpenOnNav_(pageKey){
+  return pageKey==='reports'||pageKey==='salesReport'||pageKey==='expense';
 }
 function navigateTo(pageKey){
   S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;
   if(!shouldAgeingStayOpenOnNav_(pageKey))S.ageingOpen=false;
+  if(!shouldReportsStayOpenOnNav_(pageKey))S.reportsOpen=false;
   render();
 }
 
@@ -1428,14 +1450,6 @@ document.addEventListener('click',e=>{
     return;
   }
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
-  if(a==='ageing-nav-toggle'){
-    // Per explicit user report ("ageing summary pe click karne se collapse ho raha
-    // hai...it should not collapse back") this now only ever OPENS the submenu —
-    // clicking the parent a second time no longer toggles it back closed. It only
-    // ever closes via navigateTo() (see shouldAgeingStayOpenOnNav_ above), once the
-    // user actually navigates to a page outside this section.
-    S.ageingOpen=true;render();return;
-  }
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='logout'){void writeCachedSnapshot_();clearPersistedSessionUserId_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
   if(a==='syncnow'){refreshData();return;} // sidebar "Sync with Tally" — always a full refresh
