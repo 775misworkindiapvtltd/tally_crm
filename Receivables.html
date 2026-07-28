@@ -248,6 +248,22 @@ function ageingSummaryCard_(kind){
     </div>
   </div>`;
 }
+// Combines the Receivables (pendingAmount) and Payables (closingBalance) ageing
+// buckets into ONE merged 0-30/31-60/61-90/90+ snapshot — per explicit user
+// instruction ("AGEGING ME MAIN DASHBOARD PE KYA HUM SECONDWALI SUMMARY ADD KAR
+// SAKTE HAI...carefully pick the data from relevant data table, we are already
+// picking this data in revebale andpayble ageging summary"): reuses the EXACT same
+// ageingBuckets() helper (Dashboard.html) already used for the Receivables/Payables
+// Ageing Wise tabs, called once per side with each side's own correct amount
+// column, then summed bucket-by-bucket — nothing new is computed, this only
+// combines numbers that were already being picked from the right table.
+function combinedAgeingBuckets_(){
+  const recvBuckets=ageingBuckets(dataForFY('receivables'),'pendingAmount');
+  const payBuckets=ageingBuckets(dataForFY('payables'),'closingBalance');
+  const combined={};
+  Object.keys(recvBuckets).forEach(k=>{ combined[k]=(recvBuckets[k]||0)+(payBuckets[k]||0); });
+  return combined;
+}
 function renderAgeingSummaryLanding(){
   const recvRows=dataForFY('receivables'),payRows=dataForFY('payables');
   const allRows=recvRows.concat(payRows);
@@ -257,6 +273,7 @@ function renderAgeingSummaryLanding(){
   const overdueAmount=sumBy(recvRows.filter(r=>Number(r.overdueDays)>0),'pendingAmount')+sumBy(payRows.filter(r=>Number(r.overdueDays)>0),'closingBalance');
   const notYetDueAmount=totalOutstanding-overdueAmount;
   const avgOverdueDays=overdueAll.length?Math.round(sumBy(overdueAll,'overdueDays')/overdueAll.length):0;
+  const combinedBuckets=combinedAgeingBuckets_();
   return `
     <div class="dash-grid ageing-page-cards">
       ${ageingKpiCard_('Total Outstanding',fmtINR(totalOutstanding),`${allRows.length} open bills (Receivables + Payables)`,'ageing','c-blue')}
@@ -267,6 +284,10 @@ function renderAgeingSummaryLanding(){
     <div class="ageing-landing-grid">
       ${ageingSummaryCard_('recv')}
       ${ageingSummaryCard_('pay')}
+    </div>
+    <div class="panel" style="margin-top:14px;">
+      <div class="panel-title">Ageing Snapshot — ${esc(selectedFYLabel())} <span style="font-weight:500;color:var(--muted);font-size:11px;">(Receivables + Payables combined)</span></div>
+      <div class="panel-body"><div class="age-buckets">${Object.keys(combinedBuckets).map(k=>`<div class="age-bucket ${k==='90+'?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(combinedBuckets[k])}</div></div>`).join('')}</div></div>
     </div>`;
 }
 registerPage('ageingSummary',renderAgeingSummaryLanding);
