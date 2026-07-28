@@ -587,69 +587,37 @@ function renderBalanceSheet(){
 }
 registerPage('balanceSheet',renderBalanceSheet);
 
-const REPORT_COLOR_VARS={
-  'c-blue':'blue','c-red':'red','c-green':'green','c-orange':'orange','c-purple':'purple','c-teal':'teal','c-indigo':'indigo'
-};
-// Reports hub — every report in the app is reachable from here in one grid of tiles,
-// grouped under section headings. Sales Report and Expense Report moved IN here
-// (removed from the sidebar's own nav list — see NAV_ITEMS in Common.html) per
-// explicit user instruction ("shift sales and expense report bhi usi ke under"), and
-// every additional report idea the user asked to "add all" (see ReportsExtra.html)
-// is listed under its own "More Reports" section below the original set.
-function renderReportSection_(label,items){
-  return `<div class="reports-section">
-    <div class="reports-section-label">${esc(label)}</div>
-    <div class="qa-grid" style="grid-template-columns:repeat(4,1fr);">
-      ${items.map(it=>{const cv=REPORT_COLOR_VARS[it.cls]||'blue';return `<div class="qa-btn" style="padding:18px 10px;" data-action="goto" data-page="${it.key}"><span class="qa-ic" style="width:38px;height:38px;background:var(--${cv}-tint);color:var(--${cv});">${NAV_ICONS[it.icon]}</span><span class="qa-txt" style="font-size:11.5px;">${esc(it.label)}</span></div>`;}).join('')}
-    </div>
-  </div>`;
-}
+// Reports page — simplified down to just two big clickable KPI-style cards (Sales
+// Report, Expense Report), per explicit user instruction ("abhi me bahut bada page
+// dikh raha hai...i just want to see sales report,, exense report section ,
+// clickable kpi cards....as of now"). The previous "All Reports"/"More Reports"
+// grid of 30 tiles (every report in the app — Ageing/Customer List/Collection
+// Analysis/Follow Up/Credit Notes/etc, plus the 13 ReportsExtra.html reports) is
+// NOT deleted — every one of those pages still exists and is still reachable from
+// its own spot in the sidebar (Receivables/Payables groups) exactly as before.
+// This page is just no longer the single giant hub linking ALL of them; it's
+// scoped down to the two reports the user actually wants front-and-center here.
+// If more reports should be added to this page later, they can be appended to the
+// `cards` array below — the user explicitly said "for now" this is the target set.
 function renderReports(){
-  const core=[
-    {key:'ageingRecv',label:'Receivables Ageing',icon:'ageing',cls:'c-blue'},
-    {key:'customerList',label:'Customer List',icon:'customer',cls:'c-blue'},
-    {key:'collectionAnalysis',label:'Collection Analysis',icon:'collection',cls:'c-teal'},
-    {key:'followUpList',label:'Follow Up List',icon:'followup',cls:'c-orange'},
-    {key:'creditNotes',label:'Credit Notes',icon:'creditnote',cls:'c-purple'},
-    {key:'payDashboard',label:'Payables Dashboard',icon:'out',cls:'c-red'},
-    {key:'ageingPay',label:'Payables Ageing',icon:'ageing',cls:'c-red'},
-    {key:'vendorList',label:'Vendor List',icon:'customer',cls:'c-red'},
-    {key:'salesDashboard',label:'Sales Dashboard',icon:'sales',cls:'c-green'},
-    // Moved in from the sidebar per explicit user instruction.
-    {key:'salesReport',label:'Sales Report',icon:'sales',cls:'c-green'},
-    {key:'expense',label:'Expense Report',icon:'wallet',cls:'c-orange'},
-    {key:'expensesDashboard',label:'Expenses Dashboard',icon:'wallet',cls:'c-orange'},
-    {key:'cashFlow',label:'Cash Flow',icon:'cashflow',cls:'c-indigo'},
-    {key:'profitLoss',label:'Profit & Loss',icon:'pl',cls:'c-purple'},
-    {key:'balanceSheet',label:'Balance Sheet',icon:'balance',cls:'c-teal'},
-    {key:'ledger',label:'Party Ledger',icon:'book',cls:'c-blue'},
-    {key:'execSummary',label:'Executive Summary',icon:'summary',cls:'c-green'},
+  const salesRows=voucherSales_();
+  const salesCur=periodMetrics();
+  const expRows=dataForFY('expense');
+  const expTotal=sumBy(expRows,'amount');
+  const fyLabel=selectedFYLabel();
+  const cards=[
+    {key:'salesReport',label:'Sales Report',icon:'sales',cls:'c-green',
+      value:fmtINR(salesCur.sales),sub:`${salesRows.length} vouchers — ${esc(fyLabel)}`},
+    {key:'expense',label:'Expense Report',icon:'wallet',cls:'c-orange',
+      value:fmtINR(expTotal),sub:`${expRows.length} voucher lines — ${esc(fyLabel)}`},
   ];
-  // New reports added per explicit user request ("add all reports u suggested") —
-  // see ReportsExtra.html for their data/render logic. A few suggested ideas were
-  // intentionally NOT added because the underlying data doesn't exist in the sheet
-  // (Budget vs Actual — no budget figures anywhere; Vendor average days-to-pay and
-  // Cheque bounce/cleared tracking — no per-bill payment-date or instrument-status
-  // field; Follow-Up conversion rate — follow-up notes are client-side only, not
-  // saved history; exact multi-year Customer Lifetime Value — would need every
-  // historical year loaded at once, not just the selected FY). This is flagged back
-  // to the user in the reply rather than silently fabricating numbers.
-  const more=[
-    {key:'salesPersonPerf',label:'Sales Person Performance',icon:'customer',cls:'c-blue'},
-    {key:'stateSalesReport',label:'State-wise Sales',icon:'map',cls:'c-green'},
-    {key:'customerNewRepeat',label:'New vs Repeat Customers',icon:'customer',cls:'c-teal'},
-    {key:'invoiceBuckets',label:'Invoice Value Distribution',icon:'reports',cls:'c-indigo'},
-    {key:'gstSalesSplit',label:'GST vs Non-GST Sales',icon:'creditnote',cls:'c-purple'},
-    {key:'itemExpenseReport',label:'Item-wise Expense',icon:'wallet',cls:'c-orange'},
-    {key:'expenseRecurring',label:'Recurring vs One-time Expense',icon:'wallet',cls:'c-red'},
-    {key:'collectionEfficiencyTrend',label:'Collection Efficiency Trend',icon:'collection',cls:'c-teal'},
-    {key:'paymentTermsCompliance',label:'Payment Terms Compliance',icon:'followup',cls:'c-blue'},
-    {key:'customerRiskScore',label:'Customer Risk Score',icon:'ageing',cls:'c-red'},
-    {key:'partyGroupOutstanding',label:'Party Group Outstanding',icon:'balance',cls:'c-indigo'},
-    {key:'bankCollectionReport',label:'Bank & Mode Collection',icon:'in',cls:'c-green'},
-    {key:'creditNoteImpact',label:'Credit Note Impact',icon:'creditnote',cls:'c-purple'},
-  ];
-  return renderReportSection_('All Reports',core)+renderReportSection_('More Reports',more);
+  return `<div class="dash-grid" style="grid-template-columns:repeat(2,1fr);max-width:640px;">
+    ${cards.map(c=>`<div class="card" data-action="goto" data-page="${c.key}">
+      <div class="card-top"><span class="card-label">${esc(c.label)}</span><div class="card-icon ${c.cls}">${NAV_ICONS[c.icon]}</div></div>
+      <div class="card-value">${c.value}</div>
+      <div class="card-sub">${c.sub}</div>
+    </div>`).join('')}
+  </div>`;
 }
 registerPage('reports',renderReports);
 
