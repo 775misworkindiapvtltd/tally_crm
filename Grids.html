@@ -61,11 +61,18 @@ const FOLLOWUP_COLS=[
   {key:'pendingAmount',label:'Amount',width:150,num:true,filterType:'number-range'},
   // Plan Date — the follow-up date saved via the popup, shown as its own column so
   // it's visible at a glance without opening the popup, per explicit user instruction
-  // ("plan date ka bhi col ayega jo nahi aa rha hai list mein").
-  {key:'planDate',label:'Plan Date',width:120,render:r=>{
-    const note=S.followUpData[followUpDataKey_(r.partyName)];
-    if(!note||!note.date)return muted_('—');
-    return esc(fmtDDMMMYYYY(fromISO(note.date)));
+  // ("plan date ka bhi col ayega jo nahi aa rha hai list mein"). date:true switches
+  // this column's filter from the old plain "Filter…" text box to the SAME shared
+  // calendar date-range popup every other date/timestamp column in the app already
+  // uses, per explicit user instruction ("yeha pe bhi calanader aa jaye same format
+  // jo abi tak application me chal raha hai"). This requires r.planDate to be a real
+  // ISO date-string FIELD on the row (not just something computed inside render()),
+  // since the generic engine's date filter/sort read r[col.key] directly — see the
+  // followUpList data() function below, which now materializes this from
+  // S.followUpData at data-build time.
+  {key:'planDate',label:'Plan Date',width:120,date:true,render:r=>{
+    if(!r.planDate)return muted_('—');
+    return esc(fmtDDMMMYYYY(fromISO(r.planDate)));
   }},
   // Mark Follow Up — opens a small popup (Date + Remarks). Saving persists to the
   // SALES sheet (columns O=DATE, P=REMARKS, Q=TIMESTAMP) via runServer('saveFollowUp').
@@ -506,7 +513,13 @@ const GRID_DEFS={
   // together after the Mark/Edit Follow Up popup is used on any one of them, per
   // explicit user instruction ("agar company name 3 baar hai is table me teeno me
   // ye update ho jaye...jo row click ke hai vo highlight ho jaye").
-  followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0),highlightKey:r=>followUpDataKey_(r.partyName),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
+  // planDate is materialized here (from S.followUpData, keyed by customer) as a real
+  // ISO date-string FIELD on each row — needed so the generic grid engine's
+  // filter/sort logic (which reads r[col.key] directly) can actually filter/sort by
+  // it via the shared calendar popup, instead of the value only existing inside the
+  // column's own render() function (which the filter/sort logic never sees). See
+  // the planDate column definition in FOLLOWUP_COLS above for the full reasoning.
+  followUpList:{cols:FOLLOWUP_COLS,data:()=>dataForFY('receivables').filter(r=>(Number(r.overdueDays)||0)>0).map(r=>Object.assign({},r,{planDate:(S.followUpData[followUpDataKey_(r.partyName)]||{}).date||''})),highlightKey:r=>followUpDataKey_(r.partyName),reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   creditNotes:{cols:CREDIT_NOTE_COLS,data:creditNoteRows,reportTabs:()=>(typeof renderReceivablesReportTabs_==='function'?renderReceivablesReportTabs_():'')},
   topCustomersDash:{cols:TOP_CUSTOMERS_COLS,data:()=>S.dashTopCustomers||[],compact:true,dashboardReport:true,reportType:'customers'},
   topVendorsDash:{cols:TOP_VENDORS_COLS,data:()=>S.dashTopVendors||[],compact:true,dashboardReport:true,reportType:'vendors'},
