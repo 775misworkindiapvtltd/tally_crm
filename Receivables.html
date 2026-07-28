@@ -200,28 +200,29 @@ function ageingKpiCard_(label,value,sub,icon,cls){
 }
 
 /* ============================= AGEING SUMMARY — LANDING OVERVIEW =============================
- * Per explicit user feedback: the old "Ageing Summary" parent nav item had no page
- * of its own — clicking it only toggled the sidebar submenu open/closed, and its
- * "All Data" tab just re-showed the same flat Receivables/Payables Dashboard grid
- * data, with no distinct identity of its own. This gives it a real combined
- * overview: 4 top-level KPI cards (Total Outstanding/Overdue/Not-Yet-Due/Avg
- * Overdue Days across BOTH Receivables and Payables together), then two large
- * clickable summary cards — one for Receivables Ageing, one for Payables Ageing —
- * each with its own mini KPI snapshot, so the user can see at a glance which side
- * needs more attention before drilling into either one's own All Data/Ageing Wise
- * tabs (unchanged, still reachable exactly as before via ageingRecv/ageingPay). */
-// "View Details →" replaced with two direct sub-page buttons — "All Data" and
-// "Ageing Wise" — per explicit user request/screenshot ("instead of View details
-// can i have All data ,and ageig wise data table in each revable and payble
-// section when clicked it take us to sub pages, jaise abhi jaa raha hai"). Both
-// buttons navigate into the SAME ageingRecv/ageingPay page as before (nothing new
-// was built for the destination — it's the exact existing All Data/Ageing Wise
-// tab view from renderAgeing()) but ALSO pre-select which mode tab should already
-// be active on arrival, via a new "nav-ageing" action (see the click handler
-// below) instead of the plain "nav" action, which always used to leave S.ageingMode
-// at whatever it was last (defaulting to 'all') regardless of which button was
-// clicked here.
-function ageingSummaryCard_(kind){
+ * Per explicit user feedback (TWICE — first asking to combine, then correctly
+ * pointing out the combine was wrong): Receivables (an ASSET — money owed TO the
+ * business) and Payables (a LIABILITY — money the business owes) are opposite
+ * directions and should NEVER be summed into one blended number — "Total
+ * Outstanding ₹39L" or a combined "Ageing Snapshot" bucket mixing both hides
+ * exactly the information this page exists to surface. Per explicit user
+ * instruction ("dono ke alag alag le lo, recvale ka data recevoable gaing se aa
+ * jayega, payble ka payeble agin se") — this page is now two FULLY independent,
+ * self-contained panels: each one pulls its OWN rows/amount-column from its own
+ * side (Receivables: pendingAmount, Payables: closingBalance) for EVERYTHING it
+ * shows — the KPI stats AND its own Ageing Snapshot buckets — nothing from one
+ * side is ever combined with the other anywhere on this page.
+ */
+// One fully self-contained panel per side — header, KPI stat row, its OWN Ageing
+// Snapshot bucket mini-panel, and two clearly-styled action buttons ("View All
+// Data" / "View Ageing Wise") that navigate into the existing ageingRecv/ageingPay
+// page and pre-select which mode tab is active on arrival (via the "nav-ageing"
+// action — see the click handler below). Restyled from plain .btn-ghost (which
+// per explicit user feedback "dont look like button, small kara hai") into a
+// larger, clearly-actionable pair: "All Data" as a solid accent-colored primary
+// action, "Ageing Wise" as a bold outlined secondary — both with icons, per
+// explicit user instruction ("make it lokk like a prfoessional dashboard").
+function ageingSummaryPanel_(kind){
   const isRecv=kind==='recv';
   const pageKey=isRecv?'ageingRecv':'ageingPay';
   const rows=dataForFY(isRecv?'receivables':'payables');
@@ -229,66 +230,50 @@ function ageingSummaryCard_(kind){
   const overdue=rows.filter(r=>Number(r.overdueDays)>0);
   const notYetDue=rows.filter(r=>Number(r.overdueDays)<=0);
   const total=sumBy(rows,amtKey);
-  return `<div class="card ageing-landing-card">
-    <div class="ageing-landing-head" data-action="nav-ageing" data-page="${pageKey}" data-mode="all" style="cursor:pointer;">
-      <div class="ageing-landing-ic ${isRecv?'c-blue':'c-orange'}">${NAV_ICONS[isRecv?'in':'out']}</div>
-      <div>
-        <div class="ageing-landing-title">${isRecv?'Receivables Ageing':'Payables Ageing'}</div>
-        <div class="ageing-landing-sub">${rows.length} open bills</div>
+  const avgOverdueDays=overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0;
+  const buckets=ageingBuckets(rows,amtKey);
+  const tone=isRecv?'recv':'pay';
+  return `<div class="ageing-panel ageing-panel-${tone}">
+    <div class="ageing-panel-head">
+      <div class="ageing-panel-icon ${tone}">${NAV_ICONS[isRecv?'in':'out']}</div>
+      <div class="ageing-panel-head-text">
+        <div class="ageing-panel-title">${isRecv?'Receivables Ageing':'Payables Ageing'}</div>
+        <div class="ageing-panel-sub">${rows.length} open bills — ${esc(selectedFYLabel())}</div>
+      </div>
+      <div class="ageing-panel-total">${fmtINR(total)}</div>
+    </div>
+    <div class="ageing-panel-stats">
+      <div class="ageing-stat danger">
+        <div class="ageing-stat-label">Overdue</div>
+        <div class="ageing-stat-value">${fmtINR(sumBy(overdue,amtKey))}</div>
+        <div class="ageing-stat-count">${overdue.length} bills</div>
+      </div>
+      <div class="ageing-stat success">
+        <div class="ageing-stat-label">Not Yet Due</div>
+        <div class="ageing-stat-value">${fmtINR(sumBy(notYetDue,amtKey))}</div>
+        <div class="ageing-stat-count">${notYetDue.length} bills</div>
+      </div>
+      <div class="ageing-stat neutral">
+        <div class="ageing-stat-label">Avg Overdue Days</div>
+        <div class="ageing-stat-value">${avgOverdueDays}</div>
+        <div class="ageing-stat-count">across overdue bills</div>
       </div>
     </div>
-    <div class="ageing-landing-total" data-action="nav-ageing" data-page="${pageKey}" data-mode="all" style="cursor:pointer;">${fmtINR(total)}</div>
-    <div class="ageing-landing-split">
-      <div class="ageing-landing-split-item danger"><span class="dot"></span>${fmtINR(sumBy(overdue,amtKey))} overdue <b>(${overdue.length})</b></div>
-      <div class="ageing-landing-split-item success"><span class="dot"></span>${fmtINR(sumBy(notYetDue,amtKey))} not yet due <b>(${notYetDue.length})</b></div>
+    <div class="ageing-panel-buckets">
+      <div class="ageing-panel-buckets-label">Ageing Snapshot</div>
+      <div class="age-buckets age-buckets-sm">${Object.keys(buckets).map(k=>`<div class="age-bucket ${k==='90+'?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(buckets[k])}</div></div>`).join('')}</div>
     </div>
-    <div class="ageing-landing-actions">
-      <button class="btn btn-ghost" data-action="nav-ageing" data-page="${pageKey}" data-mode="all">All Data</button>
-      <button class="btn btn-ghost" data-action="nav-ageing" data-page="${pageKey}" data-mode="ageing">Ageing Wise</button>
+    <div class="ageing-panel-actions">
+      <button class="ageing-action-btn primary" data-action="nav-ageing" data-page="${pageKey}" data-mode="all"><span class="aa-ic">${NAV_ICONS.reports}</span>All Data</button>
+      <button class="ageing-action-btn" data-action="nav-ageing" data-page="${pageKey}" data-mode="ageing"><span class="aa-ic">${NAV_ICONS.ageing}</span>Ageing Wise</button>
     </div>
   </div>`;
 }
-// Combines the Receivables (pendingAmount) and Payables (closingBalance) ageing
-// buckets into ONE merged 0-30/31-60/61-90/90+ snapshot — per explicit user
-// instruction ("AGEGING ME MAIN DASHBOARD PE KYA HUM SECONDWALI SUMMARY ADD KAR
-// SAKTE HAI...carefully pick the data from relevant data table, we are already
-// picking this data in revebale andpayble ageging summary"): reuses the EXACT same
-// ageingBuckets() helper (Dashboard.html) already used for the Receivables/Payables
-// Ageing Wise tabs, called once per side with each side's own correct amount
-// column, then summed bucket-by-bucket — nothing new is computed, this only
-// combines numbers that were already being picked from the right table.
-function combinedAgeingBuckets_(){
-  const recvBuckets=ageingBuckets(dataForFY('receivables'),'pendingAmount');
-  const payBuckets=ageingBuckets(dataForFY('payables'),'closingBalance');
-  const combined={};
-  Object.keys(recvBuckets).forEach(k=>{ combined[k]=(recvBuckets[k]||0)+(payBuckets[k]||0); });
-  return combined;
-}
 function renderAgeingSummaryLanding(){
-  const recvRows=dataForFY('receivables'),payRows=dataForFY('payables');
-  const allRows=recvRows.concat(payRows);
-  const overdueAll=allRows.filter(r=>Number(r.overdueDays)>0);
-  const notYetDueAll=allRows.filter(r=>Number(r.overdueDays)<=0);
-  const totalOutstanding=sumBy(recvRows,'pendingAmount')+sumBy(payRows,'closingBalance');
-  const overdueAmount=sumBy(recvRows.filter(r=>Number(r.overdueDays)>0),'pendingAmount')+sumBy(payRows.filter(r=>Number(r.overdueDays)>0),'closingBalance');
-  const notYetDueAmount=totalOutstanding-overdueAmount;
-  const avgOverdueDays=overdueAll.length?Math.round(sumBy(overdueAll,'overdueDays')/overdueAll.length):0;
-  const combinedBuckets=combinedAgeingBuckets_();
-  return `
-    <div class="dash-grid ageing-page-cards">
-      ${ageingKpiCard_('Total Outstanding',fmtINR(totalOutstanding),`${allRows.length} open bills (Receivables + Payables)`,'ageing','c-blue')}
-      ${ageingKpiCard_('Overdue Amount',fmtINR(overdueAmount),`${overdueAll.length} overdue bills`,'clock','c-red')}
-      ${ageingKpiCard_('Not Yet Due',fmtINR(notYetDueAmount),`${notYetDueAll.length} not-yet-due bills`,'in','c-green')}
-      ${ageingKpiCard_('Avg Overdue Days',avgOverdueDays,'across all overdue bills','ageing','c-orange')}
-    </div>
-    <div class="ageing-landing-grid">
-      ${ageingSummaryCard_('recv')}
-      ${ageingSummaryCard_('pay')}
-    </div>
-    <div class="panel" style="margin-top:14px;">
-      <div class="panel-title">Ageing Snapshot — ${esc(selectedFYLabel())} <span style="font-weight:500;color:var(--muted);font-size:11px;">(Receivables + Payables combined)</span></div>
-      <div class="panel-body"><div class="age-buckets">${Object.keys(combinedBuckets).map(k=>`<div class="age-bucket ${k==='90+'?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(combinedBuckets[k])}</div></div>`).join('')}</div></div>
-    </div>`;
+  return `<div class="ageing-panels-grid">
+    ${ageingSummaryPanel_('recv')}
+    ${ageingSummaryPanel_('pay')}
+  </div>`;
 }
 registerPage('ageingSummary',renderAgeingSummaryLanding);
 
@@ -357,7 +342,8 @@ function renderAgeing(kind){
     // below (see renderAgeingPivot()'s own totals row), so a separate snapshot
     // panel here was redundant. The combined (Receivables+Payables) version of this
     // same snapshot correctly lives ONLY on the main "Ageing Summary" landing page
-    // — see combinedAgeingBuckets_()/renderAgeingSummaryLanding() above.
+    // — Receivables/Payables now each get their OWN separate snapshot instead, on
+    // the main "Ageing Summary" landing page — see ageingSummaryPanel_() above.
     return `${pageTabsBar}
       <div class="dash-grid ageing-page-cards ageing-summary-cards">
         ${ageingKpiCard_(isRecv?'Paisa Aana Tha, Aaya Nahi':'Payment Karna Tha, Hua Nahi',fmtINR(sumBy(overdue,amtKey)),`${overdue.length} overdue bills`,'clock','c-red')}

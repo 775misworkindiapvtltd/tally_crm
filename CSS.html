@@ -394,35 +394,58 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .ageing-kpi-card .card-value{font-size:13px;line-height:1;}
 .ageing-kpi-card .card-sub{font-size:9px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-/* ---------- AGEING SUMMARY — LANDING OVERVIEW ---------- */
-/* Two large clickable cards (Receivables Ageing / Payables Ageing) below the
-   combined KPI strip — gives the "Ageing Summary" parent nav item a real overview
-   page of its own instead of just toggling a submenu with nowhere to land, per
-   explicit user feedback. */
-.ageing-landing-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
-.ageing-landing-card{display:flex;flex-direction:column;gap:12px;padding:18px 20px;}
-.ageing-landing-head{display:flex;align-items:center;gap:12px;}
-.ageing-landing-ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;}
-.ageing-landing-ic svg{width:19px;height:19px;}
-.ageing-landing-ic.c-blue{background:var(--blue-tint);color:var(--blue);}
-.ageing-landing-ic.c-orange{background:var(--orange-tint);color:var(--orange);}
-.ageing-landing-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:var(--ink);}
-.ageing-landing-sub{font-size:11px;color:var(--muted);margin-top:1px;}
-.ageing-landing-total{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:800;color:var(--ink);}
-.ageing-landing-split{display:flex;flex-direction:column;gap:6px;padding-top:4px;border-top:1px solid var(--line-light);}
-.ageing-landing-split-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-secondary);font-weight:600;}
-.ageing-landing-split-item b{color:var(--muted);font-weight:700;}
-.ageing-landing-split-item .dot{width:8px;height:8px;border-radius:50%;flex:none;}
-.ageing-landing-split-item.danger .dot{background:var(--danger);}
-.ageing-landing-split-item.success .dot{background:var(--success);}
-/* Two direct sub-page buttons (All Data / Ageing Wise) replacing the old plain
-   "View Details →" text link — per explicit user request/screenshot ("instead of
-   View details can i have All data ,and ageig wise data table in each revable and
-   payble section when clicked it take us to sub pages"). */
-.ageing-landing-actions{display:flex;gap:8px;margin-top:2px;}
-.ageing-landing-actions .btn{flex:1;justify-content:center;padding:8px 10px;font-size:12px;}
-@media (max-width:700px){
-  .ageing-landing-grid{grid-template-columns:1fr;}
+/* ---------- AGEING SUMMARY — LANDING OVERVIEW (fully separate Recv/Pay panels) ---------- */
+/* Two FULLY independent panels (Receivables Ageing / Payables Ageing) — per
+   explicit user feedback, Receivables (asset) and Payables (liability) numbers
+   must NEVER be blended into one combined figure anywhere on this page, so each
+   panel below carries its own header, stats, and its OWN Ageing Snapshot buckets.
+   Restyled into a denser, more "dashboard" look — a colored left accent bar,
+   a 3-stat inline row instead of stacked KPI cards, and larger, clearly-actionable
+   buttons — per explicit user instruction ("look wise kafi sleek prfessional
+   dikhan chiaye...make it lokk like a prfoessional dashboard"). */
+.ageing-panels-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+.ageing-panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);overflow:hidden;position:relative;padding-left:5px;}
+.ageing-panel::before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;}
+.ageing-panel-recv::before{background:var(--recv);}
+.ageing-panel-pay::before{background:var(--pay);}
+.ageing-panel-head{display:flex;align-items:center;gap:12px;padding:18px 20px 14px;}
+.ageing-panel-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:none;}
+.ageing-panel-icon svg{width:20px;height:20px;}
+.ageing-panel-icon.recv{background:var(--recv-tint);color:var(--recv);}
+.ageing-panel-icon.pay{background:var(--pay-tint);color:var(--pay);}
+.ageing-panel-head-text{flex:1;min-width:0;}
+.ageing-panel-title{font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:700;color:var(--ink);}
+.ageing-panel-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.ageing-panel-total{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:800;color:var(--ink);white-space:nowrap;flex:none;}
+.ageing-panel-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-light);margin:0 20px;border-radius:10px;overflow:hidden;border:1px solid var(--line-light);}
+.ageing-stat{background:var(--bg);padding:11px 12px;text-align:center;}
+.ageing-stat-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+.ageing-stat-value{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ageing-stat.danger .ageing-stat-value{color:var(--danger);}
+.ageing-stat.success .ageing-stat-value{color:var(--success);}
+.ageing-stat.neutral .ageing-stat-value{color:var(--ink);}
+.ageing-stat-count{font-size:9.5px;color:var(--muted);margin-top:2px;}
+.ageing-panel-buckets{padding:16px 20px 4px;}
+.ageing-panel-buckets-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;}
+.age-buckets-sm .age-bucket{padding:7px 5px;}
+.age-buckets-sm .ab-label{font-size:9px;}
+.age-buckets-sm .ab-val{font-size:11px;}
+/* Larger, clearly-actionable buttons — "All Data" reads as the PRIMARY action
+   (solid accent fill), "Ageing Wise" as a bold secondary (outlined, thicker border
+   than a standard .btn-ghost) — replacing the old plain .btn-ghost pair that per
+   explicit user feedback "dont look like button, small kara hai". */
+.ageing-panel-actions{display:flex;gap:10px;padding:16px 20px 20px;}
+.ageing-action-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 14px;border-radius:10px;font-size:12.5px;font-weight:700;cursor:pointer;transition:all .15s;border:2px solid var(--line);background:var(--surface);color:var(--ink-secondary);}
+.ageing-action-btn .aa-ic{width:15px;height:15px;display:flex;flex:none;}
+.ageing-action-btn .aa-ic svg{width:15px;height:15px;}
+.ageing-action-btn:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);transform:translateY(-1px);}
+.ageing-action-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px var(--color-primary-glow);}
+.ageing-action-btn.primary:hover{background:var(--accent-dark);border-color:var(--accent-dark);color:#fff;box-shadow:0 4px 14px var(--color-primary-glow);}
+@media (max-width:900px){
+  .ageing-panels-grid{grid-template-columns:1fr;}
+}
+@media (max-width:500px){
+  .ageing-panel-stats{grid-template-columns:1fr;}
 }
 
 /* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
