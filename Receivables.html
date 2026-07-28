@@ -349,25 +349,20 @@ function renderAgeing(kind){
   </div>`;
 
   if(mode==='ageing'){
-    // Ageing Snapshot (0-30/31-60/61-90/90+ Days buckets) — per explicit user
-    // request/screenshot ("this s not impletemnted yet , i wanted u to add this in
-    // ageding wise dashabord....for paybles and recevables, pick the data from
-    // relevant section for this to shwo value"). Reuses the EXACT same
-    // ageingBuckets() helper (Dashboard.html) and .age-buckets/.age-bucket CSS
-    // already used by the old Payables Dashboard panel — just wired into this
-    // Ageing Wise view for BOTH kinds now, each reading its own correct amount
-    // column (pendingAmount for Receivables, closingBalance for Payables) via the
-    // same `amtKey` this whole page already resolves per kind above.
-    const buckets=ageingBuckets(rows,amtKey);
+    // NOTE: an "Ageing Snapshot" (0-30/31-60/61-90/90+ Days) buckets panel was
+    // briefly added HERE (on the individual Receivables/Payables Ageing Wise page)
+    // in an earlier change, but per explicit user feedback with a screenshot it was
+    // removed again — this exact page already shows the same bucket totals as
+    // sortable/heatmapped COLUMNS across the top of the party pivot table right
+    // below (see renderAgeingPivot()'s own totals row), so a separate snapshot
+    // panel here was redundant. The combined (Receivables+Payables) version of this
+    // same snapshot correctly lives ONLY on the main "Ageing Summary" landing page
+    // — see combinedAgeingBuckets_()/renderAgeingSummaryLanding() above.
     return `${pageTabsBar}
       <div class="dash-grid ageing-page-cards ageing-summary-cards">
         ${ageingKpiCard_(isRecv?'Paisa Aana Tha, Aaya Nahi':'Payment Karna Tha, Hua Nahi',fmtINR(sumBy(overdue,amtKey)),`${overdue.length} overdue bills`,'clock','c-red')}
         ${ageingKpiCard_(isRecv?'Paisa Abhi Aana Hai':'Payment Abhi Karna Hai',fmtINR(sumBy(notYetDue,amtKey)),`${notYetDue.length} not-yet-due bills`,isRecv?'in':'out','c-green')}
         ${ageingKpiCard_('Total Amount',fmtINR(sumBy(rows,amtKey)),`${rows.length} total bills`,'ageing','c-blue')}
-      </div>
-      <div class="panel" style="margin-bottom:14px;">
-        <div class="panel-title">Ageing Snapshot — ${esc(selectedFYLabel())}</div>
-        <div class="panel-body"><div class="age-buckets">${Object.keys(buckets).map(k=>`<div class="age-bucket ${k==='90+'?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(buckets[k])}</div></div>`).join('')}</div></div>
       </div>
       ${renderAgeingPivot(kind)}`;
   }
