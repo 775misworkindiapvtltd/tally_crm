@@ -210,27 +210,42 @@ function ageingKpiCard_(label,value,sub,icon,cls){
  * each with its own mini KPI snapshot, so the user can see at a glance which side
  * needs more attention before drilling into either one's own All Data/Ageing Wise
  * tabs (unchanged, still reachable exactly as before via ageingRecv/ageingPay). */
+// "View Details →" replaced with two direct sub-page buttons — "All Data" and
+// "Ageing Wise" — per explicit user request/screenshot ("instead of View details
+// can i have All data ,and ageig wise data table in each revable and payble
+// section when clicked it take us to sub pages, jaise abhi jaa raha hai"). Both
+// buttons navigate into the SAME ageingRecv/ageingPay page as before (nothing new
+// was built for the destination — it's the exact existing All Data/Ageing Wise
+// tab view from renderAgeing()) but ALSO pre-select which mode tab should already
+// be active on arrival, via a new "nav-ageing" action (see the click handler
+// below) instead of the plain "nav" action, which always used to leave S.ageingMode
+// at whatever it was last (defaulting to 'all') regardless of which button was
+// clicked here.
 function ageingSummaryCard_(kind){
   const isRecv=kind==='recv';
+  const pageKey=isRecv?'ageingRecv':'ageingPay';
   const rows=dataForFY(isRecv?'receivables':'payables');
   const amtKey=isRecv?'pendingAmount':'closingBalance';
   const overdue=rows.filter(r=>Number(r.overdueDays)>0);
   const notYetDue=rows.filter(r=>Number(r.overdueDays)<=0);
   const total=sumBy(rows,amtKey);
-  return `<div class="card ageing-landing-card" data-action="nav" data-page="${isRecv?'ageingRecv':'ageingPay'}">
-    <div class="ageing-landing-head">
+  return `<div class="card ageing-landing-card">
+    <div class="ageing-landing-head" data-action="nav-ageing" data-page="${pageKey}" data-mode="all" style="cursor:pointer;">
       <div class="ageing-landing-ic ${isRecv?'c-blue':'c-orange'}">${NAV_ICONS[isRecv?'in':'out']}</div>
       <div>
         <div class="ageing-landing-title">${isRecv?'Receivables Ageing':'Payables Ageing'}</div>
         <div class="ageing-landing-sub">${rows.length} open bills</div>
       </div>
     </div>
-    <div class="ageing-landing-total">${fmtINR(total)}</div>
+    <div class="ageing-landing-total" data-action="nav-ageing" data-page="${pageKey}" data-mode="all" style="cursor:pointer;">${fmtINR(total)}</div>
     <div class="ageing-landing-split">
       <div class="ageing-landing-split-item danger"><span class="dot"></span>${fmtINR(sumBy(overdue,amtKey))} overdue <b>(${overdue.length})</b></div>
       <div class="ageing-landing-split-item success"><span class="dot"></span>${fmtINR(sumBy(notYetDue,amtKey))} not yet due <b>(${notYetDue.length})</b></div>
     </div>
-    <div class="ageing-landing-cta">View Details →</div>
+    <div class="ageing-landing-actions">
+      <button class="btn btn-ghost" data-action="nav-ageing" data-page="${pageKey}" data-mode="all">All Data</button>
+      <button class="btn btn-ghost" data-action="nav-ageing" data-page="${pageKey}" data-mode="ageing">Ageing Wise</button>
+    </div>
   </div>`;
 }
 function renderAgeingSummaryLanding(){
@@ -475,6 +490,16 @@ document.addEventListener('click',e=>{
       return;
     }
     if(a==='ageing-mode'){S.ageingMode=el.getAttribute('data-mode');tableState(S.page).page=1;render();return;}
+    // Ageing Summary landing page's per-card "All Data"/"Ageing Wise" buttons — per
+    // explicit user request. Navigates into the existing ageingRecv/ageingPay page
+    // (same navigateTo() every other nav click uses) AND pre-selects which mode tab
+    // is active on arrival, so clicking "Ageing Wise" here doesn't land you on
+    // whatever mode was last left active (which defaults to 'all').
+    if(a==='nav-ageing'){
+      S.ageingMode=el.getAttribute('data-mode')||'all';
+      navigateTo(el.getAttribute('data-page'));
+      return;
+    }
   }
   // Click on the dark overlay itself (not the card) closes the popup — same pattern
   // as clicking away from any other dropdown/menu in this app.

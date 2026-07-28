@@ -415,7 +415,12 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .ageing-landing-split-item .dot{width:8px;height:8px;border-radius:50%;flex:none;}
 .ageing-landing-split-item.danger .dot{background:var(--danger);}
 .ageing-landing-split-item.success .dot{background:var(--success);}
-.ageing-landing-cta{margin-top:2px;font-size:12px;font-weight:700;color:var(--accent-dark);}
+/* Two direct sub-page buttons (All Data / Ageing Wise) replacing the old plain
+   "View Details →" text link — per explicit user request/screenshot ("instead of
+   View details can i have All data ,and ageig wise data table in each revable and
+   payble section when clicked it take us to sub pages"). */
+.ageing-landing-actions{display:flex;gap:8px;margin-top:2px;}
+.ageing-landing-actions .btn{flex:1;justify-content:center;padding:8px 10px;font-size:12px;}
 @media (max-width:700px){
   .ageing-landing-grid{grid-template-columns:1fr;}
 }
