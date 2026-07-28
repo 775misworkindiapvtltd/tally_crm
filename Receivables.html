@@ -199,6 +199,63 @@ function ageingKpiCard_(label,value,sub,icon,cls){
   </div>`;
 }
 
+/* ============================= AGEING SUMMARY — LANDING OVERVIEW =============================
+ * Per explicit user feedback: the old "Ageing Summary" parent nav item had no page
+ * of its own — clicking it only toggled the sidebar submenu open/closed, and its
+ * "All Data" tab just re-showed the same flat Receivables/Payables Dashboard grid
+ * data, with no distinct identity of its own. This gives it a real combined
+ * overview: 4 top-level KPI cards (Total Outstanding/Overdue/Not-Yet-Due/Avg
+ * Overdue Days across BOTH Receivables and Payables together), then two large
+ * clickable summary cards — one for Receivables Ageing, one for Payables Ageing —
+ * each with its own mini KPI snapshot, so the user can see at a glance which side
+ * needs more attention before drilling into either one's own All Data/Ageing Wise
+ * tabs (unchanged, still reachable exactly as before via ageingRecv/ageingPay). */
+function ageingSummaryCard_(kind){
+  const isRecv=kind==='recv';
+  const rows=dataForFY(isRecv?'receivables':'payables');
+  const amtKey=isRecv?'pendingAmount':'closingBalance';
+  const overdue=rows.filter(r=>Number(r.overdueDays)>0);
+  const notYetDue=rows.filter(r=>Number(r.overdueDays)<=0);
+  const total=sumBy(rows,amtKey);
+  return `<div class="card ageing-landing-card" data-action="nav" data-page="${isRecv?'ageingRecv':'ageingPay'}">
+    <div class="ageing-landing-head">
+      <div class="ageing-landing-ic ${isRecv?'c-blue':'c-orange'}">${NAV_ICONS[isRecv?'in':'out']}</div>
+      <div>
+        <div class="ageing-landing-title">${isRecv?'Receivables Ageing':'Payables Ageing'}</div>
+        <div class="ageing-landing-sub">${rows.length} open bills</div>
+      </div>
+    </div>
+    <div class="ageing-landing-total">${fmtINR(total)}</div>
+    <div class="ageing-landing-split">
+      <div class="ageing-landing-split-item danger"><span class="dot"></span>${fmtINR(sumBy(overdue,amtKey))} overdue <b>(${overdue.length})</b></div>
+      <div class="ageing-landing-split-item success"><span class="dot"></span>${fmtINR(sumBy(notYetDue,amtKey))} not yet due <b>(${notYetDue.length})</b></div>
+    </div>
+    <div class="ageing-landing-cta">View Details →</div>
+  </div>`;
+}
+function renderAgeingSummaryLanding(){
+  const recvRows=dataForFY('receivables'),payRows=dataForFY('payables');
+  const allRows=recvRows.concat(payRows);
+  const overdueAll=allRows.filter(r=>Number(r.overdueDays)>0);
+  const notYetDueAll=allRows.filter(r=>Number(r.overdueDays)<=0);
+  const totalOutstanding=sumBy(recvRows,'pendingAmount')+sumBy(payRows,'closingBalance');
+  const overdueAmount=sumBy(recvRows.filter(r=>Number(r.overdueDays)>0),'pendingAmount')+sumBy(payRows.filter(r=>Number(r.overdueDays)>0),'closingBalance');
+  const notYetDueAmount=totalOutstanding-overdueAmount;
+  const avgOverdueDays=overdueAll.length?Math.round(sumBy(overdueAll,'overdueDays')/overdueAll.length):0;
+  return `
+    <div class="dash-grid ageing-page-cards">
+      ${ageingKpiCard_('Total Outstanding',fmtINR(totalOutstanding),`${allRows.length} open bills (Receivables + Payables)`,'ageing','c-blue')}
+      ${ageingKpiCard_('Overdue Amount',fmtINR(overdueAmount),`${overdueAll.length} overdue bills`,'clock','c-red')}
+      ${ageingKpiCard_('Not Yet Due',fmtINR(notYetDueAmount),`${notYetDueAll.length} not-yet-due bills`,'in','c-green')}
+      ${ageingKpiCard_('Avg Overdue Days',avgOverdueDays,'across all overdue bills','ageing','c-orange')}
+    </div>
+    <div class="ageing-landing-grid">
+      ${ageingSummaryCard_('recv')}
+      ${ageingSummaryCard_('pay')}
+    </div>`;
+}
+registerPage('ageingSummary',renderAgeingSummaryLanding);
+
 function renderAgeing(kind){
   const isRecv=kind==='recv',rows=dataForFY(isRecv?'receivables':'payables'),amtKey=isRecv?'pendingAmount':'closingBalance';
   const overdue=rows.filter(r=>Number(r.overdueDays)>0),notYetDue=rows.filter(r=>Number(r.overdueDays)<=0),mode=S.ageingMode||'all';

@@ -394,6 +394,32 @@ table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
 .ageing-kpi-card .card-value{font-size:13px;line-height:1;}
 .ageing-kpi-card .card-sub{font-size:9px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
+/* ---------- AGEING SUMMARY — LANDING OVERVIEW ---------- */
+/* Two large clickable cards (Receivables Ageing / Payables Ageing) below the
+   combined KPI strip — gives the "Ageing Summary" parent nav item a real overview
+   page of its own instead of just toggling a submenu with nowhere to land, per
+   explicit user feedback. */
+.ageing-landing-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+.ageing-landing-card{display:flex;flex-direction:column;gap:12px;padding:18px 20px;}
+.ageing-landing-head{display:flex;align-items:center;gap:12px;}
+.ageing-landing-ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;}
+.ageing-landing-ic svg{width:19px;height:19px;}
+.ageing-landing-ic.c-blue{background:var(--blue-tint);color:var(--blue);}
+.ageing-landing-ic.c-orange{background:var(--orange-tint);color:var(--orange);}
+.ageing-landing-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:var(--ink);}
+.ageing-landing-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.ageing-landing-total{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:800;color:var(--ink);}
+.ageing-landing-split{display:flex;flex-direction:column;gap:6px;padding-top:4px;border-top:1px solid var(--line-light);}
+.ageing-landing-split-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-secondary);font-weight:600;}
+.ageing-landing-split-item b{color:var(--muted);font-weight:700;}
+.ageing-landing-split-item .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+.ageing-landing-split-item.danger .dot{background:var(--danger);}
+.ageing-landing-split-item.success .dot{background:var(--success);}
+.ageing-landing-cta{margin-top:2px;font-size:12px;font-weight:700;color:var(--accent-dark);}
+@media (max-width:700px){
+  .ageing-landing-grid{grid-template-columns:1fr;}
+}
+
 /* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
 /* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line. The
    Sales/Duration toggle itself now sits on the LEFT on the master Sales grid (see

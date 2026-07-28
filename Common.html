@@ -663,6 +663,7 @@ const PAGE_TITLES={
   dashboard:{t:'Finance Command Center',s:'Complete Overview of Your Business Performance'},
   execSummary:{t:'Executive Summary',s:'High-level snapshot for leadership'},
   mapView:{t:'India Sales Map',s:'State-wise sales with city drill-down'},
+  ageingSummary:{t:'Ageing Summary',s:'Combined receivables & payables health at a glance'},
   ageingRecv:{t:'Receivables Ageing Summary',s:'All data and ageing-wise receivable analysis'},
   customerList:{t:'Customer List',s:'Unique customers and invoice totals from SALES'},
   receipt:{t:'Receipt List',s:'All recorded receipt vouchers'},
@@ -740,7 +741,12 @@ function renderShell(inner){
   items.forEach(n=>{
     if(n.group!==lastGroup){ if(n.group) navHtml+=`<div class="nav-group-label">${esc(n.group.toUpperCase())}</div>`; lastGroup=n.group; }
     if(n.parent){
-      const childActive=S.page==='ageingRecv'||S.page==='ageingPay';
+      // 'ageingSummary' included here too now that it's a real landing page of its
+      // own (not just a toggle label) — landing on it (directly, or via this nav
+      // click) correctly shows it as the active item AND auto-expands the
+      // Receivables/Payables children below it, per the redesigned Ageing Summary
+      // overview (see renderAgeingSummaryLanding() in Receivables.html).
+      const childActive=S.page==='ageingSummary'||S.page==='ageingRecv'||S.page==='ageingPay';
       // BUG FIX: the label used to be a bare text node sitting directly inside
       // .nav-item (never wrapped in a <span>) — so the collapsed-sidebar CSS rule
       // that was meant to hide it (`.nav-item span:not(.n-ic){display:none;}`) could
@@ -758,7 +764,12 @@ function renderShell(inner){
       // to use the same combined condition as the children themselves, so the
       // arrow always accurately reflects what's actually on screen.
       const ageingExpanded=S.ageingOpen||childActive;
-      navHtml+=`<div class="nav-item nav-parent ${childActive?'active':''}" data-action="ageing-nav-toggle"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${ageingExpanded?'▾':'›'}</span></div>`;
+      // Clicking the parent label now NAVIGATES to the new 'ageingSummary' landing
+      // page (data-action="nav") instead of only toggling the submenu open/closed
+      // with nowhere for the parent itself to go — per explicit user request to
+      // give Ageing Summary its own real overview page, matched to the two
+      // Receivables/Payables children it sits above.
+      navHtml+=`<div class="nav-item nav-parent ${S.page==='ageingSummary'?'active':''}" data-action="nav" data-page="ageingSummary"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${ageingExpanded?'▾':'›'}</span></div>`;
       if(ageingExpanded)navHtml+=`<div class="nav-children"><div class="nav-item ${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv"><span class="n-ic">${NAV_ICONS.in}</span><span class="n-lbl">Receivables</span></div><div class="nav-item ${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay"><span class="n-ic">${NAV_ICONS.out}</span><span class="n-lbl">Payables</span></div></div>`;
       return;
     }
@@ -836,7 +847,13 @@ function renderShell(inner){
 // ever closes once the user has moved to a page OUTSIDE the Ageing Summary section
 // — navigating to either of its own two children keeps it open.
 function shouldAgeingStayOpenOnNav_(pageKey){
-  return pageKey==='ageingRecv'||pageKey==='ageingPay';
+  // 'ageingSummary' (the new combined landing page) added to this list per
+  // explicit user request to redesign that landing page — clicking the "Ageing
+  // Summary" parent nav item now navigates straight to this overview page (see
+  // renderAgeingSummaryLanding() in Receivables.html) AND keeps the submenu open,
+  // instead of the parent being a pure toggle-only label with nowhere of its own
+  // to go.
+  return pageKey==='ageingSummary'||pageKey==='ageingRecv'||pageKey==='ageingPay';
 }
 function navigateTo(pageKey){
   S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;
