@@ -490,24 +490,68 @@ CHART_DEFS['cashFlow']=function(){
   drawComboChart('chCashFlow6m',months.map(m=>m.label),[{label:'Cash In',data:inflow,color:'#16A34A'},{label:'Cash Out',data:outflow,color:'#E23A3A'}]);
 };
 
+// Redesigned per explicit user request ("what do u suggest should be there in
+// profit and loss section, whats else can we include, can be make the layout more
+// presentable"): 4 KPI cards up top (Gross Profit/margin, Total Operating Expenses,
+// Net Profit, Net Margin), then a proper two-column layout — the statement itself
+// (left, wider) with a "% of Sales" column next to every line so cost drivers are
+// obvious at a glance, section headers, and a visually distinct Gross Profit
+// subtotal band + a bold bordered Net Profit total row — alongside a "Top Expense
+// Categories" mini bar-chart panel (right) reusing the same .mini-cat-row look the
+// Expenses Dashboard already uses, for a quick visual read without needing to scan
+// every line of the statement.
 function renderProfitLoss(){
   const cur=periodMetrics();
   const grossProfit=cur.sales-cur.purchase;
   const netProfit=grossProfit-cur.expense;
   const expByCategory=topN(dataForFY('expense'),'subGroup','amount',20);
   const fyLabel=selectedFYLabel();
+  const grossMarginPct=cur.sales?(grossProfit/cur.sales*100):0;
+  const netMarginPct=cur.sales?(netProfit/cur.sales*100):0;
+  const pctOfSales_=v=>cur.sales?((v/cur.sales)*100).toFixed(1)+'%':'—';
+  const maxExpCat=Math.max(1,...expByCategory.map(c=>c.value),1);
+
+  const plRow=(label,value,opts={})=>{
+    const cls=['pl-row'];
+    if(opts.subtotal)cls.push('pl-row-subtotal');
+    if(opts.total)cls.push('pl-row-total');
+    const valColor=opts.total?(value>=0?'var(--success)':'var(--danger)'):'';
+    return `<div class="${cls.join(' ')}">
+      <span class="pl-label">${esc(label)}</span>
+      <span class="pl-pct">${opts.noPct?'':pctOfSales_(value)}</span>
+      <span class="pl-val"${valColor?` style="color:${valColor};"`:''}>${fmtINR(value)}</span>
+    </div>`;
+  };
+  const plSection=label=>`<div class="pl-row-section"><span>${esc(label)}</span></div>`;
 
   return `
-    <div class="simple-panel">
-      <h3 style="margin-bottom:14px;font-size:15px;">Profit &amp; Loss Statement — ${esc(fyLabel)}</h3>
-      <div class="kv-grid" style="grid-template-columns:1fr;max-width:520px;">
-        <div class="kv-row"><span class="k">Sales</span><span class="v">${fmtINR(cur.sales)}</span></div>
-        <div class="kv-row"><span class="k">Less: Purchases</span><span class="v">${fmtINR(cur.purchase)}</span></div>
-        <div class="kv-row" style="font-weight:700;"><span class="k">Gross Profit</span><span class="v">${fmtINR(grossProfit)}</span></div>
-        ${expByCategory.map(c=>`<div class="kv-row"><span class="k">Less: ${esc(c.label)}</span><span class="v">${fmtINR(c.value)}</span></div>`).join('')}
-        <div class="kv-row" style="font-weight:700;border-top:2px solid var(--ink);"><span class="k">Net Profit</span><span class="v" style="color:${netProfit>=0?'var(--success)':'var(--danger)'};">${fmtINR(netProfit)}</span></div>
+    <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="card"><div class="card-top"><span class="card-label">Gross Profit</span><div class="card-icon c-green">${NAV_ICONS.sales}</div></div><div class="card-value">${fmtINR(grossProfit)}</div><div class="card-sub">${grossMarginPct.toFixed(1)}% gross margin</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Total Operating Expenses</span><div class="card-icon c-red">${NAV_ICONS.wallet}</div></div><div class="card-value">${fmtINR(cur.expense)}</div><div class="card-sub">${pctOfSales_(cur.expense)} of Sales · ${expByCategory.length} categories</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Net Profit</span><div class="card-icon ${netProfit>=0?'c-green':'c-red'}">${NAV_ICONS.pl}</div></div><div class="card-value" style="color:${netProfit>=0?'var(--success)':'var(--danger)'};">${fmtINR(netProfit)}</div><div class="card-sub">${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Net Margin</span><div class="card-icon c-purple">${NAV_ICONS.collection}</div></div><div class="card-value" style="color:${netMarginPct>=0?'var(--success)':'var(--danger)'};">${netMarginPct.toFixed(1)}%</div><div class="card-sub">Net Profit ÷ Sales</div></div>
+    </div>
+    <div class="dash-row">
+      <div class="panel">
+        <div class="panel-title">Profit &amp; Loss Statement <span style="font-weight:500;color:var(--muted);font-size:11px;">— ${esc(fyLabel)}</span></div>
+        <div class="panel-body" style="padding:4px 16px 14px;">
+          <div class="pl-statement">
+            <div class="pl-head-row"><span></span><span>% of Sales</span><span>Amount</span></div>
+            ${plRow('Sales',cur.sales,{noPct:true})}
+            ${plRow('Less: Purchases',cur.purchase)}
+            ${plRow('Gross Profit',grossProfit,{subtotal:true})}
+            ${plSection('Operating Expenses')}
+            ${expByCategory.length?expByCategory.map(c=>plRow('Less: '+c.label,c.value)).join(''):`<div class="pl-row"><span class="pl-label" style="font-style:italic;color:var(--muted);">No expense lines for the selected financial year(s)</span><span class="pl-pct"></span><span class="pl-val"></span></div>`}
+            ${plRow('Net Profit',netProfit,{total:true})}
+          </div>
+        </div>
       </div>
-    </div>`;
+      <div class="panel">
+        <div class="panel-title">Top Expense Categories</div>
+        <div class="panel-body">${expByCategory.slice(0,8).map((c,i)=>`<div class="mini-cat-row"><span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span><div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxExpCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div><span class="mc-amt">${fmtINR(c.value)}</span><span class="mc-pct">${pctOfSales_(c.value)}</span></div>`).join('')||`<div class="empty-state"><div class="big">No expenses for the selected financial years</div></div>`}</div>
+      </div>
+    </div>
+    <div class="compare-note" style="margin-top:10px;">Operating expenses are grouped by Sub Group from the EXPENSE sheet for the selected financial year(s). "% of Sales" shows each line as a share of Sales so the biggest cost drivers are easy to spot at a glance. This is an indicative P&amp;L (no Other Income/Depreciation/Tax provisions are tracked in the sheet) — for statutory reporting, use Tally directly.</div>`;
 }
 registerPage('profitLoss',renderProfitLoss);
 

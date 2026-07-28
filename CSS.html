@@ -1296,6 +1296,30 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
 .ledger-print-co-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;font-size:10.5px;color:var(--ink-secondary);}
 .ledger-print-co-meta span b{font-weight:700;}
 
+/* ---------- PROFIT & LOSS STATEMENT (redesigned) ---------- */
+/* A proper 3-column statement (label / % of Sales / Amount) instead of the old
+   plain single-column kv-grid, with a distinct Gross Profit subtotal band, a
+   section header for Operating Expenses, and a bold bordered Net Profit total —
+   per explicit user request ("what do u suggest should be there in profit and
+   loss section...can be make the layout more presentable"). */
+.pl-statement{display:flex;flex-direction:column;}
+.pl-head-row{display:grid;grid-template-columns:1fr 90px 140px;gap:10px;padding:0 4px 8px;font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:right;border-bottom:1px solid var(--line);}
+.pl-head-row span:first-child{text-align:left;}
+.pl-row{display:grid;grid-template-columns:1fr 90px 140px;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line-light);font-size:12.5px;}
+.pl-row:last-child{border-bottom:0;}
+.pl-label{color:var(--ink-secondary);font-weight:600;}
+.pl-pct{text-align:right;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;}
+.pl-val{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);}
+.pl-row-section{padding:10px 4px 6px;font-size:10px;font-weight:800;color:var(--accent-dark);text-transform:uppercase;letter-spacing:.06em;}
+.pl-row-subtotal{background:var(--accent-tint2);border-radius:8px;margin:4px 0;padding:9px 8px;}
+.pl-row-subtotal .pl-label,.pl-row-subtotal .pl-val{font-weight:800;color:var(--ink);}
+.pl-row-total{border-top:2px solid var(--ink);border-bottom:0;margin-top:6px;padding-top:12px;}
+.pl-row-total .pl-label{font-weight:800;color:var(--ink);font-size:13.5px;}
+.pl-row-total .pl-val{font-size:15px;font-weight:800;}
+@media (max-width:700px){
+  .pl-head-row,.pl-row{grid-template-columns:1fr 70px 110px;font-size:11px;}
+}
+
 /* ---------- PLACEHOLDER / SIMPLE PAGES ---------- */
 .simple-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;}
 .kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;}

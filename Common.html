@@ -733,8 +733,17 @@ function renderShell(inner){
       // full label text squeezed into 64px — the label was never actually hidden.
       // Wrapping it in <span class="n-lbl"> lets the collapsed CSS target it
       // precisely, per explicit user instruction with a reference screenshot.
-      navHtml+=`<div class="nav-item nav-parent ${childActive?'active':''}" data-action="ageing-nav-toggle"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${S.ageingOpen?'▾':'›'}</span></div>`;
-      if(S.ageingOpen||childActive)navHtml+=`<div class="nav-children"><div class="nav-item ${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv"><span class="n-ic">${NAV_ICONS.in}</span><span class="n-lbl">Receivables</span></div><div class="nav-item ${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay"><span class="n-ic">${NAV_ICONS.out}</span><span class="n-lbl">Payables</span></div></div>`;
+      // BUG FIX #2: the submenu's actual visibility already correctly used
+      // (S.ageingOpen||childActive) below, but the CHEVRON symbol only ever looked
+      // at S.ageingOpen on its own — so if you landed on ageingRecv/ageingPay
+      // WITHOUT first clicking the parent to open it (childActive alone was
+      // showing the children), the chevron still displayed the "collapsed" ›
+      // glyph even while the children were visibly expanded right below it. Fixed
+      // to use the same combined condition as the children themselves, so the
+      // arrow always accurately reflects what's actually on screen.
+      const ageingExpanded=S.ageingOpen||childActive;
+      navHtml+=`<div class="nav-item nav-parent ${childActive?'active':''}" data-action="ageing-nav-toggle"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${ageingExpanded?'▾':'›'}</span></div>`;
+      if(ageingExpanded)navHtml+=`<div class="nav-children"><div class="nav-item ${S.page==='ageingRecv'?'active':''}" data-action="nav" data-page="ageingRecv"><span class="n-ic">${NAV_ICONS.in}</span><span class="n-lbl">Receivables</span></div><div class="nav-item ${S.page==='ageingPay'?'active':''}" data-action="nav" data-page="ageingPay"><span class="n-ic">${NAV_ICONS.out}</span><span class="n-lbl">Payables</span></div></div>`;
       return;
     }
     const badge=n.badge?n.badge():0;
@@ -803,8 +812,20 @@ function renderShell(inner){
  * (this was the main cause of slow/blank-feeling page switches; previously every
  * click re-fetched permissions from the LOGIN PAGE sheet before rendering).
  */
+// Decides whether the Ageing Summary sidebar submenu should remain expanded after
+// navigating to `pageKey` — pulled out as its own small, pure, unit-testable
+// function. Per explicit user report with a screenshot ("when click on ageing
+// summary...it is collapsing back....it should not collapse back....when there are
+// sub parts....neeche ke parts click karne baad he collapse ho"): the submenu only
+// ever closes once the user has moved to a page OUTSIDE the Ageing Summary section
+// — navigating to either of its own two children keeps it open.
+function shouldAgeingStayOpenOnNav_(pageKey){
+  return pageKey==='ageingRecv'||pageKey==='ageingPay';
+}
 function navigateTo(pageKey){
-  S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;render();
+  S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;
+  if(!shouldAgeingStayOpenOnNav_(pageKey))S.ageingOpen=false;
+  render();
 }
 
 /* ============================= GENERIC GRID ENGINE ============================= */
@@ -1330,7 +1351,14 @@ document.addEventListener('click',e=>{
     return;
   }
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
-  if(a==='ageing-nav-toggle'){S.ageingOpen=!S.ageingOpen;render();return;}
+  if(a==='ageing-nav-toggle'){
+    // Per explicit user report ("ageing summary pe click karne se collapse ho raha
+    // hai...it should not collapse back") this now only ever OPENS the submenu —
+    // clicking the parent a second time no longer toggles it back closed. It only
+    // ever closes via navigateTo() (see shouldAgeingStayOpenOnNav_ above), once the
+    // user actually navigates to a page outside this section.
+    S.ageingOpen=true;render();return;
+  }
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='logout'){void writeCachedSnapshot_();clearPersistedSessionUserId_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
   if(a==='syncnow'){refreshData();return;} // sidebar "Sync with Tally" — always a full refresh
