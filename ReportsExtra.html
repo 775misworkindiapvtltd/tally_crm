@@ -43,8 +43,8 @@ GRID_DEFS.salesPersonPerf={cols:[
   {key:'salesPerson',label:'Sales Person',width:220},
   {key:'bills',label:'Total Bills',width:110,num:true},
   {key:'overdueBills',label:'Overdue Bills',width:110,num:true},
-  {key:'maxOverdueDays',label:'Max Overdue Days',width:130,num:true},
-  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true}
+  {key:'maxOverdueDays',label:'Max Overdue Days',width:130,num:true,filterType:'number-range'},
+  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range'}
 ],data:buildSalesPersonRows_};
 registerPage('salesPersonPerf',()=>renderGrid('salesPersonPerf'));
 
@@ -64,7 +64,7 @@ function buildStateSalesRows_(){
 GRID_DEFS.stateSalesReport={cols:[
   {key:'state',label:'State',width:200},
   {key:'invoices',label:'Invoices',width:110,num:true},
-  {key:'amount',label:'Sales Amount',width:160,num:true,currency:true}
+  {key:'amount',label:'Sales Amount',width:160,num:true,currency:true,filterType:'number-range'}
 ],data:buildStateSalesRows_};
 registerPage('stateSalesReport',()=>renderGrid('stateSalesReport'));
 
@@ -109,7 +109,7 @@ GRID_DEFS.customerNewRepeat={cols:[
   {key:'invoiceTo',label:'Party Name',width:240},
   {key:'yearsActive',label:'Years Active (Lifetime)',width:150,num:true},
   {key:'classification',label:'Type',width:120,render:r=>reportBadge_(r.classification,r.classification==='New'?'success':'info')},
-  {key:'amount',label:'Amount (Selected FY)',width:170,num:true,currency:true}
+  {key:'amount',label:'Amount (Selected FY)',width:170,num:true,currency:true,filterType:'number-range'}
 ],data:()=>S._customerNewRepeatRows||[]};
 function renderCustomerNewRepeat(){
   const rows=buildCustomerNewRepeatRows_();
@@ -185,7 +185,7 @@ GRID_DEFS.itemExpenseReport={cols:[
   {key:'itemName',label:'Item Name',width:220},
   {key:'qty',label:'Total Qty',width:110,num:true},
   {key:'lines',label:'Voucher Lines',width:120,num:true},
-  {key:'amount',label:'Amount',width:150,num:true,currency:true}
+  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range'}
 ],data:buildItemExpenseRows_};
 registerPage('itemExpenseReport',()=>renderGrid('itemExpenseReport'));
 
@@ -206,7 +206,7 @@ GRID_DEFS.expenseRecurring={cols:[
   {key:'partyName',label:'Party Name',width:230},
   {key:'months',label:'Distinct Months Billed',width:160,num:true},
   {key:'classification',label:'Type',width:120,render:r=>reportBadge_(r.classification,r.classification==='Recurring'?'warning':'info')},
-  {key:'amount',label:'Total Expense',width:150,num:true,currency:true}
+  {key:'amount',label:'Total Expense',width:150,num:true,currency:true,filterType:'number-range'}
 ],data:buildExpenseRecurringRows_};
 registerPage('expenseRecurring',()=>renderGrid('expenseRecurring'));
 
@@ -255,8 +255,8 @@ GRID_DEFS.paymentTermsCompliance={cols:[
   {key:'paymentTerms',label:'Payment Terms',width:180},
   {key:'totalBills',label:'Total Bills',width:110,num:true},
   {key:'overdueBills',label:'Overdue Bills',width:110,num:true},
-  {key:'totalOutstanding',label:'Total Outstanding',width:160,num:true,currency:true},
-  {key:'overdueOutstanding',label:'Overdue Outstanding',width:160,num:true,currency:true}
+  {key:'totalOutstanding',label:'Total Outstanding',width:160,num:true,currency:true,filterType:'number-range'},
+  {key:'overdueOutstanding',label:'Overdue Outstanding',width:160,num:true,currency:true,filterType:'number-range'}
 ],data:buildPaymentTermsRows_};
 registerPage('paymentTermsCompliance',()=>renderGrid('paymentTermsCompliance'));
 
@@ -283,8 +283,8 @@ function buildCustomerRiskRows_(){
 }
 GRID_DEFS.customerRiskScore={cols:[
   {key:'partyName',label:'Party Name',width:230},
-  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true},
-  {key:'maxOverdueDays',label:'Max Overdue Days',width:150,num:true},
+  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range'},
+  {key:'maxOverdueDays',label:'Max Overdue Days',width:150,num:true,filterType:'number-range'},
   {key:'riskLevel',label:'Risk Level',width:120,render:r=>reportBadge_(r.riskLevel,r.riskLevel==='High'?'danger':r.riskLevel==='Medium'?'warning':'success')}
 ],data:buildCustomerRiskRows_};
 registerPage('customerRiskScore',()=>renderGrid('customerRiskScore'));
@@ -306,9 +306,9 @@ function buildPartyGroupRows_(){
 }
 GRID_DEFS.partyGroupOutstanding={cols:[
   {key:'partyGroup',label:'Party Group',width:220},
-  {key:'receivable',label:'Receivable Outstanding',width:170,num:true,currency:true},
-  {key:'payable',label:'Payable Outstanding',width:170,num:true,currency:true},
-  {key:'net',label:'Net Position',width:150,num:true,render:r=>`<span style="color:${r.net>=0?'var(--success)':'var(--danger)'};font-weight:700;">${esc(fmtINRCompact(r.net))}</span>`}
+  {key:'receivable',label:'Receivable Outstanding',width:170,num:true,currency:true,filterType:'number-range'},
+  {key:'payable',label:'Payable Outstanding',width:170,num:true,currency:true,filterType:'number-range'},
+  {key:'net',label:'Net Position',width:150,num:true,filterType:'number-range',render:r=>`<span style="color:${r.net>=0?'var(--success)':'var(--danger)'};font-weight:700;">${esc(fmtINRCompact(r.net))}</span>`}
 ],data:buildPartyGroupRows_};
 registerPage('partyGroupOutstanding',()=>renderGrid('partyGroupOutstanding'));
 
@@ -329,7 +329,7 @@ GRID_DEFS.bankCollectionReport={cols:[
   {key:'bankName',label:'Bank Name',width:220},
   {key:'transactionType',label:'Transaction Type',width:150},
   {key:'count',label:'Receipts',width:110,num:true},
-  {key:'amount',label:'Amount',width:150,num:true,currency:true}
+  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range'}
 ],data:buildBankCollectionRows_};
 registerPage('bankCollectionReport',()=>renderGrid('bankCollectionReport'));
 
@@ -347,7 +347,7 @@ function buildCreditNoteImpactRows_(){
 GRID_DEFS.creditNoteImpact={cols:[
   {key:'partyName',label:'Customer',width:230},
   {key:'count',label:'Credit Notes',width:120,num:true},
-  {key:'amount',label:'Total Amount',width:160,num:true,currency:true}
+  {key:'amount',label:'Total Amount',width:160,num:true,currency:true,filterType:'number-range'}
 ],data:buildCreditNoteImpactRows_};
 function renderCreditNoteImpact(){
   const rows=creditNoteRows();

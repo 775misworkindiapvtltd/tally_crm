@@ -839,12 +839,31 @@ function hasActiveColumnFilter_(st,key){
   const df=st.dateFilters&&st.dateFilters[key];
   if(df&&(df.from||df.to))return true;
   const nf=st.numFilters&&st.numFilters[key];
-  return !!(nf&&((nf.min!==''&&nf.min!=null)||(nf.max!==''&&nf.max!=null)));
+  if(!nf)return false;
+  const hasV1=nf.val1!==''&&nf.val1!=null;
+  const hasV2=nf.val2!==''&&nf.val2!=null;
+  return nf.op==='between'?(hasV1||hasV2):hasV1;
 }
 function hasAnyActiveColumnFilter_(st){
   const keys=new Set([].concat(Object.keys(st.filters||{}),Object.keys(st.dateFilters||{}),Object.keys(st.numFilters||{})));
   return Array.from(keys).some(key=>hasActiveColumnFilter_(st,key));
 }
+
+// Numeric column filter operators — replaces the old plain min/max-only range with
+// a proper operator picker (Greater than / Greater-or-equal / Less than /
+// Less-or-equal / Equal to / Between), per explicit user instruction ("max overdue
+// days, amount me jo filter hai, that should be greater then less than, = to amount
+// etc wala filter hona chaiye. in all the tables"). Applied to every filterType:
+// 'number-range' column across every grid (see Grids.html/ReportsExtra.html column
+// defs) — Overdue Days, Amount, Pending Amount, Closing Balance, etc.
+const NUM_FILTER_OPS=[
+  {key:'gte',label:'≥ Greater or equal'},
+  {key:'gt',label:'> Greater than'},
+  {key:'lte',label:'≤ Less or equal'},
+  {key:'lt',label:'< Less than'},
+  {key:'eq',label:'= Equal to'},
+  {key:'between',label:'⇔ Between'}
+];
 
 // Previous/Next pagination glyphs — inline SVG chevrons instead of the ‹ › text
 // characters (U+2039/U+203A), per explicit user report ("there is no button to go
@@ -882,11 +901,29 @@ function renderGrid(tableKey){
     const to=range.to?new Date(range.to+'T23:59:59').getTime():Infinity;
     rows=rows.filter(r=>{const t=parseDT(r[k]);return t!==null&&t>=from&&t<=to;});
   });
-  Object.entries(st.numFilters||{}).forEach(([k,range])=>{
-    if(!range||(range.min===''||range.min==null)&&(range.max===''||range.max==null))return;
-    const min=(range.min===''||range.min==null)?-Infinity:Number(range.min);
-    const max=(range.max===''||range.max==null)?Infinity:Number(range.max);
-    rows=rows.filter(r=>{const n=Number(r[k]);return !isNaN(n)&&n>=min&&n<=max;});
+  // Operator-based numeric filter (>, ≥, <, ≤, =, Between) — see NUM_FILTER_OPS
+  // above. A row with a non-numeric value in this column never matches any operator
+  // (isNaN guard), same conservative behavior the old min/max range had.
+  Object.entries(st.numFilters||{}).forEach(([k,nf])=>{
+    if(!nf)return;
+    const op=nf.op||'gte';
+    const v1=(nf.val1===''||nf.val1==null)?null:Number(nf.val1);
+    const v2=(nf.val2===''||nf.val2==null)?null:Number(nf.val2);
+    if(op==='between'){ if(v1===null&&v2===null)return; }
+    else if(v1===null)return;
+    rows=rows.filter(r=>{
+      const n=Number(r[k]);
+      if(isNaN(n))return false;
+      switch(op){
+        case 'gt': return n>v1;
+        case 'gte': return n>=v1;
+        case 'lt': return n<v1;
+        case 'lte': return n<=v1;
+        case 'eq': return n===v1;
+        case 'between': return n>=(v1===null?-Infinity:v1)&&n<=(v2===null?Infinity:v2);
+        default: return true;
+      }
+    });
   });
   if(st.sort){
     const col=def.cols.find(c=>c.key===st.sort);
@@ -950,12 +987,25 @@ function renderGrid(tableKey){
         const cur=st.filters[c.key]||'';
         filterHtml=`<div class="th-filter"><select data-action="filter-select" data-table="${tableKey}" data-col="${c.key}"><option value="">All</option>${opts.map(o=>`<option value="${esc(o)}" ${cur===o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
       }else if(c.filterType==='number-range'){
-        const nf=(st.numFilters&&st.numFilters[c.key])||{min:'',max:''};
-        filterHtml=`<div class="th-filter th-num-filter"><input type="number" inputmode="decimal" placeholder="Min" data-action="num-min" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.min===''||nf.min==null?'':nf.min)}"><span class="date-sep">to</span><input type="number" inputmode="decimal" placeholder="Max" data-action="num-max" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.max===''||nf.max==null?'':nf.max)}">${(nf.min!==''&&nf.min!=null)||(nf.max!==''&&nf.max!=null)?`<span class="dr-clear" title="Clear price range" data-action="clear-numrange" data-table="${tableKey}" data-col="${c.key}">✕</span>`:''}</div>`;
+        // Operator picker (≥/>/≤/</=/Between) + one value input, and a SECOND value
+        // input only when "Between" is selected — replaces the old fixed Min/Max
+        // pair, per explicit user instruction ("that should be greater then less
+        // than, = to amount etc wala filter hona chaiye. in all the tables").
+        const nf=(st.numFilters&&st.numFilters[c.key])||{op:'gte',val1:'',val2:''};
+        const op=nf.op||'gte';
+        const hasVal=(nf.val1!==''&&nf.val1!=null)||(op==='between'&&nf.val2!==''&&nf.val2!=null);
+        filterHtml=`<div class="th-filter th-num-filter">
+          <select class="num-op-select" data-action="num-op" data-table="${tableKey}" data-col="${c.key}">
+            ${NUM_FILTER_OPS.map(o=>`<option value="${o.key}" ${op===o.key?'selected':''}>${esc(o.label)}</option>`).join('')}
+          </select>
+          <input type="number" inputmode="decimal" placeholder="Value" data-action="num-val1" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.val1===''||nf.val1==null?'':nf.val1)}">
+          ${op==='between'?`<span class="date-sep">and</span><input type="number" inputmode="decimal" placeholder="Value" data-action="num-val2" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.val2===''||nf.val2==null?'':nf.val2)}">`:''}
+          ${hasVal?`<span class="dr-clear" title="Clear filter" data-action="clear-numrange" data-table="${tableKey}" data-col="${c.key}">✕</span>`:''}
+        </div>`;
       }else filterHtml=`<div class="th-filter"><input type="text" placeholder="Filter…" data-action="filter" data-table="${tableKey}" data-col="${c.key}" value="${esc(st.filters[c.key]||'')}"></div>`;
     }
     const searchIcon=c.date?'📅':(c.filterType==='select'||c.filterType==='number-range')?'▾':'⌕';
-    const searchTitle=c.date?'Filter by date range':c.filterType==='select'?'Filter this column':c.filterType==='number-range'?'Filter by price range':'Search this column';
+    const searchTitle=c.date?'Filter by date range':c.filterType==='select'?'Filter this column':c.filterType==='number-range'?'Filter by value (>, <, =, Between)':'Search this column';
     const searchAction=c.date?'date-icon':'togglesearch';
     const dateFilterActiveCls=(c.date&&hasActiveColumnFilter_(st,c.key))?' date-filter-active':'';
     const headerTotal=c.headerTotal?(()=>{
@@ -1226,11 +1276,18 @@ document.addEventListener('change',e=>{
     const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
     st.filters[c]=el.value;st.page=1;render();return;
   }
-  if(a==='num-min'||a==='num-max'){
+  if(a==='num-op'){
     const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
     if(!st.numFilters)st.numFilters={};
-    if(!st.numFilters[c])st.numFilters[c]={min:'',max:''};
-    st.numFilters[c][a==='num-min'?'min':'max']=el.value===''?'':Number(el.value);
+    if(!st.numFilters[c])st.numFilters[c]={op:'gte',val1:'',val2:''};
+    st.numFilters[c].op=el.value;
+    st.page=1;st.filterOpen=c;render();return;
+  }
+  if(a==='num-val1'||a==='num-val2'){
+    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
+    if(!st.numFilters)st.numFilters={};
+    if(!st.numFilters[c])st.numFilters[c]={op:'gte',val1:'',val2:''};
+    st.numFilters[c][a==='num-val1'?'val1':'val2']=el.value===''?'':Number(el.value);
     st.page=1;st.filterOpen=c;render();return;
   }
 });

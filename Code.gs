@@ -215,6 +215,24 @@ function looksLikeHeaderRow_(row, headers) {
   return nonEmpty > 0 && matches >= 3 && (matches / nonEmpty) >= 0.6;
 }
 
+// Per explicit user instruction ("remove nul from table, show nothing"): several
+// sheet cells contain the LITERAL TEXT "Null" (a real string, not a genuinely empty/
+// JS-null cell) — e.g. Sales Person / Phone / Group cells that were left as the
+// placeholder text "Null" instead of being left blank. Every existing formatter
+// (fmtValue_, numOrZero_, etc.) only ever checked for actual JS null/undefined, so
+// that literal text passed straight through and showed up as the word "Null" in
+// every grid. Stripping it here, once, at the single point every sheet read passes
+// through, means every mapper/column downstream (which just consumes whatever
+// sheetToObjects_/sheetToRows_ returns) automatically shows a blank cell instead —
+// no per-column fix needed anywhere else. Only touches STRING cells (a real
+// number/Date/boolean is left untouched) and only an EXACT "null" match (trimmed,
+// case-insensitive) — a genuine value like "Null Bazar Traders" is left alone.
+function sanitizeNullLikeCell_(v) {
+  if (typeof v !== 'string') return v;
+  return /^\s*null\s*$/i.test(v) ? '' : v;
+}
+function sanitizeNullLikeRow_(row) { return row.map(sanitizeNullLikeCell_); }
+
 function sheetToObjects_(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(name);
@@ -226,6 +244,7 @@ function sheetToObjects_(name) {
   return data.slice(1)
     .filter(function (row) { return row.some(function (c) { return c !== ''; }); })
     .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); })
+    .map(sanitizeNullLikeRow_)
     .map(function (row) {
       var obj = {};
       headers.forEach(function (h, i) { obj[h] = row[i]; });
@@ -244,7 +263,8 @@ function sheetToRows_(name) {
   var headerRow = data[0];
   return data.slice(1)
     .filter(function (row) { return row.some(function (c) { return c !== ''; }); })
-    .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); });
+    .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); })
+    .map(sanitizeNullLikeRow_);
 }
 
 function fmtTimestamp_(v) {
@@ -539,7 +559,8 @@ function getReceiptStyleHeaderAndRows_(sheetName) {
   var headerRow = data[headerIdx];
   var rows = data.slice(headerIdx + 1)
     .filter(function (row) { return row.some(function (c) { return c !== ''; }); })
-    .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); });
+    .filter(function (row) { return !looksLikeHeaderRow_(row, headerRow); })
+    .map(sanitizeNullLikeRow_); // strip literal "Null" text cells — see sanitizeNullLikeRow_ above
   return { headerRow: headerRow, rows: rows };
 }
 
