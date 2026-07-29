@@ -171,6 +171,12 @@ let S = {
   // (Invoice To), or 'state'. Persisted below so "by default vo aayega jo maine
   // last select kiya tha" holds even across a fresh page load, not just this session.
   salesDimension:'category',
+  // Sales Dashboard's Product Summary dimension — 'description' (the SALES sheet's
+  // per-line Description/Item Name/Product column, the default) or 'category'.
+  // Exposed as a toggle because which of the two actually holds the product name
+  // differs per sheet; the Most Selling Product KPI and the sales-mix donut both
+  // follow this same value so the whole page stays consistent. Persisted below.
+  salesDashProductDim:'description',
   // Expense Report pivot — same concept as Sales Duration pivot but for EXPENSE data.
   // Toggle between 'list' (plain grid) and 'report' (pivot table).
   expenseReportView:'list', expenseCategoryMode:'month', expenseCategoryCustomFYs:[],
@@ -198,6 +204,7 @@ try{
 // the remembered size for table body cells.
 try{document.documentElement.style.setProperty('--data-scale',String(S.fontSize/100));}catch(e){}
 try{ const dim=localStorage.getItem('tally_sales_dimension'); if(dim==='category'||dim==='partyName'||dim==='state'){S.salesDimension=dim;} }catch(e){}
+try{ const pd=localStorage.getItem('tally_sales_dash_product_dim'); if(pd==='description'||pd==='category'){S.salesDashProductDim=pd;} }catch(e){}
 // Restore Duration pivot column widths from localStorage
 try{
   const raw=localStorage.getItem('tally_pivot_col_widths');
