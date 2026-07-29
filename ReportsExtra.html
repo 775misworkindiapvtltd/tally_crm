@@ -1,0 +1,364 @@
+<script>
+/* ============================= REPORTS HUB — ADDITIONAL REPORTS =============================
+ * 13 new reports added per explicit user instruction ("give me more ideas of report
+ * we can add in this analysis...add all reports u suggested"). Each is registered as
+ * a normal GRID_DEFS entry (search/sort/filter/hide-columns/resize/pagination all come
+ * free from the existing generic renderGrid() engine, same as every other report in
+ * the app) plus a thin page wrapper — a few also show small KPI summary cards above
+ * the grid, the same pattern Sales/Expenses Dashboard already use.
+ *
+ * A handful of the originally suggested ideas were intentionally NOT built because
+ * the required data simply isn't present anywhere in the sheet (see the comment next
+ * to `more` in renderReports() in Finance.html for the full list + reasoning) — rather
+ * than inventing numbers, those were left out and flagged back to the user directly.
+ */
+
+// Small colored pill re-using the existing .status-badge look (already styled in
+// CSS.html) with an inline color override — avoids adding a brand-new CSS class for
+// every ad-hoc two/three-way classification below (New/Repeat, Recurring/One-time,
+// High/Medium/Low risk).
+function reportBadge_(text,tone){
+  const fg={danger:'var(--danger)',warning:'var(--orange)',success:'var(--success)',info:'var(--accent-dark)'};
+  const bg={danger:'var(--danger-tint)',warning:'var(--orange-tint)',success:'var(--success-tint)',info:'var(--accent-tint)'};
+  const t=fg[tone]?tone:'info';
+  return `<span class="status-badge" style="background:${bg[t]};color:${fg[t]};">${esc(text)}</span>`;
+}
+
+/* ---------- 1. SALES PERSON PERFORMANCE ---------- */
+function buildSalesPersonRows_(){
+  const rows=dataForFY('receivables');
+  const map={};
+  rows.forEach(r=>{
+    const sp=String(r.salesPerson||'Unassigned').trim()||'Unassigned';
+    if(!map[sp])map[sp]={salesPerson:sp,bills:0,overdueBills:0,maxOverdueDays:0,pendingAmount:0};
+    const m=map[sp];
+    m.bills++; m.pendingAmount+=Number(r.pendingAmount)||0;
+    const od=Number(r.overdueDays)||0;
+    if(od>0)m.overdueBills++;
+    m.maxOverdueDays=Math.max(m.maxOverdueDays,od);
+  });
+  return Object.values(map).sort((a,b)=>b.pendingAmount-a.pendingAmount);
+}
+GRID_DEFS.salesPersonPerf={cols:[
+  {key:'salesPerson',label:'Sales Person',width:220},
+  {key:'bills',label:'Total Bills',width:110,num:true},
+  {key:'overdueBills',label:'Overdue Bills',width:110,num:true},
+  {key:'maxOverdueDays',label:'Max Overdue Days',width:130,num:true,filterType:'number-range'},
+  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range'}
+],data:buildSalesPersonRows_};
+registerPage('salesPersonPerf',()=>renderGrid('salesPersonPerf'));
+
+/* ---------- 2. STATE-WISE SALES ---------- */
+function buildStateSalesRows_(){
+  const rows=dataForFY('sales');
+  const map={};
+  rows.forEach(r=>{
+    const st=String(r.state||'Unknown').trim()||'Unknown';
+    if(!map[st])map[st]={state:st,lines:0,amount:0,invoiceSet:new Set()};
+    const m=map[st];
+    m.lines++; m.amount+=Number(r.amount)||0;
+    if(r.invoiceNo)m.invoiceSet.add(String(r.invoiceNo).trim().toLowerCase());
+  });
+  return Object.values(map).map(s=>({state:s.state,invoices:s.invoiceSet.size||s.lines,amount:Math.round(s.amount*100)/100})).sort((a,b)=>b.amount-a.amount);
+}
+GRID_DEFS.stateSalesReport={cols:[
+  {key:'state',label:'State',width:200},
+  {key:'invoices',label:'Invoices',width:110,num:true},
+  {key:'amount',label:'Sales Amount',width:160,num:true,currency:true,filterType:'number-range'}
+],data:buildStateSalesRows_};
+registerPage('stateSalesReport',()=>renderGrid('stateSalesReport'));
+
+/* ---------- 3. NEW vs REPEAT CUSTOMERS ----------
+ * Classification uses the customer's COMPLETE (unfiltered) sales history to find
+ * every financial year they've ever bought in, then compares that against the
+ * currently selected FY filter — a customer whose history is ENTIRELY inside the
+ * selected FY(s) is "New" (first seen this period); anyone with sales outside the
+ * selected period too is "Repeat". When no FY filter is applied (All Financial
+ * Years), "New" instead means the customer only ever bought in exactly one FY. */
+function reportsAllCustomerFYHistory_(){
+  const map={};
+  (S.salesRows||[]).forEach(r=>{
+    const name=String(r.invoiceTo||'').trim();if(!name)return;
+    const key=name.toLowerCase();
+    const fy=financialYearKey(r.date);if(!fy)return;
+    if(!map[key])map[key]=new Set();
+    map[key].add(fy);
+  });
+  return map;
+}
+function buildCustomerNewRepeatRows_(){
+  const historyMap=reportsAllCustomerFYHistory_();
+  const selected=new Set(selectedFinancialYears());
+  const byCustomer={};
+  dataForFY('sales').forEach(r=>{
+    const name=String(r.invoiceTo||'').trim();if(!name)return;
+    const key=name.toLowerCase();
+    if(!byCustomer[key])byCustomer[key]={invoiceTo:name,amount:0};
+    byCustomer[key].amount+=Number(r.amount)||0;
+  });
+  return Object.keys(byCustomer).map(key=>{
+    const c=byCustomer[key];
+    const allFYs=historyMap[key]||new Set();
+    let classification;
+    if(!selected.size){ classification=allFYs.size>1?'Repeat':'New'; }
+    else { classification=Array.from(allFYs).some(fy=>!selected.has(fy))?'Repeat':'New'; }
+    return {invoiceTo:c.invoiceTo,yearsActive:allFYs.size,classification,amount:Math.round(c.amount*100)/100};
+  }).sort((a,b)=>b.amount-a.amount);
+}
+GRID_DEFS.customerNewRepeat={cols:[
+  {key:'invoiceTo',label:'Party Name',width:240},
+  {key:'yearsActive',label:'Years Active (Lifetime)',width:150,num:true},
+  {key:'classification',label:'Type',width:120,render:r=>reportBadge_(r.classification,r.classification==='New'?'success':'info')},
+  {key:'amount',label:'Amount (Selected FY)',width:170,num:true,currency:true,filterType:'number-range'}
+],data:()=>S._customerNewRepeatRows||[]};
+function renderCustomerNewRepeat(){
+  const rows=buildCustomerNewRepeatRows_();
+  S._customerNewRepeatRows=rows;
+  const newRows=rows.filter(r=>r.classification==='New'),repeatRows=rows.filter(r=>r.classification==='Repeat');
+  return `<div class="dash-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="card"><div class="card-label">New Customers</div><div class="card-value">${newRows.length}</div><div class="card-sub">${fmtINR(sumBy(newRows,'amount'))}</div></div>
+    <div class="card"><div class="card-label">Repeat Customers</div><div class="card-value">${repeatRows.length}</div><div class="card-sub">${fmtINR(sumBy(repeatRows,'amount'))}</div></div>
+    <div class="card"><div class="card-label">Total Customers</div><div class="card-value">${rows.length}</div></div>
+  </div>${renderGrid('customerNewRepeat')}`;
+}
+registerPage('customerNewRepeat',renderCustomerNewRepeat);
+
+/* ---------- 4. INVOICE VALUE DISTRIBUTION ---------- */
+function buildInvoiceBucketRows_(){
+  const invoices=buildSalesReport();
+  const buckets=[
+    {label:'₹0 – ₹5,000',min:0,max:5000},
+    {label:'₹5,000 – ₹20,000',min:5000,max:20000},
+    {label:'₹20,000 – ₹50,000',min:20000,max:50000},
+    {label:'₹50,000 – ₹1,00,000',min:50000,max:100000},
+    {label:'₹1,00,000+',min:100000,max:Infinity}
+  ];
+  const rows=buckets.map(b=>({label:b.label,invoices:0,amount:0}));
+  invoices.forEach(inv=>{
+    const amt=Number(inv.amount)||0;
+    let idx=buckets.findIndex(b=>amt>=b.min&&amt<b.max);
+    if(idx===-1)idx=rows.length-1;
+    rows[idx].invoices++; rows[idx].amount+=amt;
+  });
+  const grand=sumBy(rows,'amount');
+  return rows.map(r=>Object.assign({},r,{pctLabel:grand?(r.amount/grand*100).toFixed(1)+'%':'0.0%'}));
+}
+GRID_DEFS.invoiceBuckets={cols:[
+  {key:'label',label:'Invoice Value Bucket',width:220},
+  {key:'invoices',label:'Invoices',width:110,num:true},
+  {key:'amount',label:'Total Amount',width:160,num:true,currency:true},
+  {key:'pctLabel',label:'% of Total',width:110}
+],data:buildInvoiceBucketRows_,noPagination:true};
+registerPage('invoiceBuckets',()=>renderGrid('invoiceBuckets'));
+
+/* ---------- 5. GST vs NON-GST SALES ---------- */
+function buildGstSplitRows_(){
+  const invoices=buildSalesReport();
+  const withGst={label:'With GST No.',invoices:0,amount:0};
+  const withoutGst={label:'Without GST No.',invoices:0,amount:0};
+  invoices.forEach(inv=>{
+    const target=String(inv.gstNo||'').trim()?withGst:withoutGst;
+    target.invoices++; target.amount+=Number(inv.amount)||0;
+  });
+  return [withGst,withoutGst];
+}
+GRID_DEFS.gstSalesSplit={cols:[
+  {key:'label',label:'Segment',width:220},
+  {key:'invoices',label:'Invoices',width:120,num:true},
+  {key:'amount',label:'Total Amount',width:170,num:true,currency:true}
+],data:buildGstSplitRows_,noPagination:true};
+registerPage('gstSalesSplit',()=>renderGrid('gstSalesSplit'));
+
+/* ---------- 6. ITEM-WISE EXPENSE ---------- */
+function buildItemExpenseRows_(){
+  const rows=dataForFY('expense');
+  const map={};
+  rows.forEach(r=>{
+    const item=String(r.itemName||'Unspecified').trim()||'Unspecified';
+    if(!map[item])map[item]={itemName:item,qty:0,lines:0,amount:0};
+    const m=map[item];
+    m.qty+=Number(r.qty)||0; m.lines++; m.amount+=signedExpenseAmt_(r);
+  });
+  return Object.values(map).map(m=>Object.assign({},m,{amount:Math.round(m.amount*100)/100})).sort((a,b)=>b.amount-a.amount);
+}
+GRID_DEFS.itemExpenseReport={cols:[
+  {key:'itemName',label:'Item Name',width:220},
+  {key:'qty',label:'Total Qty',width:110,num:true},
+  {key:'lines',label:'Voucher Lines',width:120,num:true},
+  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range'}
+],data:buildItemExpenseRows_};
+registerPage('itemExpenseReport',()=>renderGrid('itemExpenseReport'));
+
+/* ---------- 7. RECURRING vs ONE-TIME EXPENSE ---------- */
+function buildExpenseRecurringRows_(){
+  const rows=dataForFY('expense');
+  const map={};
+  rows.forEach(r=>{
+    const party=String(r.partyName||'Unknown').trim()||'Unknown';
+    const t=parseDT(r.date);
+    if(!map[party])map[party]={partyName:party,months:new Set(),amount:0};
+    if(t!==null){const d=new Date(t);map[party].months.add(d.getFullYear()+'-'+d.getMonth());}
+    map[party].amount+=signedExpenseAmt_(r);
+  });
+  return Object.values(map).map(p=>({partyName:p.partyName,months:p.months.size,classification:p.months.size>=2?'Recurring':'One-time',amount:Math.round(p.amount*100)/100})).sort((a,b)=>b.amount-a.amount);
+}
+GRID_DEFS.expenseRecurring={cols:[
+  {key:'partyName',label:'Party Name',width:230},
+  {key:'months',label:'Distinct Months Billed',width:160,num:true},
+  {key:'classification',label:'Type',width:120,render:r=>reportBadge_(r.classification,r.classification==='Recurring'?'warning':'info')},
+  {key:'amount',label:'Total Expense',width:150,num:true,currency:true,filterType:'number-range'}
+],data:buildExpenseRecurringRows_};
+registerPage('expenseRecurring',()=>renderGrid('expenseRecurring'));
+
+/* ---------- 8. COLLECTION EFFICIENCY TREND ---------- */
+function buildCollectionTrendRows_(){
+  return selectedFYMonths().map(m=>{
+    const from=toISO(new Date(m.y,m.m,1)),to=toISO(new Date(m.y,m.m+1,0));
+    const sales=sumBy(voucherSales_(from,to),'debit');
+    const collections=sumBy(rowsInCustomRange(dataForFY('receipt'),'date',from,to),'debitLedgerAmount');
+    const pct=sales?Math.min(999,collections/sales*100):0;
+    return {month:m.label,sales,collections,efficiencyPct:pct};
+  });
+}
+GRID_DEFS.collectionEfficiencyTrend={cols:[
+  {key:'month',label:'Month',width:140},
+  {key:'sales',label:'Sales',width:150,num:true,currency:true},
+  {key:'collections',label:'Collections',width:150,num:true,currency:true},
+  {key:'efficiencyPct',label:'Collection Efficiency',width:160,num:true,render:r=>r.efficiencyPct.toFixed(1)+'%'}
+],data:buildCollectionTrendRows_,noPagination:true};
+function renderCollectionEfficiencyTrend(){
+  const rows=buildCollectionTrendRows_();
+  const totalSales=sumBy(rows,'sales'),totalCollections=sumBy(rows,'collections');
+  const avgPct=totalSales?Math.min(999,totalCollections/totalSales*100):0;
+  return `<div class="dash-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="card"><div class="card-label">Total Sales</div><div class="card-value">${fmtINR(totalSales)}</div></div>
+    <div class="card"><div class="card-label">Total Collections</div><div class="card-value">${fmtINR(totalCollections)}</div></div>
+    <div class="card"><div class="card-label">Overall Collection Efficiency</div><div class="card-value">${avgPct.toFixed(1)}%</div></div>
+  </div>${renderGrid('collectionEfficiencyTrend')}`;
+}
+registerPage('collectionEfficiencyTrend',renderCollectionEfficiencyTrend);
+
+/* ---------- 9. PAYMENT TERMS COMPLIANCE ---------- */
+function buildPaymentTermsRows_(){
+  const rows=dataForFY('receivables');
+  const map={};
+  rows.forEach(r=>{
+    const term=String(r.paymentTerms||'Not Specified').trim()||'Not Specified';
+    if(!map[term])map[term]={paymentTerms:term,totalBills:0,overdueBills:0,totalOutstanding:0,overdueOutstanding:0};
+    const m=map[term];
+    m.totalBills++; m.totalOutstanding+=Number(r.pendingAmount)||0;
+    if((Number(r.overdueDays)||0)>0){ m.overdueBills++; m.overdueOutstanding+=Number(r.pendingAmount)||0; }
+  });
+  return Object.values(map).sort((a,b)=>b.totalOutstanding-a.totalOutstanding);
+}
+GRID_DEFS.paymentTermsCompliance={cols:[
+  {key:'paymentTerms',label:'Payment Terms',width:180},
+  {key:'totalBills',label:'Total Bills',width:110,num:true},
+  {key:'overdueBills',label:'Overdue Bills',width:110,num:true},
+  {key:'totalOutstanding',label:'Total Outstanding',width:160,num:true,currency:true,filterType:'number-range'},
+  {key:'overdueOutstanding',label:'Overdue Outstanding',width:160,num:true,currency:true,filterType:'number-range'}
+],data:buildPaymentTermsRows_};
+registerPage('paymentTermsCompliance',()=>renderGrid('paymentTermsCompliance'));
+
+/* ---------- 10. CUSTOMER RISK SCORE ----------
+ * riskScore = maxOverdueDays × outstanding amount (only for parties currently
+ * overdue) — a simple, explainable combination of "how late" and "how much".
+ * Ranked parties are split into top 20% High / next 30% Medium / remaining Low;
+ * parties with nothing overdue are always Low. */
+function buildCustomerRiskRows_(){
+  const rows=dataForFY('receivables');
+  const byParty={};
+  rows.forEach(r=>{
+    const name=r.partyName||'Unknown';
+    if(!byParty[name])byParty[name]={partyName:name,pendingAmount:0,maxOverdueDays:0};
+    byParty[name].pendingAmount+=Number(r.pendingAmount)||0;
+    byParty[name].maxOverdueDays=Math.max(byParty[name].maxOverdueDays,Number(r.overdueDays)||0);
+  });
+  const list=Object.values(byParty).map(p=>Object.assign(p,{riskScore:p.maxOverdueDays>0?p.maxOverdueDays*Math.max(0,p.pendingAmount):0}));
+  const ranked=list.filter(p=>p.riskScore>0).sort((a,b)=>b.riskScore-a.riskScore);
+  const n=ranked.length,highCut=Math.ceil(n*0.2),medCut=Math.ceil(n*0.5);
+  ranked.forEach((p,i)=>{ p.riskLevel=i<highCut?'High':(i<medCut?'Medium':'Low'); });
+  list.filter(p=>p.riskScore===0).forEach(p=>{ p.riskLevel='Low'; });
+  return list.sort((a,b)=>b.riskScore-a.riskScore);
+}
+GRID_DEFS.customerRiskScore={cols:[
+  {key:'partyName',label:'Party Name',width:230},
+  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range'},
+  {key:'maxOverdueDays',label:'Max Overdue Days',width:150,num:true,filterType:'number-range'},
+  {key:'riskLevel',label:'Risk Level',width:120,render:r=>reportBadge_(r.riskLevel,r.riskLevel==='High'?'danger':r.riskLevel==='Medium'?'warning':'success')}
+],data:buildCustomerRiskRows_};
+registerPage('customerRiskScore',()=>renderGrid('customerRiskScore'));
+
+/* ---------- 11. PARTY GROUP OUTSTANDING ---------- */
+function buildPartyGroupRows_(){
+  const map={};
+  dataForFY('receivables').forEach(r=>{
+    const g=String(r.partyGroup||'Unassigned').trim()||'Unassigned';
+    if(!map[g])map[g]={partyGroup:g,receivable:0,payable:0};
+    map[g].receivable+=Number(r.pendingAmount)||0;
+  });
+  dataForFY('payables').forEach(r=>{
+    const g=String(r.partyGroup||'Unassigned').trim()||'Unassigned';
+    if(!map[g])map[g]={partyGroup:g,receivable:0,payable:0};
+    map[g].payable+=Number(r.closingBalance)||0;
+  });
+  return Object.values(map).map(g=>Object.assign({},g,{net:g.receivable-g.payable})).sort((a,b)=>(b.receivable+b.payable)-(a.receivable+a.payable));
+}
+GRID_DEFS.partyGroupOutstanding={cols:[
+  {key:'partyGroup',label:'Party Group',width:220},
+  {key:'receivable',label:'Receivable Outstanding',width:170,num:true,currency:true,filterType:'number-range'},
+  {key:'payable',label:'Payable Outstanding',width:170,num:true,currency:true,filterType:'number-range'},
+  {key:'net',label:'Net Position',width:150,num:true,filterType:'number-range',render:r=>`<span style="color:${r.net>=0?'var(--success)':'var(--danger)'};font-weight:700;">${esc(fmtINRCompact(r.net))}</span>`}
+],data:buildPartyGroupRows_};
+registerPage('partyGroupOutstanding',()=>renderGrid('partyGroupOutstanding'));
+
+/* ---------- 12. BANK & MODE COLLECTION REPORT ---------- */
+function buildBankCollectionRows_(){
+  const rows=dataForFY('receipt');
+  const map={};
+  rows.forEach(r=>{
+    const bank=String(r.bankName||'Not Specified').trim()||'Not Specified';
+    const mode=String(r.transactionType||'Not Specified').trim()||'Not Specified';
+    const key=bank+'|'+mode;
+    if(!map[key])map[key]={bankName:bank,transactionType:mode,count:0,amount:0};
+    map[key].count++; map[key].amount+=Number(r.debitLedgerAmount)||0;
+  });
+  return Object.values(map).sort((a,b)=>b.amount-a.amount);
+}
+GRID_DEFS.bankCollectionReport={cols:[
+  {key:'bankName',label:'Bank Name',width:220},
+  {key:'transactionType',label:'Transaction Type',width:150},
+  {key:'count',label:'Receipts',width:110,num:true},
+  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range'}
+],data:buildBankCollectionRows_};
+registerPage('bankCollectionReport',()=>renderGrid('bankCollectionReport'));
+
+/* ---------- 13. CREDIT NOTE IMPACT ---------- */
+function buildCreditNoteImpactRows_(){
+  const rows=creditNoteRows();
+  const byParty={};
+  rows.forEach(r=>{
+    const name=r.partyName||'Unknown';
+    if(!byParty[name])byParty[name]={partyName:name,count:0,amount:0};
+    byParty[name].count++; byParty[name].amount+=Number(r.amount)||0;
+  });
+  return Object.values(byParty).sort((a,b)=>b.amount-a.amount);
+}
+GRID_DEFS.creditNoteImpact={cols:[
+  {key:'partyName',label:'Customer',width:230},
+  {key:'count',label:'Credit Notes',width:120,num:true},
+  {key:'amount',label:'Total Amount',width:160,num:true,currency:true,filterType:'number-range'}
+],data:buildCreditNoteImpactRows_};
+function renderCreditNoteImpact(){
+  const rows=creditNoteRows();
+  const totalCredit=sumBy(rows,'amount');
+  const totalSales=sumBy(voucherSales_(),'debit');
+  const pct=totalSales?(totalCredit/totalSales*100):0;
+  return `<div class="dash-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="card"><div class="card-label">Total Credit Notes</div><div class="card-value">${fmtINR(totalCredit)}</div><div class="card-sub">${rows.length} credit notes</div></div>
+    <div class="card"><div class="card-label">Total Sales</div><div class="card-value">${fmtINR(totalSales)}</div></div>
+    <div class="card"><div class="card-label">Credit Note % of Sales</div><div class="card-value">${pct.toFixed(2)}%</div></div>
+  </div>${renderGrid('creditNoteImpact')}`;
+}
+registerPage('creditNoteImpact',renderCreditNoteImpact);
+</script>

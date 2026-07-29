@@ -1,24 +1,231 @@
 <script>
-/* ============================= CONFIG ============================= */
+/* ============================= CONFIG =============================
+ * APP_BUILD: bump this on every fix. Shown in the sidebar footer so you can
+ * confirm at a glance whether your LIVE Apps Script deployment is actually
+ * running the latest code — editing/saving files in the Apps Script editor
+ * does NOT update your published /exec URL by itself. You must go to
+ * Deploy > Manage deployments > (pencil/edit icon) > Version: New version
+ * > Deploy, every time you paste in updated code. If the version number
+ * shown in your app doesn't match the one below, that's why a fix "isn't
+ * working" — it simply hasn't been deployed yet.
+ */
+const APP_BUILD = "2026-07-26.1 (Fixed sidebar collapse: hover-to-expand + icon-with-caption rail; avatar/brand-icon now follow Appearance in dark mode too)";
 const PAGE_SIZE_OPTIONS = [50,100,500,1000];
 const AUTO_LOGOUT_TIME = "23:59";
+// Repeatable content-size controls. A-/A+ move one 5% step on every click while
+// A always returns to 100%. The bounded range prevents either unreadably small
+// content or a zoom level too large for the fixed application chrome.
+const FONT_SIZE_MIN = 80;
+const FONT_SIZE_MAX = 140;
+const FONT_SIZE_STEP = 5;
+const FONT_SIZE_CONTROLS = [
+  {label:'A-',command:'down'},
+  {label:'A',command:'reset'},
+  {label:'A+',command:'up'}
+];
 
 /* ============================= STATE ============================= */
-function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},filterOpen:null,widths:{},page:1,pageSize:50};}
+// highlightedRowKey: the single row (matched via def.rowKeyFn) that should stay
+// visually highlighted after the user interacts with it — e.g. Follow Up List's
+// "Mark Followed Up"/"Edit Follow Up" popup, per explicit user instruction ("jab
+// click karen to jo row click ke hai vo highlight ho jaye").
+function dtState(){return{sort:null,dir:1,hidden:new Set(),filters:{},dateFilters:{},numFilters:{},filterOpen:null,widths:{},order:[],page:1,pageSize:50,expanded:new Set(),highlightedRowKey:null,
+  // _autoWidthCol/_autoWidthOrig track a column that's been TEMPORARILY widened
+  // because its number-range filter editor (operator + up to 2 value inputs) needs
+  // more room than the column's own configured/resized width — see
+  // applyNumFilterAutoWidth_()/revertNumFilterAutoWidth_() below. Never persisted
+  // (persistGridPrefs_() never touches these), so it can't leak into the user's
+  // saved column-width preference.
+  _autoWidthCol:null,_autoWidthOrig:undefined};}
+// Table state is created lazily per grid the first time it's viewed. Whenever a fresh
+// dtState() is created, immediately re-apply this user's remembered column
+// hide/order/width/sort/page-size (see GRID_PREFS below) so a page always opens
+// exactly the way the user last left it — even right after logging back in.
+function tableState(key){
+  if(!S.dt[key]){S.dt[key]=dtState();applyPersistedGridPrefs_(key);}
+  return S.dt[key];
+}
+
+/* ============================= REMEMBERED GRID SETTINGS =============================
+ * "If I hide some columns, next login those columns should stay hidden" — persisted
+ * per signed-in user (so different logins on the same browser don't clash), covering
+ * hidden columns, column order (drag/shift), column widths (resize), the active
+ * sort column/direction, and rows-per-page. Deliberately does NOT persist active
+ * text/date/number filters or the current page number — those are a one-time search,
+ * not a layout preference, and persisting them could otherwise silently hide rows
+ * the next time the user opens the same report. */
+function gridPrefsStorageKey_(){return 'tally_grid_prefs_v1:'+dataCacheKey_();}
+function loadGridPrefsCache_(){
+  S._gridPrefsCache={};
+  try{const raw=localStorage.getItem(gridPrefsStorageKey_());if(raw)S._gridPrefsCache=JSON.parse(raw)||{};}catch(e){S._gridPrefsCache={};}
+}
+function persistGridPrefs_(tableKey){
+  if(!S.user)return;
+  const st=S.dt[tableKey];if(!st)return;
+  if(!S._gridPrefsCache)S._gridPrefsCache={};
+  S._gridPrefsCache[tableKey]={hidden:Array.from(st.hidden||[]),order:(st.order||[]).slice(),widths:Object.assign({},st.widths||{}),sort:st.sort||null,dir:st.dir===-1?-1:1,pageSize:st.pageSize||50};
+  try{localStorage.setItem(gridPrefsStorageKey_(),JSON.stringify(S._gridPrefsCache));}catch(e){console.warn('Could not save table preferences:',e);}
+}
+function applyPersistedGridPrefs_(tableKey){
+  const p=S._gridPrefsCache&&S._gridPrefsCache[tableKey];if(!p)return;
+  const st=S.dt[tableKey];if(!st)return;
+  if(Array.isArray(p.hidden))st.hidden=new Set(p.hidden);
+  if(Array.isArray(p.order))st.order=p.order.slice();
+  if(p.widths&&typeof p.widths==='object')st.widths=Object.assign({},p.widths);
+  if(p.sort)st.sort=p.sort;
+  if(p.dir===1||p.dir===-1)st.dir=p.dir;
+  if(p.pageSize&&PAGE_SIZE_OPTIONS.indexOf(p.pageSize)!==-1)st.pageSize=p.pageSize;
+}
+// Persist Duration pivot (Sales + Expense) column widths to localStorage so
+// user-resized columns survive page refresh, per explicit user instruction.
+function persistPivotColWidths_(){
+  try{localStorage.setItem('tally_pivot_col_widths',JSON.stringify({
+    salesColW:S.salesCategoryColWidth,salesTotW:S.salesCategoryTotalWidth,
+    salesCatW:S.salesCategoryCatWidth,salesPctW:S.salesCategoryPctWidth,
+    expenseColW:S.expenseCategoryColWidth,expenseTotW:S.expenseCategoryTotalWidth,
+    expenseCatW:S.expenseCategoryCatWidth,expensePctW:S.expenseCategoryPctWidth
+  }));}catch(e){}
+}
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
-  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[],
-  users:[], missingSheets:[],
+  // Back-navigation history — a simple stack of previously-visited page keys, per
+  // explicit user instruction ("I do not have any option to go back to my previous
+  // page, can we add that"). Pushed onto by navigateTo() every time the page
+  // actually changes, popped by goBack() — see both below. Capped at 50 entries so
+  // it can't grow unbounded over a very long session. Reset on login/logout so a
+  // fresh session never shows a stale "back" target.
+  pageHistory:[],
+  expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], balanceLedgers:{}, salesRows:[], expenseTrendRows:[],
+  users:[], missingSheets:[], diagnostics:{}, diagBannerDismissed:false,
   toast:null, loginError:"",
   dt:{ expense:dtState(), payables:dtState(), receivables:dtState(), receipt:dtState(), payment:dtState() },
   colMenuOpen:null, logoutAt:0,
+  lastSync:'', lastSyncAt:0, lastSyncSource:'', cacheLoaded:false,
   ledger:{ search:'', selected:null, detail:null, loading:false },
   darkMode:false, fontSize:100,
+  // Appearance system: displayMode is 'light'|'dark'|'system' (persisted +
+  // resolved into S.darkMode/html.dark on load/change). colorScheme is a
+  // COLOR_SCHEMES[].key or 'surprise' (re-rolled on every load — see
+  // applyAppearance_()/rollSurpriseScheme_() below). appearanceOpen toggles the
+  // settings modal.
+  displayMode:'light', colorScheme:'cobalt-blue', appearanceOpen:false,
+  filters:null,
+  // Follow Up List: per-CUSTOMER (not per-bill) note, keyed by
+  // partyName.trim().toLowerCase() — so if the same company appears on 3 rows
+  // (3 overdue bills), saving one popup updates the note shown on ALL 3 rows at
+  // once, per explicit user instruction ("agar company name 3 baar hai is table
+  // me teeno me ye update ho jaye"). PERSISTED to the sheet on every save (see
+  // saveFollowUp() in Code.gs — appends to FOLLOWUP_LOG + writes the latest values
+  // onto SALES) and re-loaded on every sync via the 'followUp' chunk, per explicit
+  // user instruction ("SAVE ALL PREVIOUS FOLLOW UP REMARKS ALSO AND CAN SEE ALSO
+  // WHILE FOLLOW UP"). followUpData = latest entry per party (what the grid's Plan
+  // Date/Follow-up Notes columns show); followUpHistory = EVERY entry per party,
+  // newest first (what the popup's own history list shows). Both are derived from
+  // followUpLegacyMap/followUpHistoryRaw (the raw server payload) via
+  // rebuildFollowUpData_() — never written to directly.
+  followUpData:{}, followUpHistory:{}, followUpLegacyMap:{}, followUpHistoryRaw:[],
+  // The currently-open "Mark/Edit Follow Up" popup — {open,party,rowKey,date,remarks,promisedAmount}.
+  followUpPopup:null,
+  ageingOpen:false, ageingMode:'all',
+  // Reports sidebar cascade (Reports -> Sales Report/Expense Report), mirroring
+  // the Ageing Summary parent/children pattern above — per explicit user
+  // instruction ("only 3 report...ye teeni button left side wale bar me cascade ho
+  // jaaye jaiseke ageing report pe click karne pe dikta hai"). See NAV_PARENTS
+  // below for the actual parent->children wiring.
+  reportsOpen:false,
+  // Desktop-only sidebar hover-expand state — set true/false directly by the
+  // mouseover/mouseout listeners near the bottom of this file (NOT via a full
+  // render()), and re-applied as the .sidebar-expanded class every time render()
+  // DOES run for some other reason (e.g. a nav click). This JS-tracked state is
+  // what makes the sidebar survive render() replacing the whole .sidebar DOM node —
+  // a plain CSS :hover pseudo-class does NOT survive that DOM replacement, which
+  // was the root cause of "clicked Ageing Summary, it collapsed back" (see the
+  // detailed BUG FIX comment above the .sidebar-expanded rules in CSS.html).
+  sidebarHovered:false,
+  map:{selectedState:'',zoom:1,searchQuery:'',citySortCol:'amount',citySortDir:-1,panX:0,panY:0,sidePanelOpen:false},
+  // Sales Report top toggle: 'sales' = existing invoice-wise master/detail grid
+  // (unchanged), 'category' = the Category-wise Monthly/Yearly/Custom pivot below
+  // (see renderSalesCategoryPivot() in Finance.html). This pivot is a bespoke table
+  // (not the generic renderGrid engine) because of one custom requirement: resizing
+  // ANY single month/year column must resize ALL month/year columns together, which
+  // the generic per-column-independent resize doesn't support — so it tracks its own
+  // sort/resize/mode state here instead of reusing tableState().
+  salesReportView:'sales', salesCategoryMode:'month', salesCategoryCustomFrom:'', salesCategoryCustomTo:'',
+  // Custom Range date pickers now live behind a single FY-style button + popover
+  // (see renderSalesCategoryPivot() in Finance.html) instead of bare <input
+  // type="date"> boxes sitting directly in the toolbar, per explicit user
+  // instruction ("Customer range financial year button chaiye rather than input
+  // boxes"). This just tracks whether that popover is currently open.
+  salesCategoryRangeOpen:false,
+  // Custom Range FY multi-select — array of FY keys the user has ticked, per
+  // explicit user instruction ("financial summary wise aaye jaise dashboard mein
+  // aata hai...can select multi can select single").
+  salesCategoryCustomFYs:[],
+  // Cross-filter for the Duration pivot: when Party Name is the dimension, this
+  // filters by Category (and vice versa). Multi-select array of values.
+  salesCrossFilter:[],salesCrossFilterOpen:false,salesCrossFilterSearch:'',
+  salesCategorySort:'total', salesCategorySortDir:-1,
+  salesCategoryColWidth:110, salesCategoryTotalWidth:130, salesCategoryCatWidth:210, salesCategoryPctWidth:90,
+  // Which field the Duration pivot groups by — 'category' (default), 'partyName'
+  // (Invoice To), or 'state'. Persisted below so "by default vo aayega jo maine
+  // last select kiya tha" holds even across a fresh page load, not just this session.
+  salesDimension:'category',
+  // Sales Dashboard's Product Summary dimension — 'description' (the SALES sheet's
+  // per-line Description/Item Name/Product column, the default) or 'category'.
+  // Exposed as a toggle because which of the two actually holds the product name
+  // differs per sheet; the Most Selling Product KPI and the sales-mix donut both
+  // follow this same value so the whole page stays consistent. Persisted below.
+  salesDashProductDim:'description',
+  // Expense Report pivot — same concept as Sales Duration pivot but for EXPENSE data.
+  // Toggle between 'list' (plain grid) and 'report' (pivot table).
+  expenseReportView:'list', expenseCategoryMode:'month', expenseCategoryCustomFYs:[],
+  expenseCrossFilter:[],expenseCrossFilterOpen:false,expenseCrossFilterSearch:'',
+  expenseCategorySort:'total', expenseCategorySortDir:-1,
+  expenseCategoryColWidth:110, expenseCategoryTotalWidth:130, expenseCategoryCatWidth:210, expenseCategoryPctWidth:90,
+  expenseDimension:'group', expenseCategoryRangeOpen:false,
+  // Duration pivot pagination state (Sales + Expense)
+  salesCategoryPage:1, salesCategoryPageSize:50,
+  expenseCategoryPage:1, expenseCategoryPageSize:50,
 };
 
-try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; if(S.darkMode)document.documentElement.classList.add('dark'); }catch(e){}
-try{ const fs=parseInt(localStorage.getItem('tally_font_size'),10); if(fs>=80&&fs<=130){S.fontSize=fs;} }catch(e){}
+// Legacy dark-mode-only toggle migrated into the new displayMode system below
+// (initAppearance_() in Appearance.html) — kept here only so S.darkMode has a
+// sane pre-migration value before that script runs (load order: Common.html
+// loads first, per Index.html's comment, so Appearance.html runs right after).
+try{ S.darkMode=localStorage.getItem('tally_dark_mode')==='true'; }catch(e){}
+try{ S.map.sidePanelOpen=localStorage.getItem('tally_map_side_panel_open')==='true'; }catch(e){}
+// Restore every valid incremental size, including values reached by repeated clicks.
+try{
+  const fs=parseInt(localStorage.getItem('tally_font_size'),10);
+  if(Number.isFinite(fs))S.fontSize=Math.min(FONT_SIZE_MAX,Math.max(FONT_SIZE_MIN,fs));
+}catch(e){}
+// Apply the data-scale CSS variable immediately so the first render already uses
+// the remembered size for table body cells.
+try{document.documentElement.style.setProperty('--data-scale',String(S.fontSize/100));}catch(e){}
+try{ const dim=localStorage.getItem('tally_sales_dimension'); if(dim==='category'||dim==='partyName'||dim==='state'){S.salesDimension=dim;} }catch(e){}
+try{ const pd=localStorage.getItem('tally_sales_dash_product_dim'); if(pd==='description'||pd==='category'){S.salesDashProductDim=pd;} }catch(e){}
+// Restore Duration pivot column widths from localStorage
+try{
+  const raw=localStorage.getItem('tally_pivot_col_widths');
+  if(raw){const o=JSON.parse(raw);
+    if(o.salesColW)S.salesCategoryColWidth=o.salesColW;
+    if(o.salesTotW)S.salesCategoryTotalWidth=o.salesTotW;
+    if(o.salesCatW)S.salesCategoryCatWidth=o.salesCatW;
+    if(o.salesPctW)S.salesCategoryPctWidth=o.salesPctW;
+    if(o.expenseColW)S.expenseCategoryColWidth=o.expenseColW;
+    if(o.expenseTotW)S.expenseCategoryTotalWidth=o.expenseTotW;
+    if(o.expenseCatW)S.expenseCategoryCatWidth=o.expenseCatW;
+    if(o.expensePctW)S.expenseCategoryPctWidth=o.expensePctW;
+  }
+}catch(e){}
+// Remembered login session id — see establishSession_()/loadAll() below. This lets a
+// signed-in user auto-resume instantly if the page ever gets reloaded unintentionally
+// (e.g. a two-finger trackpad swipe triggering the browser's back/forward navigation
+// gesture — see the overscroll-behavior-x CSS fix for the primary cause — or a normal
+// browser refresh), instead of being dropped back to the login screen.
+function persistSessionUserId_(id){ try{localStorage.setItem('tally_session_user_id',String(id));}catch(e){} }
+function clearPersistedSessionUserId_(){ try{localStorage.removeItem('tally_session_user_id');}catch(e){} }
 
 /* ============================= APPS SCRIPT BRIDGE ============================= */
 function runServer(fnName,arg){
@@ -26,62 +233,300 @@ function runServer(fnName,arg){
     if(typeof google==='undefined'||!google.script||!google.script.run){
       reject(new Error("google.script.run not available — open this page via the Apps Script /exec URL."));return;
     }
-    let call=google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(new Error(err.message||String(err))));
-    arg===undefined?call[fnName]():call[fnName](arg);
+    const onFailure=err=>reject(new Error((err&&err.message)||String(err)));
+    const call=google.script.run.withSuccessHandler(resolve).withFailureHandler(onFailure);
+
+    // Apps Script's google.script.run is a generated proxy, not a normal object.
+    // Bracket-based dynamic invocation can therefore be undefined even
+    // when the server function exists. Keep the public bridge explicit instead.
+    switch(fnName){
+      case 'getLoginData': call.getLoginData(); break;
+      case 'getChunk': call.getChunk(arg); break;
+      case 'getDistrictGeoJson': call.getDistrictGeoJson(arg); break;
+      case 'getLedgerForParty': call.getLedgerForParty(arg); break;
+      case 'saveFollowUp': call.saveFollowUp(arg); break;
+      default: reject(new Error('Unsupported server function: '+fnName));
+    }
   });
 }
 
+function applyDataPayload_(data){
+  if(!data)return false;
+  S.expense=Array.isArray(data.expense)?data.expense:[];
+  S.payables=Array.isArray(data.payables)?data.payables:[];
+  S.receivables=Array.isArray(data.receivables)?data.receivables:[];
+  S.receipt=Array.isArray(data.receipt)?data.receipt:[];
+  S.payment=Array.isArray(data.payment)?data.payment:[];
+  S.balanceParties=Array.isArray(data.balanceParties)?data.balanceParties:[];
+  S.balanceVouchers=Array.isArray(data.balanceVouchers)?data.balanceVouchers:[];
+  S.balanceLedgers=(data.balanceLedgers&&typeof data.balanceLedgers==='object')?data.balanceLedgers:{};
+  S.salesRows=Array.isArray(data.salesRows)?data.salesRows:[];
+  S.expenseTrendRows=Array.isArray(data.expenseTrendRows)?data.expenseTrendRows:[];
+  S.missingSheets=Array.isArray(data.missingSheets)?data.missingSheets:[];
+  S.diagnostics=(data.diagnostics&&typeof data.diagnostics==='object')?data.diagnostics:{};
+  S.followUpLegacyMap=(data.followUpLegacyMap&&typeof data.followUpLegacyMap==='object')?data.followUpLegacyMap:{};
+  S.followUpHistoryRaw=Array.isArray(data.followUpHistoryRaw)?data.followUpHistoryRaw:[];
+  rebuildFollowUpData_();
+  return true;
+}
+
+// Merges the two follow-up data sources loaded from the server into the shape the
+// UI actually reads (S.followUpData = latest entry per party, S.followUpHistory =
+// every entry per party, newest first) — per explicit user report/instruction
+// ("I CAN SEE DATA IN SHEET FOR FOLLOW UP BUT SAME MISSING IN PANEL...SAVE ALL
+// PREVIOUS FOLLOW UP REMARKS ALSO AND CAN SEE ALSO WHILE FOLLOW UP"):
+//  1) S.followUpHistoryRaw — every row from the append-only FOLLOWUP_LOG sheet
+//     (oldest-first, one row per save, going forward from now on).
+//  2) S.followUpLegacyMap — whatever DATE/REMARKS/PROMISED AMOUNT is ALREADY sitting
+//     directly on the SALES sheet per party (entries made before this feature
+//     existed, or typed straight into the sheet) — used ONLY as a fallback for a
+//     party with no logged history yet, so it doesn't get silently dropped.
+// Called once after every chunk load AND once right after a fresh save (see
+// followup-save handler in Receivables.html) so the popup's own history list
+// reflects a just-saved entry immediately, without waiting for the next sync.
+function rebuildFollowUpData_(){
+  const byParty={};
+  (S.followUpHistoryRaw||[]).forEach(entry=>{
+    const key=followUpDataKey_(entry.party);
+    if(!key)return;
+    if(!byParty[key])byParty[key]=[];
+    byParty[key].push(entry);
+  });
+  const followUpData={},followUpHistory={};
+  Object.keys(byParty).forEach(key=>{
+    const newestFirst=byParty[key].slice().reverse(); // sheet append order is oldest-first
+    followUpHistory[key]=newestFirst;
+    followUpData[key]=newestFirst[0];
+  });
+  Object.keys(S.followUpLegacyMap||{}).forEach(key=>{
+    if(followUpData[key])return; // logged history (if any) is authoritative for this party
+    const legacy=S.followUpLegacyMap[key];
+    followUpData[key]=legacy;
+    followUpHistory[key]=[legacy];
+  });
+  S.followUpData=followUpData;
+  S.followUpHistory=followUpHistory;
+}
+
 function applyBootstrap(data){
-  S.expense=data.expense||[]; S.payables=data.payables||[]; S.receivables=data.receivables||[];
-  S.receipt=data.receipt||[]; S.payment=data.payment||[]; S.balanceParties=data.balanceParties||[];
-  S.users=data.users||[]; S.missingSheets=data.missingSheets||[];
+  if(!applyDataPayload_(data))showToast("Server se khaali response aaya — Sync with Tally dabao.",true);
+}
+
+/* ============================= LOCAL DATA CACHE =============================
+ * Sheet snapshots are stored locally per signed-in user. IndexedDB supports the larger
+ * Tally datasets; localStorage is only a fallback when IndexedDB is unavailable. */
+const DATA_CACHE_DB='finance360_data_cache';
+const DATA_CACHE_STORE='snapshots';
+const DATA_CACHE_VERSION=1;
+const DATA_CACHE_LOCAL_PREFIX='finance360_data_cache_v1:';
+
+function dataCacheKey_(){return String(S.user&&S.user.id||'anonymous').trim().toLowerCase();}
+function formatSyncTime_(value){
+  const d=new Date(Number(value)||Date.now()),pad=n=>n<10?'0'+n:''+n;
+  return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' · '+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+function markSynced(source,time){
+  const ts=Number(time)||Date.now();
+  S.lastSyncAt=ts;S.lastSync=formatSyncTime_(ts);S.lastSyncSource=source||'live';
+}
+function dataCachePayload_(){
+  return {expense:S.expense,payables:S.payables,receivables:S.receivables,receipt:S.receipt,payment:S.payment,
+    balanceParties:S.balanceParties,balanceVouchers:S.balanceVouchers,balanceLedgers:S.balanceLedgers,
+    salesRows:S.salesRows,expenseTrendRows:S.expenseTrendRows,missingSheets:S.missingSheets,diagnostics:S.diagnostics,
+    followUpLegacyMap:S.followUpLegacyMap,followUpHistoryRaw:S.followUpHistoryRaw};
+}
+function dataCacheSnapshot_(){return {version:DATA_CACHE_VERSION,savedAt:S.lastSyncAt||Date.now(),data:dataCachePayload_()};}
+function openDataCache_(){
+  return new Promise((resolve,reject)=>{
+    if(typeof indexedDB==='undefined'){reject(new Error('IndexedDB unavailable'));return;}
+    const req=indexedDB.open(DATA_CACHE_DB,DATA_CACHE_VERSION);
+    req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(DATA_CACHE_STORE))req.result.createObjectStore(DATA_CACHE_STORE);};
+    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Could not open local cache'));
+  });
+}
+async function readCachedSnapshot_(){
+  const key=dataCacheKey_();
+  try{
+    const db=await openDataCache_();
+    return await new Promise((resolve,reject)=>{
+      const req=db.transaction(DATA_CACHE_STORE,'readonly').objectStore(DATA_CACHE_STORE).get(key);
+      req.onsuccess=()=>{db.close();resolve(req.result||null);};req.onerror=()=>{db.close();reject(req.error);};
+    });
+  }catch(err){
+    try{const raw=localStorage.getItem(DATA_CACHE_LOCAL_PREFIX+key);return raw?JSON.parse(raw):null;}catch(ignore){return null;}
+  }
+}
+async function writeCachedSnapshot_(){
+  if(!S.user||!hasAnyData())return false;
+  const key=dataCacheKey_(),snapshot=dataCacheSnapshot_();
+  try{
+    const db=await openDataCache_();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(DATA_CACHE_STORE,'readwrite');tx.objectStore(DATA_CACHE_STORE).put(snapshot,key);
+      tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(tx.error);};
+    });
+    return true;
+  }catch(err){
+    try{localStorage.setItem(DATA_CACHE_LOCAL_PREFIX+key,JSON.stringify(snapshot));return true;}catch(ignore){console.warn('Local cache could not be saved:',err);return false;}
+  }
+}
+async function hydrateCachedData_(){
+  const snapshot=await readCachedSnapshot_();
+  if(!snapshot||snapshot.version!==DATA_CACHE_VERSION||!snapshot.savedAt||!applyDataPayload_(snapshot.data))return false;
+  S.cacheLoaded=true;markSynced('cache',snapshot.savedAt);return true;
+}
+
+// Builds a plain-language list of problems found in the sheet (missing tabs, missing
+// headers, tabs with zero data rows, Receipt/PAYMENT/Balance tabs with fewer columns
+// than expected). Returns [] if everything looks fine.
+function diagnosticIssues(){
+  const d=S.diagnostics||{}; const issues=[];
+  Object.keys(d).forEach(tab=>{
+    const info=d[tab];
+    if(!info.exists){ issues.push(`Tab "${tab}" not found — check the exact spelling/spacing of this sheet tab's name.`); return; }
+    if(info.missingHeaders && info.missingHeaders.length){
+      issues.push(`Tab "${tab}" is missing column header(s): ${info.missingHeaders.join(', ')} — check spelling/spacing in row 1.`);
+    }
+    if(info.columnCountOk===false){
+      issues.push(`Tab "${tab}" has only ${info.columnCount} column(s), expected at least ${info.expectedMinCols} — some columns may be missing or shifted.`);
+    }
+    if(info.exists && info.dataRowCount===0 && (!info.missingHeaders||!info.missingHeaders.length)){
+      issues.push(`Tab "${tab}" exists but has 0 data rows below the header.`);
+    }
+  });
+  return issues;
+}
+function hasAnyData(){
+  return S.expense.length||S.payables.length||S.receivables.length||S.receipt.length||S.payment.length||S.balanceParties.length||S.salesRows.length;
+}
+
+// BUG FIX (found after user report: dashboard shows all-Rs0 with NO diagnostics banner
+// visible): the Data Diagnostics banner used to be gated on `!hasAnyData()`, but
+// hasAnyData() ORs in S.balanceParties.length — and the Balance tab (the master party
+// ledger) almost always has rows even when EXPENSE/PAYABLES/RECEIVABLES/SALES are
+// empty or misconfigured. That made hasAnyData() return true and PERMANENTLY hid the
+// banner, no matter how broken the other sheets were — exactly the reported symptom.
+// Fix: show the banner whenever diagnosticIssues() finds ANY problem, independent of
+// whether the Balance tab happens to have data. This is a strictly separate signal
+// from the "still loading, show a spinner" case below.
+function shouldShowDiagBanner(){
+  return !S.syncing && !S.diagBannerDismissed && diagnosticIssues().length>0;
 }
 
 async function loadAll(){
   S.ready=false;render();
   try{
     const loginData=await runServer('getLoginData');
-    S.users=loginData.users||[];
+    S.users=(loginData&&loginData.users)||[];
     S.loadError="";
   }catch(err){ S.loadError=err.message; }
+  // Auto-resume a previously signed-in user if the page reloaded unintentionally
+  // (e.g. an accidental two-finger swipe triggering the browser's back/forward
+  // navigation gesture, or a manual refresh) — this is the actual fix for "swiping
+  // logs me out": the swipe was reloading the whole app, and since login state only
+  // ever lived in memory, that reload always dropped back to the login screen no
+  // matter what. Session persistence removes the forced re-login; the CSS
+  // overscroll-behavior-x fix below removes the swipe-triggered reload itself.
+  let resumedUser=null;
+  try{
+    const savedId=localStorage.getItem('tally_session_user_id');
+    if(savedId)resumedUser=S.users.find(u=>String(u.id)===savedId)||null;
+  }catch(e){}
+  if(resumedUser){
+    S.user=resumedUser;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();S.pageHistory=[];
+    loadGridPrefsCache_();
+    Object.keys(S.dt).forEach(applyPersistedGridPrefs_);
+    await hydrateCachedData_();
+    S.syncing=true;S.ready=true;render();startClock();
+    void loadHeavyData(true);
+    return;
+  }
   S.ready=true;render();startClock();
 }
 
-function permsPayload(){
-  return S.user?{
-    dashboard:S.user.dashboard, expense:S.user.expense, payables:S.user.payables,
-    receivables:S.user.receivables, receipt:S.user.receipt, payment:S.user.payment,
-    ledger:S.user.ledger, overdue:S.user.overdue
-  }:null;
+// Load data one tab at a time to stay within the Apps Script response-size limit.
+// The currently rendered cached snapshot stays visible until all live chunks finish;
+// this avoids partial numbers, repeated page movement, and a table changing mid-scroll.
+const CHUNK_KEYS=['receivables','payables','expense','expenseTrend','receipt','payment','sales','balance','diagnostics','followUp'];
+
+// Page-scoped refresh: clicking the inline "Refresh" button on a specific page only
+// re-fetches the sheet(s) that page actually needs, instead of pulling every
+// registered chunk — per explicit user instruction ("Sales Report mein refresh
+// select karu to sirf isi se related sheets se data pick ho, baki ka nahi, else time
+// jyada lagta hai"). Sales Report reads SALES (buildSalesReport) plus RECEIVABLES
+// (for the linked Pending Amount/Overdue Days on each invoice) — nothing else. Any
+// page NOT listed here keeps doing a full refresh (see refreshpage handler below),
+// and the sidebar "Sync with Tally" button always does a full refresh regardless of
+// which page is open, since that button is the explicit "sync everything" action.
+const PAGE_CHUNK_KEYS={
+  salesReport:['sales','receivables']
+};
+
+async function loadChunks(chunkKeys){
+  const keys=(chunkKeys&&chunkKeys.length)?chunkKeys:CHUNK_KEYS;
+  let completed=0;const livePayload={};
+  for(const key of keys){
+    try{
+      const data=await runServer('getChunk',key);
+      if(data===null||data===undefined)continue;
+      switch(key){
+        case 'expense':livePayload.expense=data||[];break;
+        case 'expenseTrend':livePayload.expenseTrendRows=data||[];break;
+        case 'payables':livePayload.payables=data||[];break;
+        case 'receivables':livePayload.receivables=data||[];break;
+        case 'receipt':livePayload.receipt=data||[];break;
+        case 'payment':livePayload.payment=data||[];break;
+        case 'sales':livePayload.salesRows=data||[];break;
+        case 'balance':livePayload.balanceParties=data.balanceParties||[];livePayload.balanceVouchers=data.balanceVouchers||[];livePayload.balanceLedgers=data.balanceLedgers||{};break;
+        case 'diagnostics':livePayload.diagnostics=data||{};break;
+        case 'followUp':livePayload.followUpLegacyMap=data.legacyMap||{};livePayload.followUpHistoryRaw=data.history||[];break;
+      }
+      completed++;
+    }catch(err){console.error('Chunk load error ['+key+']:',err.message);}
+  }
+  return {completed,livePayload};
 }
 
-async function loadHeavyData(){
-  S.syncing=true;render();
-  try{
-    applyBootstrap(await runServer('getBootstrapData',permsPayload()));
-    if(S.user){
-      const f=S.users.find(u=>u.id.toLowerCase()===S.user.id.toLowerCase());
-      if(f)S.user=Object.assign({},S.user,f);
-    }
-    S.loadError="";
-  }catch(err){ showToast("Data load error: "+err.message,true); }
-  S.syncing=false;render();
+function applyCompletedLiveSync_(result){
+  if(!result.completed)return false;
+  applyDataPayload_(Object.assign(dataCachePayload_(),result.livePayload));
+  S.cacheLoaded=false;markSynced('live');return true;
 }
 
-async function refreshData(){
-  S.syncing=true;render();
-  try{
-    applyBootstrap(await runServer('getBootstrapData',permsPayload()));
-    if(S.user){
-      const fresh=await runServer('getUserPermissions',S.user.id);
-      if(fresh)S.user=Object.assign({},S.user,fresh);
-      const item=NAV_ITEMS.find(n=>n.key===S.page);
-      if(item&&!S.user[item.perm])S.page=firstAllowedPage();
-    }
-    S.loadError="";S.syncing=false;
-    Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
-    showToast("Sheet se latest data mil gaya.",false);
-  }catch(err){S.syncing=false;showToast("Refresh nahi ho paya: "+err.message,true);}
+async function loadHeavyData(skipInitialRender){
+  S.syncing=true;S.diagBannerDismissed=false;
+  if(!skipInitialRender)render();
+  const result=await loadChunks();
+  S.syncing=false;
+  if(applyCompletedLiveSync_(result))await writeCachedSnapshot_();
+  render();
+}
+
+async function refreshData(chunkKeys,silent){
+  S.syncing=true;S.diagBannerDismissed=false;render();
+  const result=await loadChunks(chunkKeys);
+  S.syncing=false;
+  if(applyCompletedLiveSync_(result)){
+    await writeCachedSnapshot_();
+    Object.keys(S.dt).forEach(k=>{S.dt[k].filters={};S.dt[k].dateFilters={};S.dt[k].numFilters={};S.dt[k].filterOpen=null;S.dt[k].page=1;});
+    // Auto-refresh ticks (silent=true) skip the toast — popping "Sheet se latest data
+    // mil gaya" every 10 minutes on its own would get noisy, and the topbar's own
+    // "Last Refreshed on ..." pill (see renderShell()) already reflects the update.
+    // A manual click (sidebar "Sync with Tally" or a page's own "Refresh" button)
+    // still shows its usual confirmation toast, unchanged.
+    if(!silent)showToast((chunkKeys&&chunkKeys.length)?"Is report se related sheet se latest data mil gaya.":"Sheet se latest data mil gaya.",false);
+    else render(); // still need a render to refresh the "Last Refreshed on ..." pill/table data on screen
+  }else{
+    if(!silent)showToast("Live sync nahi hua — cached data hi dikh raha hai.",true);
+    else render(); // clear the "syncing" state on screen even when the auto-refresh tick found nothing new
+  }
+}
+// Refreshes only the current page's own sheet(s) when a page-scoped mapping exists
+// in PAGE_CHUNK_KEYS (e.g. Sales Report -> just SALES + RECEIVABLES); otherwise falls
+// back to the normal full refresh so every other page's behavior is unchanged.
+function refreshCurrentPage(){
+  const scoped=PAGE_CHUNK_KEYS[S.page];
+  return refreshData(scoped);
 }
 
 /* ============================= HELPERS ============================= */
@@ -97,7 +542,9 @@ function fmtINR(n){
   const formatted=other.replace(/\B(?=(\d{2})+(?!\d))/g,',')+lastThree;
   return (neg?'-':'')+'₹'+formatted;
 }
-function fmtNum(n){ n=Number(n)||0; return n.toLocaleString('en-IN',{maximumFractionDigits:2}); }
+function fmtINRCompact(n){ return fmtINR(n).replace(/\.00$/,''); }
+function fmtNum(n){ n=Number(n)||0; return n.toLocaleString('en-IN',{maximumFractionDigits:2}).replace(/\u00A0/g,''); }
+function fmtPct(n){ n=Number(n)||0; return (n>=0?'+':'')+n.toFixed(1)+'%'; }
 
 function parseDT(v){
   if(v==null)return null;
@@ -130,131 +577,511 @@ function nextLogoutTs(){
   return t.getTime();
 }
 function forceNightLogout(){
+  void writeCachedSnapshot_();
+  clearPersistedSessionUserId_();
   S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;
   S.loginError="Raat ke auto-logout ke kaaran aap sign out ho gaye. Kripya dobara login karein.";
   render();
 }
 
 /* ============================= LIVE CLOCK ============================= */
+// Background auto-refresh: pulls fresh data from the sheet every 10 minutes WITHOUT
+// the user having to click "Sync with Tally" or a page's own "Refresh" button, per
+// explicit user instruction ("data auto got refresh after 10 min even if user ne
+// app open kar rakhi hai, without pressing refresh button"). Reuses the exact same
+// refreshData() the sidebar "Sync with Tally" button calls — same full chunk fetch,
+// same cache write, same toast — just triggered by a timer instead of a click. Every
+// page's own scroll/table state is already preserved across this because render()
+// (called at the end of refreshData()) already saves/restores .content/.dt-scroll/
+// #sidebarNav scroll positions for every render, manual or automatic alike.
+const AUTO_REFRESH_INTERVAL_MS = 10*60*1000; // 10 minutes
+function startAutoRefreshTimer_(){
+  setInterval(()=>{
+    if(!S.user)return; // not logged in yet — nothing to refresh
+    if(S.syncing)return; // a refresh (manual or a previous tick) is already in flight — skip this tick rather than stacking calls
+    void refreshData(null,true); // full refresh, same scope as the sidebar "Sync with Tally" button, silent=true (no toast spam)
+  },AUTO_REFRESH_INTERVAL_MS);
+}
 function startClock(){
   setInterval(()=>{
     if(S.user && S.logoutAt && Date.now()>=S.logoutAt){ forceNightLogout(); return; }
   },1000);
+  startAutoRefreshTimer_();
 }
 
 /* ============================= LOGIN ============================= */
 function renderLogin(){
   return `
   <div class="login-wrap"><div class="login-card">
-    <div class="login-top"><div class="login-eyebrow">Tally · Accounts Desk</div><h1>Tally Dashboard</h1></div>
+    <div class="login-top"><div class="login-eyebrow">Finance 360° · Tally Integrated</div><h1>Finance Command Center</h1></div>
     <div class="login-body">
       ${S.loginError?`<div class="login-error">${esc(S.loginError)}</div>`:""}
       <form id="loginForm">
         <div class="field"><label>User ID</label><input type="text" id="loginId" autocomplete="username" placeholder="Enter your ID" required></div>
         <div class="field"><label>Password</label><input type="password" id="loginPw" autocomplete="current-password" placeholder="••••••" required></div>
-        <button type="submit" class="btn btn-gold btn-block">Sign In</button>
+        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
       </form>
-      <div class="login-hint">Credentials aur permissions aapki <b>LOGIN PAGE</b> sheet mein hain. Jis column mein <b>YES</b> hoga wahi page milega.</div>
+      <div class="login-hint">Credentials aapki <b>LOGIN PAGE</b> sheet mein hain — column B = ID, column C = Password. Login hone ke baad har user ko sabhi pages dikhenge.</div>
     </div>
   </div></div>`;
 }
-function firstAllowedPage(){ const f=NAV_ITEMS.find(n=>S.user&&S.user[n.perm]); return f?f.key:null; }
+function firstAllowedPage(){ return NAV_ITEMS[0]?NAV_ITEMS[0].key:null; }
 async function doLogin(id,pw){
   const u=S.users.find(x=>x.id.toLowerCase()===id.trim().toLowerCase()&&String(x.password)===pw);
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
-  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.page=firstAllowedPage();render();
-  await loadHeavyData();
-  try{
-    const fresh=await runServer('getUserPermissions',S.user.id);
-    if(fresh){S.user=Object.assign({},S.user,fresh);S.page=firstAllowedPage();render();}
-  }catch(e){}
+  persistSessionUserId_(u.id);
+  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();S.pageHistory=[];
+  S.cacheLoaded=false;S.lastSync='';S.lastSyncAt=0;S.lastSyncSource='';
+  // Load this user's remembered column hide/order/width/sort/page-size settings, then
+  // re-apply them onto the small set of grid states that were already created before
+  // login (expense/payables/receivables/receipt/payment — see the S object literal
+  // above). Every other grid picks up its saved prefs lazily via tableState() itself.
+  loadGridPrefsCache_();
+  Object.keys(S.dt).forEach(applyPersistedGridPrefs_);
+  await hydrateCachedData_();
+  // Render the saved snapshot immediately, then replace it once the complete live
+  // sync finishes. The current page stays stable throughout the background sync.
+  S.syncing=true;render();
+  void loadHeavyData(true);
 }
 
-/* ============================= NAV ============================= */
+/* ============================= NAV =============================
+ * Simple login only — every logged-in user sees every page, no per-page
+ * permission matrix. (Previously each item had a `perm` flag checked
+ * against LOGIN PAGE sheet columns; removed per request.)
+ */
 const NAV_ITEMS=[
-  {key:'dashboard',   label:'Dashboard',   perm:'dashboard',   group:'Overview', icon:'grid'},
-  {key:'receivables', label:'Receivables', perm:'receivables', group:'Reports',  icon:'in'},
-  {key:'payables',    label:'Payables',    perm:'payables',    group:'Reports',  icon:'out'},
-  {key:'overdue',     label:'Overdue / Ageing', perm:'overdue', group:'Reports', icon:'clock'},
-  {key:'ledger',      label:'Party Ledger',perm:'ledger',      group:'Reports',  icon:'book'},
-  {key:'receipt',     label:'Receipt',     perm:'receipt',     group:'Vouchers', icon:'arrow-down'},
-  {key:'payment',     label:'Payment',     perm:'payment',     group:'Vouchers', icon:'arrow-up'},
-  {key:'expense',     label:'Expense',     perm:'expense',     group:'Vouchers', icon:'wallet'},
+  {key:'dashboard',      label:'Dashboard',            group:null, icon:'grid'},
+  {key:'execSummary',    label:'Executive Summary',    group:null, icon:'summary'},
+
+  {key:'customerList',   label:'Customer List',        group:'Receivables', icon:'customer'},
+  {key:'receipt',        label:'Receipt List',         group:'Receivables', icon:'arrow-down'},
+  {key:'collectionAnalysis',label:'Collection Analysis',group:'Receivables', icon:'collection'},
+  {key:'followUpList',   label:'Follow Up List',       group:'Receivables', icon:'followup'},
+  {key:'creditNotes',    label:'Credit Notes',         group:'Receivables', icon:'creditnote'},
+
+  {key:'payDashboard',   label:'Payables Dashboard',   group:'Payables', icon:'out'},
+  {key:'vendorList',     label:'Vendor List',          group:'Payables', icon:'customer'},
+  {key:'payment',        label:'Payment List',         group:'Payables', icon:'arrow-up'},
+
+  {key:'mapView',        label:'Map View',             group:null, icon:'map'},
+  {key:'ageingSummary',  label:'Ageing Summary',       group:null, icon:'ageing', parent:true},
+
+  {key:'salesDashboard', label:'Sales Dashboard',      group:'Finance', icon:'sales'},
+  {key:'expensesDashboard',label:'Expenses Dashboard', group:'Finance', icon:'wallet'},
+  {key:'cashFlow',       label:'Cash Flow',            group:'Finance', icon:'cashflow'},
+  {key:'profitLoss',     label:'Profit & Loss',        group:'Finance', icon:'pl'},
+  {key:'balanceSheet',   label:'Balance Sheet',        group:'Finance', icon:'balance'},
+  {key:'reports',        label:'Reports',              group:'Finance', icon:'reports', parent:true},
+
+  {key:'ledger',         label:'Party Ledger',         group:'Finance', icon:'book'},
+
+  {key:'alerts',         label:'Alerts',               group:null, icon:'bell', badge:()=>alertCount()},
+  {key:'settings',       label:'Settings',             group:null, icon:'settings'},
 ];
 const PAGE_TITLES={
-  dashboard:'Dashboard', receivables:'Receivables', payables:'Payables', overdue:'Overdue / Ageing Analysis',
-  ledger:'Party Ledger', receipt:'Receipt Vouchers', payment:'Payment Vouchers', expense:'Expense Vouchers'
+  dashboard:{t:'Finance Command Center',s:'Complete Overview of Your Business Performance'},
+  execSummary:{t:'Executive Summary',s:'High-level snapshot for leadership'},
+  mapView:{t:'India Sales Map',s:'State-wise sales with city drill-down'},
+  ageingSummary:{t:'Ageing Summary',s:'Combined receivables & payables health at a glance'},
+  ageingRecv:{t:'Receivables Ageing Summary',s:'All data and ageing-wise receivable analysis'},
+  customerList:{t:'Customer List',s:'Unique customers and invoice totals from SALES'},
+  receipt:{t:'Receipt List',s:'All recorded receipt vouchers'},
+  collectionAnalysis:{t:'Collection Analysis',s:'DSO and collection efficiency'},
+  followUpList:{t:'Follow Up List',s:'Overdue bills needing attention this week'},
+  creditNotes:{t:'Credit Notes',s:'Credit notes issued to customers'},
+  payDashboard:{t:'Payables Dashboard',s:'Outstanding vendor bills at a glance'},
+  ageingPay:{t:'Payables Ageing Summary',s:'All data and ageing-wise payable analysis'},
+  vendorList:{t:'Vendor List',s:'All vendors with outstanding balances'},
+  payment:{t:'Payment List',s:'All recorded payment vouchers'},
+  salesDashboard:{t:'Sales Dashboard',s:'Sales performance overview'},
+  salesReport:{t:'Sales Report',s:'One row per unique Invoice No — click ▸ to expand line items'},
+  expensesDashboard:{t:'Expenses Dashboard',s:'Expense breakdown by category'},
+  cashFlow:{t:'Cash Flow',s:'Opening / inflow / outflow / closing'},
+  profitLoss:{t:'Profit & Loss',s:'Income and expenditure summary'},
+  balanceSheet:{t:'Balance Sheet',s:'Assets, liabilities & equity snapshot'},
+  reports:{t:'Reports',s:'All reports in one place'},
+  ledger:{t:'Party Ledger',s:'Statement of account, printable & PDF'},
+  expense:{t:'Expense Report',s:'Expense analysis with Group/Sub Group breakdown'},
+  alerts:{t:'Alerts',s:'Things that need your attention'},
+  settings:{t:'Settings',s:'Preferences for this dashboard'},
+  // New reports (see ReportsExtra.html) added per explicit user instruction ("add
+  // all reports u suggested add report tab") — reachable from the Reports hub page.
+  salesPersonPerf:{t:'Sales Person Performance',s:'Outstanding bills and overdue days grouped by Sales Person'},
+  stateSalesReport:{t:'State-wise Sales',s:'Sales amount and invoice count by State'},
+  customerNewRepeat:{t:'New vs Repeat Customers',s:'Customers grouped by whether they have purchased in one financial year only (New) or across multiple financial years (Repeat)'},
+  invoiceBuckets:{t:'Invoice Value Distribution',s:'Invoices grouped into amount buckets'},
+  gstSalesSplit:{t:'GST vs Non-GST Sales',s:'Invoices split by whether a GST No. is on file'},
+  itemExpenseReport:{t:'Item-wise Expense',s:'Expense amount and quantity grouped by Item Name'},
+  expenseRecurring:{t:'Recurring vs One-time Expense',s:'Parties billed in 2+ months vs a single month'},
+  collectionEfficiencyTrend:{t:'Collection Efficiency Trend',s:'Month-wise Sales vs Collections %'},
+  paymentTermsCompliance:{t:'Payment Terms Compliance',s:'Open bills grouped by Payment Terms — on-track vs overdue'},
+  customerRiskScore:{t:'Customer Risk Score',s:'Outstanding amount + overdue days combined into a risk score'},
+  partyGroupOutstanding:{t:'Party Group Outstanding',s:'Receivable/Payable outstanding rolled up by Party Group'},
+  bankCollectionReport:{t:'Bank & Mode Collection',s:'Receipts grouped by Bank Name and Transaction Type'},
+  creditNoteImpact:{t:'Credit Note Impact',s:'Credit notes as a % of total sales, and top customers'}
 };
 const NAV_ICONS={
+  map:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>',
   grid:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+  summary:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8 13 13.7l-3-3L3.7 17"/></svg>',
   in:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12l7 7 7-7"/></svg>',
   out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>',
   clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+  ageing:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
   'arrow-down':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
   'arrow-up':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
-  wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>'
+  wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>',
+  customer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  collection:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  followup:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>',
+  creditnote:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+  sales:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
+  cashflow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>',
+  pl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><rect x="4" y="6" width="16" height="12" rx="2"/></svg>',
+  balance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M3 21h18"/><path d="M4 8l4-3 4 3"/><path d="M12 8l4-3 4 3"/><path d="M5 8v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V8"/><path d="M13 8v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V8"/></svg>',
+  reports:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>',
+  bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.44.57.78 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
 };
+
+// Sidebar parent->children cascade config — each entry describes a NAV_ITEMS entry
+// flagged `parent:true`: which S state key tracks whether it's manually pinned
+// open (openKey), and its list of {key,label,icon} children shown directly below
+// it when expanded. Originally built just for "Ageing Summary" (-> Receivables/
+// Payables); "Reports" (-> Sales Report/Expense Report) reuses the exact same
+// mechanism, per explicit user instruction ("only 3 report...ye teeni button left
+// side wale bar me cascade ho jaaye jaiseke ageing report pe click karne pe dikta
+// hai"). Adding a future report here just means adding one more entry to
+// reports.children, per explicit user note ("baaki baad me aur koi report ho
+// jaaye to vo bhi baadme add kar denge").
+const NAV_PARENTS={
+  ageingSummary:{openKey:'ageingOpen',children:[
+    {key:'ageingRecv',label:'Receivables',icon:'in'},
+    {key:'ageingPay',label:'Payables',icon:'out'}
+  ]},
+  reports:{openKey:'reportsOpen',children:[
+    {key:'salesReport',label:'Sales Report',icon:'sales'},
+    {key:'expense',label:'Expense Report',icon:'wallet'}
+  ]}
+};
+
+function alertCount(){
+  const overdueRecv=dataForFY('receivables').filter(r=>Number(r.overdueDays)>0).length;
+  const overduePay=dataForFY('payables').filter(r=>Number(r.overdueDays)>0).length;
+  return overdueRecv+overduePay;
+}
 
 /* ============================= SHELL ============================= */
 function renderShell(inner){
-  const items=NAV_ITEMS.filter(n=>S.user[n.perm]);
+  const items=NAV_ITEMS; // every logged-in user sees every page
   const initials=(S.user.name||'U').substring(0,2).toUpperCase();
   let navHtml='';
-  let lastGroup=null;
+  let lastGroup=undefined;
   items.forEach(n=>{
-    if(n.group!==lastGroup){ navHtml+=`<div class="nav-group-label">${esc(n.group)}</div>`; lastGroup=n.group; }
-    navHtml+=`<div class="nav-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}</div>`;
+    if(n.group!==lastGroup){ if(n.group) navHtml+=`<div class="nav-group-label">${esc(n.group.toUpperCase())}</div>`; lastGroup=n.group; }
+    if(n.parent){
+      // Generic parent/children sidebar cascade — originally built just for
+      // "Ageing Summary" (-> Receivables/Payables) but now reused for "Reports"
+      // (-> Sales Report/Expense Report) too, per explicit user instruction
+      // ("only 3 report...ye teeni button left side wale bar me cascade ho jaaye
+      // jaiseke ageing report pe click karne pe dikta hai"). See NAV_PARENTS
+      // above for each parent's own open-state key + children list.
+      // BUG FIX (kept from the original ageingSummary-only version): the label
+      // used to be a bare text node sitting directly inside .nav-item (never
+      // wrapped in a <span>) — so the collapsed-sidebar CSS rule that was meant to
+      // hide it (`.nav-item span:not(.n-ic){display:none;}`) could only ever
+      // match the OTHER spans (.nav-chevron/.nav-badge), never the label text
+      // itself. Wrapping it in <span class="n-lbl"> lets the collapsed CSS target
+      // it precisely, per explicit user instruction with a reference screenshot.
+      // Also: the chevron symbol always uses the SAME combined condition
+      // (openKey-state OR childActive) as the children's own visibility below, so
+      // the arrow never shows "collapsed" while the children are plainly expanded.
+      const cfg=NAV_PARENTS[n.key]||{openKey:null,children:[]};
+      const childKeys=cfg.children.map(c=>c.key);
+      // Clicking the parent label NAVIGATES to its own landing page (data-action
+      // "nav") instead of only toggling the submenu open/closed with nowhere for
+      // the parent itself to go — per explicit user request/instruction.
+      const childActive=S.page===n.key||childKeys.indexOf(S.page)!==-1;
+      const expanded=(cfg.openKey&&S[cfg.openKey])||childActive;
+      navHtml+=`<div class="nav-item nav-parent ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span><span class="nav-chevron">${expanded?'▾':'›'}</span></div>`;
+      if(expanded)navHtml+=`<div class="nav-children">${cfg.children.map(c=>`<div class="nav-item ${S.page===c.key?'active':''}" data-action="nav" data-page="${c.key}"><span class="n-ic">${NAV_ICONS[c.icon]||''}</span><span class="n-lbl">${esc(c.label)}</span></div>`).join('')}</div>`;
+      return;
+    }
+    const badge=n.badge?n.badge():0;
+    navHtml+=`<div class="nav-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span class="n-ic">${NAV_ICONS[n.icon]||''}</span><span class="n-lbl">${esc(n.label)}</span>${badge?`<span class="nav-badge">${badge}</span>`:''}</div>`;
   });
-  if(!items.length) navHtml=`<div class="nav-empty">No pages assigned. Contact admin.</div>`;
+  const bottomItems=[items.find(n=>n.key==='dashboard'),items.find(n=>n.group==='Receivables'),items.find(n=>n.group==='Payables'),items.find(n=>n.key==='mapView'),items.find(n=>n.key==='alerts')].filter(Boolean);
+  const bottomNav=bottomItems.length?`<div class="bottom-nav">${bottomItems.map(n=>`<div class="bn-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span style="width:18px;height:18px;display:inline-block;">${NAV_ICONS[n.icon]||''}</span>${esc(n.label.split(' ')[0])}</div>`).join('')}</div>`:'';
 
-  const bottomItems=items.slice(0,5);
-  const bottomNav=bottomItems.length?`<div class="bottom-nav">${bottomItems.map(n=>`<div class="bn-item ${S.page===n.key?'active':''}" data-action="nav" data-page="${n.key}"><span style="width:18px;height:18px;display:inline-block;">${NAV_ICONS[n.icon]||''}</span>${esc(n.label)}</div>`).join('')}</div>`:'';
+  const title=PAGE_TITLES[S.page]||{t:'Dashboard',s:''};
+  const alerts=alertCount();
 
   return `
   <div class="shell">
     <div class="sidebar-overlay ${S.sidebarOpen?'show':''}" data-action="close-sidebar"></div>
-    <div class="sidebar ${S.sidebarOpen?'open':''}">
+    <div class="sidebar ${S.sidebarOpen?'open':''} ${S.sidebarHovered?'sidebar-expanded':''}">
       <div class="brand">
-        <div class="brand-inner"><div class="brand-icon">TD</div><div class="eyebrow">Tally Data</div><h1>Tally Dashboard</h1></div>
+        <div class="brand-inner">
+          <div class="brand-icon"><span></span><span></span><span></span><span></span></div>
+          <div class="brand-text"><div class="eyebrow">Finance 360°</div><h1>Tally Integrated</h1></div>
+        </div>
         <button class="sidebar-close" data-action="close-sidebar">✕</button>
       </div>
-      <div class="nav">${navHtml}</div>
+      <div class="nav" id="sidebarNav">${navHtml}</div>
       <div class="sidebar-foot">
-        <div class="logout-btn" data-action="syncnow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${S.syncing?'Refreshing…':'Refresh from Sheet'}</div>
-        <div class="logout-btn" data-action="logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
+        <button class="btn sync-btn btn-ghost" data-action="syncnow" style="color:#AAB2C8;border-color:var(--sidebar-line);">${S.syncing?'⟳ Syncing…':'⟳ Sync with Tally'}</button>
+        <button class="btn sidebar-appearance-btn btn-ghost" data-action="open-appearance" style="color:#AAB2C8;border-color:var(--sidebar-line);">🎨 Appearance</button>
+        <div class="sync-status" aria-live="polite">
+          <span class="sync-state">${S.syncing?'Syncing live data…':'Last updated'}</span>
+          <b>${esc(S.lastSync||'No cached data yet')}</b>
+          <span class="sync-source">${S.syncing&&S.cacheLoaded?'Showing cached data':S.lastSyncSource==='cache'?'Cached data':S.lastSyncSource==='live'?'Live Tally data':'Waiting for first sync'}</span>
+        </div>
+        <div class="logout-btn" data-action="logout" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</div>
       </div>
     </div>
     <div class="main">
       <div class="topbar">
-        <div class="topbar-left"><button class="hamburger" data-action="open-sidebar">☰</button><h2>${PAGE_TITLES[S.page]||'Dashboard'}</h2></div>
-        <div class="topbar-right"><div class="topbar-controls"><button data-action="toggle-theme" title="Toggle dark/light mode">${S.darkMode?'☀️':'🌙'}</button></div><div class="topbar-welcome">Welcome, <b>${esc(S.user.name)}</b></div><div class="avatar">${initials}</div></div>
+        <div class="topbar-left">
+          ${(S.pageHistory&&S.pageHistory.length)?`<button class="back-btn" data-action="goback" title="Go back to ${esc((PAGE_TITLES[S.pageHistory[S.pageHistory.length-1]]||{}).t||S.pageHistory[S.pageHistory.length-1]||'previous page')}">${NAV_ICONS.back}</button>`:''}
+          <button class="hamburger" data-action="open-sidebar">☰</button>
+          <div class="tb-title"><h2>${esc(title.t)} <span style="font-size:10px;color:var(--muted);">ⓘ</span></h2><div class="sub">${esc(title.s)}</div></div>
+          ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-fontsize" role="group" aria-label="Content size">
+            ${FONT_SIZE_CONTROLS.map(control=>{
+              const active=control.command==='reset'?S.fontSize===100:(control.command==='down'?S.fontSize<100:S.fontSize>100);
+              const disabled=control.command==='down'?S.fontSize<=FONT_SIZE_MIN:(control.command==='up'?S.fontSize>=FONT_SIZE_MAX:false);
+              return `<button class="${active?'active':''}" data-action="set-fontsize" data-font-command="${control.command}" title="${control.command==='reset'?'Reset content size to 100%':`${control.label} — click repeatedly (${S.fontSize}%)`}" ${disabled?'disabled':''}>${esc(control.label)}</button>`;
+            }).join('')}
+          </div>
+          <button class="appearance-trigger" data-action="open-appearance" title="Appearance — display mode &amp; color scheme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="20" r="2.5"/><path d="M12 12a9 9 0 100 9"/></svg></button>
+          <div class="topbar-welcome"><b>${esc(S.user.name)}</b><span>${esc(S.user.role||'Team Member')}</span></div>
+          <div class="avatar">${initials}</div>
+        </div>
       </div>
-      <div class="content">${inner}</div>
+      <div class="content page-${esc(S.page||'none')}">
+        <div class="content-zoom">${inner}</div>
+      </div>
     </div>
     ${bottomNav}
   </div>
   ${S.toast?`<div class="toast ${S.toast.isErr?'err':''}"><span>${S.toast.isErr?'⚠':'✓'}</span>${esc(S.toast.msg)}</div>`:""}`;
 }
 
-/* ============================= NAV ACTION ============================= */
-async function navigateTo(pageKey){
-  S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;render();
-  try{
-    const fresh=await runServer('getUserPermissions',S.user.id);
-    if(fresh){S.user=Object.assign({},S.user,fresh);
-      const item=NAV_ITEMS.find(n=>n.key===S.page);
-      if(item&&!S.user[item.perm]){showToast("Ye page ab aapke liye uplabdh nahi hai.",true);S.page=firstAllowedPage();}
-      render();
-    }
-  }catch(e){}
+/* ============================= NAV ACTION =============================
+ * Purely client-side page switch — no server round-trip on navigation anymore
+ * (this was the main cause of slow/blank-feeling page switches; previously every
+ * click re-fetched permissions from the LOGIN PAGE sheet before rendering).
+ */
+// Decides whether the Ageing Summary sidebar submenu should remain expanded after
+// navigating to `pageKey` — pulled out as its own small, pure, unit-testable
+// function. Per explicit user report with a screenshot ("when click on ageing
+// summary...it is collapsing back....it should not collapse back....when there are
+// sub parts....neeche ke parts click karne baad he collapse ho"): the submenu only
+// ever closes once the user has moved to a page OUTSIDE the Ageing Summary section
+// — navigating to either of its own two children keeps it open.
+function shouldAgeingStayOpenOnNav_(pageKey){
+  return pageKey==='ageingSummary'||pageKey==='ageingRecv'||pageKey==='ageingPay';
+}
+// Same reasoning as shouldAgeingStayOpenOnNav_ above, for the "Reports" sidebar
+// cascade (-> Sales Report/Expense Report) — per explicit user instruction.
+function shouldReportsStayOpenOnNav_(pageKey){
+  return pageKey==='reports'||pageKey==='salesReport'||pageKey==='expense';
+}
+function navigateTo(pageKey){
+  // Record where we're navigating FROM (not the destination) onto the back-stack —
+  // only when the page is actually changing, so clicking the same nav item twice
+  // (or a "Refresh"-style no-op) never pushes a duplicate/no-op entry, per explicit
+  // user instruction ("I do not have any option to go back to my previous page").
+  if(S.page&&S.page!==pageKey){
+    if(!S.pageHistory)S.pageHistory=[];
+    S.pageHistory.push(S.page);
+    if(S.pageHistory.length>50)S.pageHistory.shift();
+  }
+  S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;
+  if(!shouldAgeingStayOpenOnNav_(pageKey))S.ageingOpen=false;
+  if(!shouldReportsStayOpenOnNav_(pageKey))S.reportsOpen=false;
+  render();
+}
+// Pops the most recent page off the back-stack and navigates there WITHOUT pushing
+// the current page back onto the stack (that would make the "Back" button
+// immediately able to go "forward" again to where you just were, which isn't how
+// a normal back button behaves — each click should move you one real step back).
+function goBack(){
+  if(!S.pageHistory||!S.pageHistory.length)return;
+  const prevPage=S.pageHistory.pop();
+  S.colMenuOpen=null;S.page=prevPage;S.sidebarOpen=false;
+  if(!shouldAgeingStayOpenOnNav_(prevPage))S.ageingOpen=false;
+  if(!shouldReportsStayOpenOnNav_(prevPage))S.reportsOpen=false;
+  render();
 }
 
 /* ============================= GENERIC GRID ENGINE ============================= */
+// Shared "⟳ Refresh" / "Columns ▾" toolbar button builders — extracted out of
+// renderGrid() so both its own toolbar row AND callers that need to render these
+// controls somewhere else entirely (e.g. the Receivables Ageing Summary page,
+// which folds Refresh/Columns into its kind/mode-tabs row instead of a separate
+// toolbar — see renderAgeing() in Receivables.html) can reuse the exact same
+// markup/behavior instead of duplicating it.
+function renderRefreshBtnHtml_(){
+  return `<button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>`;
+}
+// `overlay`=true renders a smaller variant meant to float in a corner (e.g. pinned
+// to the top-right of a sub-grid's table box) rather than sit inline in a toolbar
+// row — per explicit user instruction to stop the sub-table's own Columns control
+// from taking up a whole extra row of white space above the table.
+function renderColMenuBtnHtml_(tableKey,overlay){
+  const st=tableState(tableKey);
+  const baseKeys=(GRID_DEFS[tableKey]&&GRID_DEFS[tableKey].cols||[]).map(c=>c.key);
+  if(!st.order.length)st.order=baseKeys.slice();
+  const orderedCols=st.order.map(k=>(GRID_DEFS[tableKey].cols||[]).find(c=>c.key===k)).filter(Boolean);
+  return `<div class="dt-colmenu-wrap${overlay?' sub-grid-overlay':''}">
+        <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:${overlay?'3px 9px':'5px 12px'};font-size:${overlay?'10.5px':'11.5px'};">Columns ▾</button>
+        ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide / shift columns</div>${orderedCols.map((c,i)=>`<div class="dt-colmenu-row"><label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> <span>${esc(c.label)}</span></label><div class="col-shift"><button type="button" title="Shift left" data-action="movecol-left" data-table="${tableKey}" data-col="${c.key}" ${i===0?'disabled':''}>←</button><button type="button" title="Shift right" data-action="movecol-right" data-table="${tableKey}" data-col="${c.key}" ${i===orderedCols.length-1?'disabled':''}>→</button></div></div>`).join("")}</div>`:""}
+      </div>`;
+}
+// True only when a column has an applied value/range (an open but empty filter
+// editor is not considered active). Receipt List uses this to make filtered headers
+// visibly different and to enable its Reset Filters control.
+function hasActiveColumnFilter_(st,key){
+  if(String((st.filters&&st.filters[key])??'').trim()!=='')return true;
+  const df=st.dateFilters&&st.dateFilters[key];
+  if(df&&(df.from||df.to))return true;
+  const nf=st.numFilters&&st.numFilters[key];
+  if(!nf)return false;
+  const hasV1=nf.val1!==''&&nf.val1!=null;
+  const hasV2=nf.val2!==''&&nf.val2!=null;
+  return nf.op==='between'?(hasV1||hasV2):hasV1;
+}
+function hasAnyActiveColumnFilter_(st){
+  const keys=new Set([].concat(Object.keys(st.filters||{}),Object.keys(st.dateFilters||{}),Object.keys(st.numFilters||{})));
+  return Array.from(keys).some(key=>hasActiveColumnFilter_(st,key));
+}
+
+// Numeric column filter operators — replaces the old plain min/max-only range with
+// a proper operator picker (Greater than / Greater-or-equal / Less than /
+// Less-or-equal / Equal to / Between), per explicit user instruction ("max overdue
+// days, amount me jo filter hai, that should be greater then less than, = to amount
+// etc wala filter hona chaiye. in all the tables"). Applied to every filterType:
+// 'number-range' column across every grid (see Grids.html/ReportsExtra.html column
+// defs) — Overdue Days, Amount, Pending Amount, Closing Balance, etc.
+const NUM_FILTER_OPS=[
+  {key:'gte',label:'≥ Greater or equal'},
+  {key:'gt',label:'> Greater than'},
+  {key:'lte',label:'≤ Less or equal'},
+  {key:'lt',label:'< Less than'},
+  {key:'eq',label:'= Equal to'},
+  {key:'between',label:'⇔ Between'}
+];
+
+/* ---- Auto-widen a column while its number-range filter is open ----
+ * The header <th> has overflow:hidden (needed for sticky headers to clip cleanly),
+ * so if a column's own width is narrower than what the operator-select + 1-2 value
+ * inputs actually need, the second "Between" input gets visually CLIPPED rather
+ * than wrapped — per explicit user report with a screenshot ("second box is half
+ * visible, i want it to auto adjust the col width, when filter is closed, it should
+ * resume back to whats it was originally"). Rather than reflowing content inside a
+ * fixed-width column, the column's OWN width is temporarily bumped up (same
+ * mechanism as a manual drag-resize — st.widths[key] — so no new rendering path is
+ * needed), and restored to its pre-filter width the moment the filter closes or the
+ * user switches to a different column's filter. Never touches persistGridPrefs_(),
+ * so this temporary widening can never leak into the user's saved column width. */
+const NUM_FILTER_MIN_WIDTH={single:160,between:205};
+function numFilterNeededWidth_(op){ return op==='between'?NUM_FILTER_MIN_WIDTH.between:NUM_FILTER_MIN_WIDTH.single; }
+function applyNumFilterAutoWidth_(st,tableKey,colKey){
+  const def=GRID_DEFS[tableKey];if(!def)return;
+  const col=(def.cols||[]).find(c=>c.key===colKey);
+  if(!col||col.filterType!=='number-range')return;
+  const nf=(st.numFilters&&st.numFilters[colKey])||{op:'gte'};
+  const needed=numFilterNeededWidth_(nf.op||'gte');
+  const currentWidth=st.widths[colKey]||col.width||150;
+  if(currentWidth>=needed)return; // already wide enough — leave the user's own width alone
+  st._autoWidthCol=colKey;st._autoWidthOrig=currentWidth;
+  st.widths[colKey]=needed;
+}
+function revertNumFilterAutoWidth_(st){
+  if(!st._autoWidthCol)return;
+  if(st._autoWidthOrig!==undefined)st.widths[st._autoWidthCol]=st._autoWidthOrig;
+  else delete st.widths[st._autoWidthCol];
+  st._autoWidthCol=null;st._autoWidthOrig=undefined;
+}
+// Single entry point for changing which column's filter editor is open — ALWAYS
+// reverts any previous auto-widened column first, then (if the newly-opened column
+// is itself a number-range filter) applies the auto-width for it. This one function
+// is what every filterOpen-changing action below goes through, so "opened a
+// different filter" / "closed this filter" / "changed Between<->single operator on
+// the same open filter" all correctly restore-then-reapply without needing special-
+// case logic at each call site.
+function setFilterOpen_(st,tableKey,newCol){
+  revertNumFilterAutoWidth_(st);
+  st.filterOpen=newCol;
+  if(newCol)applyNumFilterAutoWidth_(st,tableKey,newCol);
+}
+
+// Previous/Next pagination glyphs — inline SVG chevrons instead of the ‹ › text
+// characters (U+2039/U+203A), per explicit user report ("there is no button to go
+// to previous page"): those specific characters are missing from some system/
+// browser fonts and can render as a blank box, making the button look absent even
+// though it's there and clickable. « » (First/Last) use much more common
+// punctuation glyphs and were rendering fine, so only Prev/Next needed this fix.
+const PAGINATION_ICONS={
+  prev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
+  next:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>'
+};
+
 // GRID_DEFS is populated in Grids.html: { key: {cols:[{key,label,width,pill,num,date}], data:()=>[...] } }
 function renderGrid(tableKey){
-  const def=GRID_DEFS[tableKey];const st=S.dt[tableKey];let rows=def.data().slice();
-  Object.entries(st.filters).forEach(([k,v])=>{if(!v)return;rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(v.toLowerCase()));});
+  const def=GRID_DEFS[tableKey];const st=tableState(tableKey);let rows=def.data().slice();
+  const receiptLayout=tableKey==='receipt';
+  const compact=!!def.compact; // compact grids: no pagination UI, just a scrollable box, sort still works
+  Object.entries(st.filters).forEach(([k,v])=>{
+    const filterValue=String(v??'').trim();
+    if(!filterValue)return;
+    const col=def.cols.find(c=>c.key===k);
+    if(col&&col.filterType==='select'){
+      // Exact-match against one token of a (possibly concatenated) value, e.g. Sales
+      // Report's Category column where one invoice can hold "A & B" — filterValues()
+      // lets a column supply its own list of matchable tokens per row.
+      const getValues=col.filterValues||(r=>[r[k]]);
+      rows=rows.filter(r=>getValues(r).some(x=>String(x||'').toLowerCase()===filterValue.toLowerCase()));
+    } else {
+      rows=rows.filter(r=>String(r[k]??"").toLowerCase().includes(filterValue.toLowerCase()));
+    }
+  });
+  Object.entries(st.dateFilters||{}).forEach(([k,range])=>{
+    if(!range||(!range.from&&!range.to))return;
+    const from=range.from?new Date(range.from+'T00:00:00').getTime():-Infinity;
+    const to=range.to?new Date(range.to+'T23:59:59').getTime():Infinity;
+    rows=rows.filter(r=>{const t=parseDT(r[k]);return t!==null&&t>=from&&t<=to;});
+  });
+  // Operator-based numeric filter (>, ≥, <, ≤, =, Between) — see NUM_FILTER_OPS
+  // above. A row with a non-numeric value in this column never matches any operator
+  // (isNaN guard), same conservative behavior the old min/max range had.
+  Object.entries(st.numFilters||{}).forEach(([k,nf])=>{
+    if(!nf)return;
+    const op=nf.op||'gte';
+    const v1=(nf.val1===''||nf.val1==null)?null:Number(nf.val1);
+    const v2=(nf.val2===''||nf.val2==null)?null:Number(nf.val2);
+    if(op==='between'){ if(v1===null&&v2===null)return; }
+    else if(v1===null)return;
+    rows=rows.filter(r=>{
+      const n=Number(r[k]);
+      if(isNaN(n))return false;
+      switch(op){
+        case 'gt': return n>v1;
+        case 'gte': return n>=v1;
+        case 'lt': return n<v1;
+        case 'lte': return n<=v1;
+        case 'eq': return n===v1;
+        case 'between': return n>=(v1===null?-Infinity:v1)&&n<=(v2===null?Infinity:v2);
+        default: return true;
+      }
+    });
+  });
   if(st.sort){
     const col=def.cols.find(c=>c.key===st.sort);
     const isDateCol=col&&col.date; const isNumCol=col&&col.num;
@@ -274,61 +1101,274 @@ function renderGrid(tableKey){
       if(x<y)return-1*st.dir;if(x>y)return 1*st.dir;return 0;
     });
   }
-  const total=rows.length;const ps=st.pageSize;const tp=Math.max(1,Math.ceil(total/ps));
+  const total=rows.length;const noPagination=!!def.noPagination;const unpaged=compact||noPagination;const ps=unpaged?total||1:st.pageSize;const tp=Math.max(1,Math.ceil(total/ps));
   if(st.page>tp)st.page=tp;if(st.page<1)st.page=1;
-  const si=(st.page-1)*ps;const pageRows=rows.slice(si,si+ps);
-  const visCols=def.cols.filter(c=>!st.hidden.has(c.key));
+  const si=unpaged?0:(st.page-1)*ps;const pageRows=unpaged?rows:rows.slice(si,si+ps);
+  const baseKeys=def.cols.map(c=>c.key);
+  if(!st.order.length)st.order=baseKeys.slice();
+  st.order=st.order.filter(k=>baseKeys.indexOf(k)!==-1).concat(baseKeys.filter(k=>st.order.indexOf(k)===-1));
+  const orderedCols=st.order.map(k=>def.cols.find(c=>c.key===k)).filter(Boolean);
+  const visCols=orderedCols.filter(c=>!st.hidden.has(c.key));
 
-  const snoTh=`<th style="width:56px;min-width:56px;max-width:56px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
-  const hdr=snoTh+visCols.map(c=>{
-    const w=st.widths[c.key]||c.width||150;const si2=st.sort===c.key?(st.dir===1?'▲':'▼'):'';const fo=st.filterOpen===c.key;
+  const dashboardReport=!!def.dashboardReport;
+  const expandable=!!def.expandable;
+  // Sales Report no longer gets its own dedicated "+" expand column — per explicit
+  // user instruction ("sales me alag se plus nahi chiaye column me...small plus
+  // invoice number ke upar he aa jaye") the toggle is now rendered INSIDE whichever
+  // column has `expandToggle:true` (Invoice No, for Sales Report), stacked directly
+  // above that cell's own value. Grids that don't mark any column this way keep the
+  // old separate expand column for backward compatibility.
+  const expandToggleCol=expandable?visCols.find(c=>c.expandToggle):null;
+  const expTh=(expandable&&!expandToggleCol)?`<th style="width:34px;min-width:34px;max-width:34px;"></th>`:'';
+  // S.No column shrunk from 56px -> 38px per explicit user instruction ("serial
+  // number col size reduce karo") — it only ever holds a short number, so it never
+  // needed the same width as a real data column.
+  const snoTh=`<th style="width:38px;min-width:38px;max-width:38px;"><div class="th-inner"><div class="th-row"><span class="th-label" style="cursor:default;">S.No</span></div></div></th>`;
+  let hdr=expTh+snoTh+visCols.map(c=>{
+    const w=st.widths[c.key]||c.width||150;
+    // Sales Report explicitly keeps a bidirectional arrow on every header so users
+    // can see at a glance that every column is sortable. Other grids keep their
+    // existing uncluttered inactive-header appearance.
+    const isActiveSort=st.sort===c.key;
+    const si2=isActiveSort?(st.dir===1?'▲':'▼'):(def.showSortArrows?'↕':'');
+    const sortTitle=isActiveSort?(st.dir===1?'Sorted ascending — click for descending':'Sorted descending — click for ascending'):'Sort ascending';
+    const fo=st.filterOpen===c.key;
     let filterHtml='';
-    if(fo) filterHtml=`<div class="th-filter"><input type="text" placeholder="Filter…" data-action="filter" data-table="${tableKey}" data-col="${c.key}" value="${esc(st.filters[c.key]||'')}"></div>`;
-    return `<th style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
+    // Date/Timestamp columns no longer get the old inline two-<input type=date>
+    // filter row — they now open the shared calendar popup (see openDateRange()
+    // below), per explicit user instruction with a reference screenshot: every
+    // date/timestamp column across every grid must open the SAME calendar UI.
+    if(fo && !c.date){
+      if(c.filterType==='select'){
+        const opts=(c.filterOptions?c.filterOptions(def.data()):[]);
+        const cur=st.filters[c.key]||'';
+        filterHtml=`<div class="th-filter"><select data-action="filter-select" data-table="${tableKey}" data-col="${c.key}"><option value="">All</option>${opts.map(o=>`<option value="${esc(o)}" ${cur===o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+      }else if(c.filterType==='number-range'){
+        // Operator picker (≥/>/≤/</=/Between) + one value input, and a SECOND value
+        // input only when "Between" is selected — replaces the old fixed Min/Max
+        // pair, per explicit user instruction ("that should be greater then less
+        // than, = to amount etc wala filter hona chaiye. in all the tables").
+        const nf=(st.numFilters&&st.numFilters[c.key])||{op:'gte',val1:'',val2:''};
+        const op=nf.op||'gte';
+        const hasVal=(nf.val1!==''&&nf.val1!=null)||(op==='between'&&nf.val2!==''&&nf.val2!=null);
+        filterHtml=`<div class="th-filter th-num-filter">
+          <select class="num-op-select" data-action="num-op" data-table="${tableKey}" data-col="${c.key}">
+            ${NUM_FILTER_OPS.map(o=>`<option value="${o.key}" ${op===o.key?'selected':''}>${esc(o.label)}</option>`).join('')}
+          </select>
+          <input type="number" inputmode="decimal" placeholder="Value" data-action="num-val1" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.val1===''||nf.val1==null?'':nf.val1)}">
+          ${op==='between'?`<span class="date-sep">and</span><input type="number" inputmode="decimal" placeholder="Value" data-action="num-val2" data-table="${tableKey}" data-col="${c.key}" value="${esc(nf.val2===''||nf.val2==null?'':nf.val2)}">`:''}
+          ${hasVal?`<span class="dr-clear" title="Clear filter" data-action="clear-numrange" data-table="${tableKey}" data-col="${c.key}">✕</span>`:''}
+        </div>`;
+      }else filterHtml=`<div class="th-filter"><input type="text" placeholder="Filter…" data-action="filter" data-table="${tableKey}" data-col="${c.key}" value="${esc(st.filters[c.key]||'')}"></div>`;
+    }
+    const searchIcon=c.date?'📅':(c.filterType==='select'||c.filterType==='number-range')?'▾':'⌕';
+    const searchTitle=c.date?'Filter by date range':c.filterType==='select'?'Filter this column':c.filterType==='number-range'?'Filter by value (>, <, =, Between)':'Search this column';
+    const searchAction=c.date?'date-icon':'togglesearch';
+    const dateFilterActiveCls=(c.date&&hasActiveColumnFilter_(st,c.key))?' date-filter-active':'';
+    const headerTotal=c.headerTotal?(()=>{
+      const amounts=rows.map(r=>r[c.key]).filter(v=>v!==null&&v!==undefined&&v!=='');
+      if(!amounts.length)return '—';
+      return fmtINRCompact(amounts.reduce((sum,v)=>sum+(Number(v)||0),0));
+    })():null;
+    const headerLabel=`${esc(c.label)}${c.headerSub?`<span class="th-sub">${esc(c.headerSub)}</span>`:''}${headerTotal!==null?`<span class="th-total">Total: ${esc(headerTotal)}</span>`:''}`;
+    const filterActive=receiptLayout&&hasActiveColumnFilter_(st,c.key);
+    return `<th${filterActive?' class="filter-active"':''} style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
       <div class="th-inner"><div class="th-row">
-        <span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${esc(c.label)}</span>
-        <span class="sort-ic">${si2}</span>
-        <span class="search-ic" data-action="togglesearch" data-table="${tableKey}" data-col="${c.key}">⌕</span>
+        <span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${headerLabel}</span>
+        <span class="sort-ic${def.showSortArrows?' sort-ready':''}" title="${sortTitle}" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${si2}</span>
+        <span class="search-ic${dateFilterActiveCls}" title="${searchTitle}" data-action="${searchAction}" data-table="${tableKey}" data-col="${c.key}">${searchIcon}</span>
       </div>
       ${filterHtml}
       <div class="resize-handle" data-action="resize" data-table="${tableKey}" data-col="${c.key}"></div>
       </div></th>`;
   }).join("");
+  if(dashboardReport){
+    hdr=visCols.map(c=>{
+      const w=st.widths[c.key]||c.width||150;
+      const reportWidth=c.reportWidth?`width:${c.reportWidth};min-width:0;max-width:none;`:`width:${w}px;min-width:${w}px;max-width:${w}px;`;
+      const sortIcon=st.sort===c.key?(st.dir===1?'▲':'▼'):'';
+      return `<th style="${reportWidth}" data-col="${c.key}"><div class="th-inner"><div class="th-row"><span class="th-label" data-action="sort" data-table="${tableKey}" data-col="${c.key}">${esc(c.label)}</span><span class="sort-ic">${sortIcon}</span></div></div></th>`;
+    }).join('');
+  }
 
   function cellVal(r,c){
-    let v=r[c.key]==null?"":r[c.key];
-    if(c.num) return fmtNum(v);
+    const v=r[c.key]==null?"":r[c.key];
+    if(c.currency)return fmtINRCompact(v);
+    if(c.num)return fmtNum(v);
     return v;
   }
-  const bod=pageRows.length?pageRows.map((r,idx)=>`<tr>${(idx===0&&false)?'':''}<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;">${si+idx+1}</td>${visCols.map(c=>{const v=cellVal(r,c);const cls=c.num?'num':'';return`<td class="${cls}">${c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v)}</td>`;}).join("")}</tr>`).join(""):`<tr><td colspan="${visCols.length+1}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
+  // Heatmap columns (c.heatmap:true — Sales Report's Amount) get a background tint
+  // scaled against the min/max of that SAME column across every row CURRENTLY on
+  // screen (this page's pageRows, not the whole dataset — so the shading always
+  // reflects what you're actually looking at) — darkest blue at the highest value,
+  // fading down to near-white at the lowest, per explicit user instruction ("heat
+  // map...sales report...high on dark...then light light"). Text color flips to
+  // white once the tint gets dark enough to need it for contrast.
+  const heatmapCol=visCols.find(c=>c.heatmap);
+  let heatmapMin=0,heatmapMax=0;
+  if(heatmapCol){
+    const vals=pageRows.map(r=>Number(r[heatmapCol.key])||0);
+    heatmapMin=vals.length?Math.min(...vals):0;
+    heatmapMax=vals.length?Math.max(...vals):0;
+  }
+  function heatmapCellStyle_(v){
+    const num=Number(v)||0;
+    const span=heatmapMax-heatmapMin;
+    const t=span>0?(num-heatmapMin)/span:(heatmapMax>0?1:0); // 0..1, share of the range
+    // Blue accent ramp: near-white (low) -> mid accent tint -> dark accent (high).
+    const r0=245,g0=248,b0=255, r1=30,g1=79,b1=196; // #F5F8FF -> #1E4FC4
+    const r=Math.round(r0+(r1-r0)*t),g=Math.round(g0+(g1-g0)*t),b=Math.round(b0+(b1-b0)*t);
+    const textColor=t>0.55?'#fff':'var(--ink)';
+    return `background:rgb(${r},${g},${b});color:${textColor};`;
+  }
+  function dashboardReportCell_(r,c,rawValue,formattedValue){
+    if(c.compactName){
+      const marker=c.reportTone==='category'?`<span class="dreport-color-dot" style="background:${esc(r.color||'var(--accent)')};"></span>`:'';
+      return `<span class="dreport-name" title="${esc(rawValue)}">${marker}<span class="dreport-ellipsis">${esc(formattedValue)}</span></span>`;
+    }
+    if(c.reportTone==='overdue'){
+      const days=Number(rawValue)||0;
+      const tone=days>60?'danger':days>20?'warning':'success';
+      return `<span class="dreport-overdue ${tone}">${esc(formattedValue)}</span>`;
+    }
+    return `<span class="dreport-money ${esc(c.reportTone||'')}">${esc(formattedValue)}</span>`;
+  }
+  const bod=pageRows.length?pageRows.map((r,idx)=>{
+    const rowKey=expandable?String(def.rowKey?def.rowKey(r):si+idx):null;
+    const isOpen=expandable&&st.expanded.has(rowKey);
+    const reportCells=visCols.map(c=>{
+      const raw=r[c.key]==null?"":r[c.key],v=cellVal(r,c),cls=[c.num?'num':'',c.nowrap?'nowrap':'',dashboardReport?'dreport-cell':'',(expandToggleCol===c)?'exp-toggle-host':'',(heatmapCol===c)?'heatmap-cell':''].filter(Boolean).join(' ');
+      const content=dashboardReport?dashboardReportCell_(r,c,raw,v):c.render?c.render(r,v,si+idx):c.pill&&r[c.key]?`<span class="code-pill">${esc(v)}</span>`:esc(v);
+      // Title also placed directly on the <td> (not just the inner span) so the full
+      // party/category name always shows on hover, no matter where over the cell the
+      // cursor lands — this is what fixes the "hover doesn't show full name" report.
+      const cellTitle=(dashboardReport&&c.compactName)?` title="${esc(raw)}"`:'';
+      const cellStyle=(heatmapCol===c)?` style="${heatmapCellStyle_(raw)}"`:'';
+      // The row's own "+"/"−" expand toggle sits directly to the LEFT of this cell's
+      // own value (small chip, same line) instead of stacked above it or taking a
+      // whole separate column — per explicit user instruction ("i want it to be on
+      // left of invoice number, in small size").
+      const toggleHtml=(expandToggleCol===c)?`<span class="exp-toggle-inline${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span>`:'';
+      const cellInner=(expandToggleCol===c)?`<span class="exp-toggle-host-inner">${toggleHtml}<span class="exp-toggle-host-val">${content}</span></span>`:content;
+      return `<td class="${cls}"${cellTitle}${cellStyle}>${cellInner}</td>`;
+    }).join("");
+    const sno=dashboardReport?'':`<td style="text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11.5px;padding-left:4px;padding-right:4px;">${si+idx+1}</td>`;
+    let expCell='',detailRow='';
+    if(expandable&&!expandToggleCol){
+      expCell=`<td class="exp-toggle-cell"><span class="exp-toggle${isOpen?' open':''}" data-action="togglerowexpand" data-table="${tableKey}" data-rowkey="${esc(rowKey)}">${isOpen?'−':'+'}</span></td>`;
+    }
+    if(expandable&&isOpen){
+      const detailHtml=def.renderDetail?def.renderDetail(r):'';
+      const colspan=(expandToggleCol?0:1)+visCols.length+1; // (expand col, only if separate) + data cols + S.No col
+      detailRow=`<tr class="exp-detail-row${isOpen?' exp-parent-open':''}"><td colspan="${colspan}"><div class="exp-detail-wrap">${detailHtml}</div></td></tr>`;
+    }
+    // A row can also be highlighted independently of the expand/collapse feature —
+    // e.g. Follow Up List highlights whichever row's "Mark/Edit Follow Up" popup was
+    // just used, per explicit user instruction ("jab click karen to jo row click ke
+    // hai vo highlight ho jaye"). def.highlightKey(r) supplies the match key; when
+    // several rows share it (same company appearing on multiple bills), ALL of them
+    // get highlighted together, which is the desired behaviour here.
+    const isHighlighted=!!(def.highlightKey&&st.highlightedRowKey&&def.highlightKey(r)===st.highlightedRowKey);
+    const rowCls=[isOpen?'exp-row-open':'',isHighlighted?'row-highlighted':''].filter(Boolean).join(' ');
+    return `<tr${rowCls?` class="${rowCls}"`:''}>${expCell}${sno}${reportCells}</tr>${detailRow}`;
+  }).join(""):`<tr><td colspan="${visCols.length+(dashboardReport?0:1)+(expandable&&!expandToggleCol?1:0)}"><div class="empty-state"><div class="big">No matching rows</div>Filters adjust karke dekho, ya abhi koi data nahi hai.</div></td></tr>`;
   const rf=total===0?0:si+1;const rt=Math.min(si+ps,total);
 
   const mcards=pageRows.length?pageRows.map((r,idx)=>renderMobileCard(tableKey,r,si+idx+1)).join(''):`<div class="empty-state"><div class="big">No matching rows</div></div>`;
 
-  return `
-    <div class="dt-toolbar">
-      <div class="count">${total} of ${def.data().length} rows</div>
-      <button class="btn btn-ghost" data-action="syncnow" style="padding:7px 14px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
-      <div class="dt-colmenu-wrap">
-        <button class="btn btn-ghost" data-action="togglecolmenu" data-table="${tableKey}" style="padding:7px 14px;">Columns ▾</button>
-        ${S.colMenuOpen===tableKey?`<div class="dt-colmenu"><div class="h">Show / hide columns</div>${def.cols.map(c=>`<label><input type="checkbox" data-action="togglecol" data-table="${tableKey}" data-col="${c.key}" ${st.hidden.has(c.key)?'':'checked'}> ${esc(c.label)}</label>`).join("")}</div>`:""}
+  if(compact){
+    // Compact mode (dashboard mini-tables): no pagination footer/toolbar, just a
+    // fixed-height scrollable table. Sorting by clicking a header still works.
+    return `<div class="dt-table-wrap compact${dashboardReport?` dashboard-report dashboard-report-${esc(def.reportType||'')}`:''}"><div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div></div><div class="mcard-list">${mcards}</div>`;
+  }
+
+  // `subGrid` (e.g. the Sales Report expandable detail table) uses a lighter,
+  // compact toolbar. A sub-grid can also opt out of pagination so every invoice
+  // line stays visible together inside its expanded card.
+  const subGrid=!!def.subGrid;
+
+  const colMenuBtnHtml=renderColMenuBtnHtml_(tableKey);
+  const refreshBtnHtml=renderRefreshBtnHtml_();
+  // Reset Filters — available on EVERY grid now (was Receipt List only), per explicit
+  // user instruction ("JHA JHA FILTER HAI ADD RESET FILTER PLS"). Clears every
+  // column's text/date/number filter + closes any open filter editor + returns to
+  // page 1, WITHOUT touching persisted layout prefs (hidden columns, column order,
+  // widths, sort, rows-per-page) — same one-click behavior the Receipt List variant
+  // already had, just generalized to any tableKey instead of hardcoding 'receipt'.
+  const resetFiltersBtnHtml=`<button class="btn btn-ghost${receiptLayout?' receipt-reset-filters':''}" data-action="reset-grid-filters" data-table="${tableKey}" ${hasAnyActiveColumnFilter_(st)?'':'disabled'} title="Clear every column filter on this table" style="padding:5px 12px;font-size:11.5px;">↺ Reset Filters</button>`;
+
+  // Report-switcher grids (Customer List/Receipt List/Collection Analysis/Follow Up
+  // List/Credit Notes — see def.reportTabs, wired in Grids.html) get a different
+  // toolbar layout per explicit user instruction: the "N of N rows" count is dropped
+  // entirely, the tab buttons that let you jump straight to any of the other
+  // Receivables reports come first (left side), and Refresh + Columns move together
+  // to the right corner, after the tabs.
+  const reportTabsHtml=def.reportTabs?def.reportTabs():'';
+  // `noToolbar` grids (e.g. receivablesDashboard, embedded inside the Receivables
+  // Ageing Summary "All Data" tab) render their own Refresh/Columns controls
+  // elsewhere — folded into the ageing kind/mode-tabs row above the KPI cards, per
+  // explicit user instruction ("refresh and column bhi ismi me right me adjust ho
+  // jaaye...ye ek line ka screen bacha lega") — so this grid's own toolbar row is
+  // skipped entirely here to avoid rendering Refresh/Columns twice.
+  // Sub-grids (the Sales Report expanded detail table) no longer get their own
+  // toolbar row at all — that whole row was pure top white space above an already
+  // small/compact card, per explicit user instruction ("sub table has lot of white
+  // space...on top due to column stuff...adjust column somewhere else"). The
+  // Columns ▾ control instead floats as a small overlay pinned to the table's own
+  // top-right corner (see .dt-table-wrap.sub-grid position:relative + .dt-colmenu-wrap.sub-grid-overlay
+  // in CSS.html), so it costs zero extra vertical space.
+  const toolbarHtml=(def.noToolbar||subGrid)?'':(reportTabsHtml?`
+    <div class="dt-toolbar report-switcher-toolbar">
+      ${reportTabsHtml}
+      <div class="report-switcher-right">
+        ${resetFiltersBtnHtml}
+        ${refreshBtnHtml}
+        ${colMenuBtnHtml}
       </div>
-    </div>
-    <div class="dt-table-wrap">
+    </div>`:`
+    <div class="dt-toolbar dt-toolbar-plain">
+      ${def.toolbarExtra?def.toolbarExtra():''}
+      <div class="report-switcher-right">
+        ${resetFiltersBtnHtml}
+        ${refreshBtnHtml}
+        ${colMenuBtnHtml}
+      </div>
+    </div>`);
+  const subGridColMenuOverlay=subGrid?renderColMenuBtnHtml_(tableKey,true):'';
+  const paginationHtml=noPagination?'':`<div class="dt-pagination${subGrid?' sub-grid':''}${receiptLayout?' receipt-pagination':''}">
+      <div class="pp"><label for="pagesize-${tableKey}">Rows per page</label><select id="pagesize-${tableKey}" aria-label="Rows per page" data-action="pagesize" data-table="${tableKey}">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${st.pageSize===n?'selected':''}>${n}</option>`).join("")}</select></div>
+      <div class="page-range" aria-live="polite">${total===0?'0':`${rf}–${rt}`} of ${total}</div>
+      <div class="nav" aria-label="Pagination">
+        <button data-action="pagefirst" data-table="${tableKey}" title="First page" aria-label="First page" ${st.page<=1?'disabled':''}>«</button>
+        <button data-action="pageprev" data-table="${tableKey}" title="Previous page" aria-label="Previous page" ${st.page<=1?'disabled':''}>${PAGINATION_ICONS.prev}</button>
+        <span class="pageinfo" aria-label="Page ${st.page} of ${tp}">${st.page} / ${tp}</span>
+        <button data-action="pagenext" data-table="${tableKey}" title="Next page" aria-label="Next page" ${st.page>=tp?'disabled':''}>${PAGINATION_ICONS.next}</button>
+        <button data-action="pagelast" data-table="${tableKey}" title="Last page" aria-label="Last page" ${st.page>=tp?'disabled':''}>»</button>
+      </div>
+    </div>`;
+
+  // Receipt List is the viewport-fit prototype: toolbar stays above one bordered
+  // flex panel, rows are the only scrolling region, and pagination is part of that
+  // panel at the viewport bottom even when there are zero or only a few rows.
+  if(receiptLayout){
+    return `<section class="receipt-grid-shell">
+      ${toolbarHtml}
+      <div class="dt-table-wrap receipt-grid-table-wrap">
+        <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
+        ${paginationHtml}
+      </div>
+      <div class="mcard-list receipt-mcard-list">${mcards}</div>
+    </section>`;
+  }
+
+  return `
+    ${toolbarHtml}
+    <div class="dt-table-wrap${subGrid?' sub-grid':''}">
+      ${subGridColMenuOverlay}
       <div class="dt-scroll"><table class="dt"><thead><tr>${hdr}</tr></thead><tbody>${bod}</tbody></table></div>
     </div>
     <div class="mcard-list">${mcards}</div>
-    <div class="dt-pagination">
-      <div class="pp">Rows per page: <select data-action="pagesize" data-table="${tableKey}">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${st.pageSize===n?'selected':''}>${n}</option>`).join("")}</select></div>
-      <div>${total===0?'0':`${rf}–${rt}`} of ${total}</div>
-      <div class="nav">
-        <button data-action="pagefirst" data-table="${tableKey}" ${st.page<=1?'disabled':''}>«</button>
-        <button data-action="pageprev" data-table="${tableKey}" ${st.page<=1?'disabled':''}>‹</button>
-        <span class="pageinfo">${st.page} / ${tp}</span>
-        <button data-action="pagenext" data-table="${tableKey}" ${st.page>=tp?'disabled':''}>›</button>
-        <button data-action="pagelast" data-table="${tableKey}" ${st.page>=tp?'disabled':''}>»</button>
-      </div>
-    </div>`;
+    ${paginationHtml}`;
 }
 
 // Mobile card fallback renderer — each grid def can supply mcard(r) for a custom layout;
@@ -357,7 +1397,7 @@ document.addEventListener('input',e=>{
   const el=e.target;
   if(el.getAttribute('data-action')==='filter'){
     const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');
-    S.dt[t].filters[c]=el.value;
+    tableState(t).filters[c]=el.value;
     clearTimeout(filterTimer);
     filterTimer=setTimeout(()=>{S.dt[t].page=1;const pos=el.selectionStart;render();
       const ag=document.querySelector(`input[data-action="filter"][data-table="${t}"][data-col="${c}"]`);
@@ -365,6 +1405,12 @@ document.addEventListener('input',e=>{
     },350);
     return;
   }
+  // Keep the Follow Up popup's own state in sync with what's typed, WITHOUT
+  // calling render() on every keystroke (that would fight with typing in the date
+  // input) — this just protects against losing in-progress text if a background
+  // auto-refresh tick re-renders the page while the popup happens to be open.
+  if(el.id==='followupDateInput'&&S.followUpPopup){S.followUpPopup.date=el.value;return;}
+  if(el.id==='followupRemarksInput'&&S.followUpPopup){S.followUpPopup.remarks=el.value;return;}
   if(el.getAttribute('data-action')==='ledger-search'){
     S.ledger.search=el.value;
     clearTimeout(filterTimer);
@@ -376,8 +1422,31 @@ document.addEventListener('input',e=>{
 });
 
 document.addEventListener('change',e=>{
-  const el=e.target;
-  if(el.getAttribute('data-action')==='pagesize'){const t=el.getAttribute('data-table');S.dt[t].pageSize=parseInt(el.value,10);S.dt[t].page=1;render();}
+  const el=e.target,a=el.getAttribute('data-action');
+  if(a==='pagesize'){const t=el.getAttribute('data-table');tableState(t).pageSize=parseInt(el.value,10);tableState(t).page=1;persistGridPrefs_(t);render();return;}
+  // date-from/date-to (old two-<input type=date> inline header filter) removed —
+  // every date/timestamp column now opens the shared calendar popup instead (see
+  // DateRange.html's data-action="date-icon"/"dr-apply"), which writes into this
+  // exact same tableState(t).dateFilters structure, so renderGrid()'s own filtering
+  // logic above needed no changes.
+  if(a==='filter-select'){
+    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
+    st.filters[c]=el.value;st.page=1;render();return;
+  }
+  if(a==='num-op'){
+    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
+    if(!st.numFilters)st.numFilters={};
+    if(!st.numFilters[c])st.numFilters[c]={op:'gte',val1:'',val2:''};
+    st.numFilters[c].op=el.value;
+    st.page=1;setFilterOpen_(st,t,c);render();return;
+  }
+  if(a==='num-val1'||a==='num-val2'){
+    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);
+    if(!st.numFilters)st.numFilters={};
+    if(!st.numFilters[c])st.numFilters[c]={op:'gte',val1:'',val2:''};
+    st.numFilters[c][a==='num-val1'?'val1':'val2']=el.value===''?'':Number(el.value);
+    st.page=1;setFilterOpen_(st,t,c);render();return;
+  }
 });
 
 document.addEventListener('click',e=>{
@@ -386,28 +1455,115 @@ document.addEventListener('click',e=>{
   if(a==='open-sidebar'){S.sidebarOpen=true;render();return;}
   if(a==='close-sidebar'){S.sidebarOpen=false;render();return;}
   if(a==='toggle-theme'){
+    // Updated in-place (no render()) — a full re-render replaces the whole `.content`
+    // element, which was resetting scroll position to the top on every click of this
+    // topbar-right control. Toggling the dark class + swapping the button's own icon
+    // directly keeps the page exactly where the user was looking. Per explicit user
+    // instruction: "on evry click dashboard move nahi hona chahiye".
     S.darkMode=!S.darkMode;
     document.documentElement.classList.toggle('dark',S.darkMode);
     try{localStorage.setItem('tally_dark_mode',S.darkMode?'true':'false');}catch(e){}
-    render();return;
+    el.textContent=S.darkMode?'☀️':'🌙';
+    return;
+  }
+  if(a==='set-fontsize'){
+    // Increment/decrement on every click; A is an exact reset. Only the table
+    // body rows change size — headers, toolbar, and pagination stay fixed. A CSS
+    // variable drives this so no full re-render is needed (scroll stays stable).
+    const command=el.getAttribute('data-font-command');
+    let size=command==='reset'?100:S.fontSize+(command==='down'?-FONT_SIZE_STEP:FONT_SIZE_STEP);
+    size=Math.min(FONT_SIZE_MAX,Math.max(FONT_SIZE_MIN,size));
+    S.fontSize=size;
+    try{localStorage.setItem('tally_font_size',String(size));}catch(e){}
+    document.documentElement.style.setProperty('--data-scale',String(size/100));
+    const group=el.closest('.topbar-fontsize');
+    if(group)group.querySelectorAll('button').forEach(button=>{
+      const buttonCommand=button.getAttribute('data-font-command');
+      const active=buttonCommand==='reset'?size===100:(buttonCommand==='down'?size<100:size>100);
+      button.classList.toggle('active',active);
+      button.disabled=buttonCommand==='down'?size<=FONT_SIZE_MIN:(buttonCommand==='up'?size>=FONT_SIZE_MAX:false);
+      button.title=buttonCommand==='reset'?'Reset content size to 100%':`${button.textContent} — click repeatedly (${size}%)`;
+    });
+    return;
   }
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
-  if(a==='logout'){S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
-  if(a==='syncnow'){refreshData();return;}
-  if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=S.dt[t];if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;render();return;}
-  if(a==='pagefirst'){S.dt[el.getAttribute('data-table')].page=1;render();return;}
-  if(a==='pageprev'){const st=S.dt[el.getAttribute('data-table')];st.page=Math.max(1,st.page-1);render();return;}
-  if(a==='pagenext'){S.dt[el.getAttribute('data-table')].page++;render();return;}
-  if(a==='pagelast'){S.dt[el.getAttribute('data-table')].page=999999;render();return;}
-  if(a==='togglesearch'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=S.dt[t];
-    st.filterOpen=st.filterOpen===c?null:c;render();if(st.filterOpen){const inp=document.querySelector(`input[data-action="filter"][data-table="${t}"][data-col="${c}"]`);if(inp)inp.focus();}return;}
+  if(a==='logout'){void writeCachedSnapshot_();clearPersistedSessionUserId_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;S.pageHistory=[];render();return;}
+  if(a==='goback'){goBack();return;}
+  if(a==='syncnow'){refreshData();return;} // sidebar "Sync with Tally" — always a full refresh
+  if(a==='refreshpage'){refreshCurrentPage();return;} // per-page "Refresh" button — scoped when PAGE_CHUNK_KEYS has an entry for the current page
+  if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}
+  if(a==='reset-grid-filters'){
+    // Now works for EVERY grid (was Receipt-List-only), per explicit user
+    // instruction ("JHA JHA FILTER HAI ADD RESET FILTER PLS"). Clears transient
+    // column filters only — persisted hidden columns/order/widths/sort/rows-per-page
+    // preference are left untouched, same as before.
+    const t=el.getAttribute('data-table');
+    const st=tableState(t);st.filters={};st.dateFilters={};st.numFilters={};revertNumFilterAutoWidth_(st);st.filterOpen=null;st.page=1;render();
+    return;
+  }
+  if(a==='sort'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.sort===c)st.dir*=-1;else{st.sort=c;st.dir=1;}st.page=1;persistGridPrefs_(t);render();return;}
+  if(a==='togglerowexpand'){
+    // Only ONE row can be expanded at a time per table — clicking a second row's "+"
+    // auto-collapses whichever row was previously open, per explicit user
+    // instruction ("agar me second plus pe click karu to pehele wala auto collapse
+    // ho jaye"). Clicking the currently-open row's own toggle still closes it.
+    const t=el.getAttribute('data-table'),k=el.getAttribute('data-rowkey'),st=tableState(t);
+    if(!st.expanded)st.expanded=new Set();
+    const wasOpen=st.expanded.has(k);
+    st.expanded.clear();
+    if(!wasOpen)st.expanded.add(k);
+    render();return;
+  }
+  if(a==='pagefirst'){tableState(el.getAttribute('data-table')).page=1;render();return;}
+  if(a==='pageprev'){const st=tableState(el.getAttribute('data-table'));st.page=Math.max(1,st.page-1);render();return;}
+  if(a==='pagenext'){tableState(el.getAttribute('data-table')).page++;render();return;}
+  if(a==='pagelast'){tableState(el.getAttribute('data-table')).page=999999;render();return;}
+  if(a==='togglesearch'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);
+    setFilterOpen_(st,t,st.filterOpen===c?null:c);render();if(st.filterOpen){const inp=document.querySelector(`input[data-table="${t}"][data-col="${c}"]`);if(inp)inp.focus();}return;}
+  if(a==='clear-daterange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);delete st.dateFilters[c];st.page=1;setFilterOpen_(st,t,c);render();return;}
+  if(a==='clear-numrange'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t);if(st.numFilters)delete st.numFilters[c];st.page=1;setFilterOpen_(st,t,c);render();return;}
   if(a==='togglecolmenu'){const t=el.getAttribute('data-table');S.colMenuOpen=S.colMenuOpen===t?null:t;render();return;}
-  if(a==='togglecol'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=S.dt[t];if(st.hidden.has(c))st.hidden.delete(c);else st.hidden.add(c);render();S.colMenuOpen=t;return;}
+  if(a==='togglecol'){const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');const st=tableState(t);if(st.hidden.has(c))st.hidden.delete(c);else st.hidden.add(c);persistGridPrefs_(t);render();S.colMenuOpen=t;return;}
+  if(a==='movecol-left'||a==='movecol-right'){
+    const t=el.getAttribute('data-table'),c=el.getAttribute('data-col'),st=tableState(t),i=st.order.indexOf(c),j=a==='movecol-left'?i-1:i+1;
+    if(i>=0&&j>=0&&j<st.order.length){const tmp=st.order[i];st.order[i]=st.order[j];st.order[j]=tmp;}persistGridPrefs_(t);render();S.colMenuOpen=t;return;
+  }
   if(a==='select-party'){selectLedgerParty(el.getAttribute('data-name'));return;}
   if(a==='ledger-print'){window.print();return;}
 });
 document.addEventListener('click',e=>{if(!e.target.closest('.dt-colmenu-wrap')&&S.colMenuOpen){S.colMenuOpen=null;render();}});
+/* Desktop sidebar hover-expand — icon-only rail that expands to full width while
+ * the cursor is over it (see .sidebar/.sidebar-expanded under
+ * @media (min-width:981px) in CSS.html). Driven by S.sidebarHovered + the
+ * .sidebar-expanded class (NOT a plain CSS :hover pseudo-class) specifically so it
+ * survives render() replacing the whole .sidebar DOM node on every click — see the
+ * detailed BUG FIX comment above the CSS rules for the full explanation of why a
+ * plain :hover broke this ("clicked Ageing Summary, it collapsed back").
+ * mouseover/mouseout (not mouseenter/mouseleave) are used because they support
+ * event delegation on `document` — mouseenter/mouseleave don't bubble, so they
+ * can't be attached once here and still fire for a .sidebar that gets replaced by
+ * every render(). Toggling the class directly on the CURRENT .sidebar element
+ * (rather than always calling render()) avoids an unnecessary full re-render on
+ * every single mouse movement in/out of the sidebar. */
+document.addEventListener('mouseover',e=>{
+  if(S.sidebarHovered)return; // already expanded — nothing to do
+  if(!e.target.closest('.sidebar'))return;
+  S.sidebarHovered=true;
+  const sb=document.querySelector('.sidebar');
+  if(sb)sb.classList.add('sidebar-expanded');
+});
+document.addEventListener('mouseout',e=>{
+  if(!S.sidebarHovered)return; // already collapsed — nothing to do
+  if(!e.target.closest('.sidebar'))return; // this mouseout isn't even about the sidebar
+  // relatedTarget is where the cursor is MOVING TO — only collapse once it has
+  // actually left the sidebar entirely (not just moved between two child elements
+  // both still inside it, which also fires mouseout on the inner element).
+  if(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.sidebar'))return;
+  S.sidebarHovered=false;
+  const sb=document.querySelector('.sidebar');
+  if(sb)sb.classList.remove('sidebar-expanded');
+});
 
 document.addEventListener('mousedown',e=>{
   const el=e.target.closest('[data-action="resize"]');if(!el)return;
@@ -421,30 +1577,74 @@ document.addEventListener('mousemove',e=>{
 });
 document.addEventListener('mouseup',e=>{
   if(!resizeCtx)return;
-  S.dt[resizeCtx.t].widths[resizeCtx.c]=Math.max(60,Math.round(resizeCtx.startW+(e.clientX-resizeCtx.startX)));
+  tableState(resizeCtx.t).widths[resizeCtx.c]=Math.max(60,Math.round(resizeCtx.startW+(e.clientX-resizeCtx.startX)));
+  persistGridPrefs_(resizeCtx.t);
   resizeCtx.el.classList.remove('active');resizeCtx=null;render();
 });
 
 /* ============================= RENDER ============================= */
+const PAGE_RENDERERS={};
+function registerPage(key,fn){ PAGE_RENDERERS[key]=fn; }
+
 function render(){
   const app=document.getElementById('app');
   if(!S.ready){app.innerHTML=`<div class="loading-screen"><div class="spinner"></div><div>Loading dashboard…</div></div>`;return;}
-  if(S.loadError){app.innerHTML=`<div class="login-wrap"><div class="login-card"><div class="login-top"><div class="login-eyebrow">Setup</div><h1>Sheet load failed</h1></div><div class="login-body"><div class="login-error">${esc(S.loadError)}</div><div class="login-hint">1) Open via the Apps Script <b>/exec</b> URL. 2) Required tabs: LOGIN PAGE, EXPENSE, PAYABLES, RECEIVABLES, Receipt, PAYMENT, Balance. 3) Deploy access = "Anyone".</div><button class="btn btn-gold btn-block" style="margin-top:14px;" data-action="syncnow">Retry</button></div></div></div>`;return;}
+  if(S.loadError){app.innerHTML=`<div class="login-wrap"><div class="login-card"><div class="login-top"><div class="login-eyebrow">Setup</div><h1>Sheet load failed</h1></div><div class="login-body"><div class="login-error">${esc(S.loadError)}</div><div class="login-hint">1) Open via the Apps Script <b>/exec</b> URL. 2) Required tabs: LOGIN PAGE, EXPENSE, PAYABLES, RECEIVABLES, Receipt, PAYMENT, Balance. 3) Deploy access = "Anyone".</div><button class="btn btn-primary btn-block" style="margin-top:14px;" data-action="syncnow">Retry</button></div></div></div>`;return;}
   if(!S.user){app.innerHTML=renderLogin();return;}
+  if(!S.filters)S.filters=defaultFilterState();
+  // Root rendering replaces `.content`, so retain both the page and table positions.
+  // This keeps the screen still while cached data is replaced by the completed live sync.
+  const content=document.querySelector('.content');
+  const savedContentScroll={left:content?content.scrollLeft:0,top:content?content.scrollTop:0};
   const dtScroll=document.querySelector('.dt-scroll');
-  const savedDtScrollLeft=dtScroll?dtScroll.scrollLeft:0;
-  const savedDtScrollTop=dtScroll?dtScroll.scrollTop:0;
+  const savedDtScroll={left:dtScroll?dtScroll.scrollLeft:0,top:dtScroll?dtScroll.scrollTop:0};
+  // The sidebar's own nav list (originally selected via the CSS class `.nav`, which
+  // has its own overflow-y:auto scrollbar — see CSS.html) was NOT being preserved
+  // across render(), even though `.content` and `.dt-scroll` already were. Every
+  // click anywhere that calls render() rebuilds the whole sidebar from scratch,
+  // which reset this scroll position to the top.
+  // FOLLOW-UP FIX: selecting by the CSS class `.nav` was ambiguous — every grid's
+  // pagination footer ALSO uses a `<div class="nav">` for its Prev/Next controls
+  // (see .dt-pagination .nav in CSS.html), so document.querySelector('.nav') could
+  // silently grab the wrong element depending on what's rendered in `.content` that
+  // cycle. Fixed for real by giving the sidebar's nav list its own unique id
+  // (#sidebarNav, set in the markup below) and selecting by that instead, so this
+  // can never be confused with a pagination control again. Per explicit user
+  // instruction ("sidebar menu is still moving up, when I am clicking on anything").
+  const navScroll=document.getElementById('sidebarNav');
+  const savedNavScroll={left:navScroll?navScroll.scrollLeft:0,top:navScroll?navScroll.scrollTop:0};
   let inner="";
-  if(S.syncing && !S.expense.length && !S.payables.length && !S.receivables.length && !S.balanceParties.length){
+  if(S.syncing && !hasAnyData()){
     inner=`<div class="empty-state" style="padding-top:80px;"><div class="spinner" style="margin:0 auto 16px;"></div><div class="big">Loading data…</div><div style="margin-top:6px;">Aapka data background mein load ho raha hai, kuch seconds lagenge.</div></div>`;
-  } else if(S.page==='dashboard')inner=renderDashboard();
-  else if(S.page==='overdue')inner=renderOverdue();
-  else if(S.page==='ledger')inner=renderLedgerPage();
-  else if(GRID_DEFS[S.page])inner=renderGrid(S.page);
-  else inner=`<div class="empty-state"><div class="big">Select a page</div>Left mein menu se apna page choose karein.</div>`;
+  } else if(PAGE_RENDERERS[S.page]){
+    inner=PAGE_RENDERERS[S.page]();
+  } else if(S.page==='ledger'){
+    inner=renderLedgerPage();
+  } else if(GRID_DEFS[S.page]){
+    inner=renderGrid(S.page);
+  } else {
+    inner=`<div class="empty-state"><div class="big">Select a page</div>Left mein menu se apna page choose karein.</div>`;
+  }
+  const issues=shouldShowDiagBanner()?diagnosticIssues():[];
+  if(issues.length){
+    inner=`<div class="login-error" style="margin-bottom:14px;position:relative;padding-right:32px;line-height:1.6;">
+      <div style="font-weight:700;margin-bottom:6px;">⚠ Data Diagnostics — no data came back from your Google Sheet:</div>
+      <ul style="margin:0 0 0 18px;padding:0;">${issues.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>
+      <div style="margin-top:8px;font-size:11px;opacity:.85;">Fix the sheet, then click "Sync with Tally" in the sidebar — no need to redeploy the app.</div>
+      <span data-action="dismiss-diag" style="position:absolute;top:10px;right:12px;cursor:pointer;font-weight:700;">✕</span>
+    </div>${inner}`;
+  }
   app.innerHTML=renderShell(inner);
-  const dtScroll2=document.querySelector('.dt-scroll');
-  if(dtScroll2){dtScroll2.scrollLeft=savedDtScrollLeft;dtScroll2.scrollTop=savedDtScrollTop;}
+  const restoreScroll=()=>{
+    const content2=document.querySelector('.content');
+    if(content2){content2.scrollLeft=savedContentScroll.left;content2.scrollTop=savedContentScroll.top;}
+    const dtScroll2=document.querySelector('.dt-scroll');
+    if(dtScroll2){dtScroll2.scrollLeft=savedDtScroll.left;dtScroll2.scrollTop=savedDtScroll.top;}
+    const navScroll2=document.getElementById('sidebarNav');
+    if(navScroll2){navScroll2.scrollLeft=savedNavScroll.left;navScroll2.scrollTop=savedNavScroll.top;}
+  };
+  restoreScroll();
+  setTimeout(()=>{paintCharts();if(S.page==='mapView'&&typeof paintIndiaMap==='function')paintIndiaMap();restoreScroll();},0);
 }
 
 loadAll();

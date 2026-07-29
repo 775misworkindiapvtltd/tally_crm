@@ -1,0 +1,218 @@
+<script>
+/* ============================= CALENDAR DATE-RANGE FILTER =============================
+ * Shared popup calendar used by EVERY date/timestamp column across EVERY grid (Sales
+ * Report, Receivables/Payables/Expense/Receipt/Payment lists, Sub-tables, etc — any
+ * column with {date:true} in its GRID_DEFS column config). Per explicit user
+ * instruction with a reference screenshot: presets on the left, two consecutive
+ * month calendars on the right (prev arrow only on the LEFT calendar's outer edge,
+ * next arrow only on the RIGHT calendar's outer edge), a footer showing the chosen
+ * range as text plus Cancel/Apply.
+ *
+ * The popup is a SINGLE DOM node appended directly to <body> (NOT part of any
+ * table's innerHTML), so it always renders position:fixed above every other panel —
+ * .dt-scroll's overflow:auto/hidden and the sticky <thead> can never clip it, and it
+ * survives every render() call (which only ever replaces #app, a different element).
+ * Applying/cancelling writes into the SAME tableState(table).dateFilters[col]
+ * structure renderGrid() already filters by — so no changes to the filtering logic
+ * itself were needed, only to how the filter is captured from the user.
+ */
+let drState={open:false,table:null,col:null,anchorEl:null,from:null,to:null,preset:null,baseYear:0,baseMonth:0};
+const DR_MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DR_WEEKDAY_LABELS=['Mo','Tu','We','Th','Fr','Sa','Su'];
+const DR_PRESETS=[
+  {key:'today',label:'Today'},{key:'yesterday',label:'Yesterday'},
+  {key:'thisWeek',label:'This Week'},{key:'lastWeek',label:'Last Week'},
+  {key:'last7',label:'Last 7 Days'},{key:'last30',label:'Last 30 Days'},
+  {key:'thisMonth',label:'This Month'},{key:'lastMonth',label:'Last Month'},
+  {key:'all',label:'All'}
+];
+
+function drPresetRange_(key){
+  const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const iso=toISO;
+  if(key==='today')return{from:iso(today),to:iso(today)};
+  if(key==='yesterday'){const y=new Date(today);y.setDate(y.getDate()-1);return{from:iso(y),to:iso(y)};}
+  if(key==='thisWeek'){const dow=(today.getDay()+6)%7;const mon=new Date(today);mon.setDate(mon.getDate()-dow);return{from:iso(mon),to:iso(today)};}
+  if(key==='lastWeek'){
+    const dow=(today.getDay()+6)%7;const thisMon=new Date(today);thisMon.setDate(thisMon.getDate()-dow);
+    const lastSun=new Date(thisMon);lastSun.setDate(lastSun.getDate()-1);
+    const lastMon=new Date(lastSun);lastMon.setDate(lastMon.getDate()-6);
+    return{from:iso(lastMon),to:iso(lastSun)};
+  }
+  if(key==='last7'){const f=new Date(today);f.setDate(f.getDate()-6);return{from:iso(f),to:iso(today)};}
+  if(key==='last30'){const f=new Date(today);f.setDate(f.getDate()-29);return{from:iso(f),to:iso(today)};}
+  if(key==='thisMonth'){const f=new Date(today.getFullYear(),today.getMonth(),1);return{from:iso(f),to:iso(today)};}
+  if(key==='lastMonth'){
+    const f=new Date(today.getFullYear(),today.getMonth()-1,1);
+    const l=new Date(today.getFullYear(),today.getMonth(),0);
+    return{from:iso(f),to:iso(l)};
+  }
+  return{from:'',to:''}; // 'all' — clears the filter entirely
+}
+function drDetectPreset_(from,to){
+  if(!from&&!to)return'all';
+  for(const p of DR_PRESETS){
+    if(p.key==='all')continue;
+    const r=drPresetRange_(p.key);
+    if(r.from===from&&r.to===to)return p.key;
+  }
+  return null;
+}
+function buildCalMonth_(year,month){
+  const first=new Date(year,month,1);
+  const offset=(first.getDay()+6)%7; // days since Monday
+  const start=new Date(year,month,1-offset);
+  const todayIso=toISO(new Date());
+  const cells=[];
+  for(let i=0;i<42;i++){
+    const d=new Date(start);d.setDate(start.getDate()+i);
+    cells.push({iso:toISO(d),day:d.getDate(),inMonth:d.getMonth()===month,isToday:toISO(d)===todayIso});
+  }
+  return{year,month,cells};
+}
+function drDayClass_(iso,inMonth){
+  let cls='dr-day';
+  if(!inMonth)cls+=' dr-day-outside';
+  const isStart=drState.from&&iso===drState.from;
+  const isEnd=drState.to&&iso===drState.to;
+  const inRange=drState.from&&drState.to&&iso>drState.from&&iso<drState.to;
+  if(isStart||isEnd)cls+=' dr-day-edge';
+  else if(inRange)cls+=' dr-day-inrange';
+  return cls;
+}
+
+let drPopupEl=null;
+function ensureDrPopupEl_(){
+  if(drPopupEl)return drPopupEl;
+  drPopupEl=document.createElement('div');
+  drPopupEl.id='drPopupRoot';
+  document.body.appendChild(drPopupEl);
+  return drPopupEl;
+}
+function positionDrPopup_(anchorEl){
+  const el=ensureDrPopupEl_(),margin=8;
+  if(!anchorEl||typeof anchorEl.getBoundingClientRect!=='function')return;
+  const rect=anchorEl.getBoundingClientRect();
+  el.style.visibility='hidden';el.style.display='block';
+  const pw=el.offsetWidth,ph=el.offsetHeight;
+  let left=rect.left,top=rect.bottom+margin;
+  if(left+pw>window.innerWidth-margin)left=window.innerWidth-pw-margin;
+  if(left<margin)left=margin;
+  if(top+ph>window.innerHeight-margin){
+    const above=rect.top-ph-margin;
+    top=above>margin?above:margin;
+  }
+  el.style.left=left+'px';el.style.top=top+'px';el.style.visibility='visible';
+}
+function renderDrPopup_(){
+  const el=ensureDrPopupEl_();
+  if(!drState.open){el.style.display='none';return;}
+  const leftCal=buildCalMonth_(drState.baseYear,drState.baseMonth);
+  const nextD=new Date(drState.baseYear,drState.baseMonth+1,1);
+  const rightCal=buildCalMonth_(nextD.getFullYear(),nextD.getMonth());
+  const presetsHtml=DR_PRESETS.map(p=>`<button type="button" class="dr-preset${drState.preset===p.key?' active':''}" data-action="dr-preset" data-preset="${p.key}">${esc(p.label)}</button>`).join('');
+  // Same fix/reasoning as the main grid pagination's Prev/Next buttons (see
+  // PAGINATION_ICONS in Common.html): the ‹ › text glyphs can render as a blank box
+  // on some fonts — switched to the same reliable inline SVG chevrons.
+  const calHtml=(cal,side)=>`<div class="dr-cal">
+    <div class="dr-cal-head">
+      ${side==='left'?`<button type="button" class="dr-nav" data-action="dr-prev" title="Previous month">${PAGINATION_ICONS.prev}</button>`:'<span class="dr-nav-spacer"></span>'}
+      <span class="dr-cal-title">${esc(DR_MONTH_NAMES[cal.month])} ${cal.year}</span>
+      ${side==='right'?`<button type="button" class="dr-nav" data-action="dr-next" title="Next month">${PAGINATION_ICONS.next}</button>`:'<span class="dr-nav-spacer"></span>'}
+    </div>
+    <div class="dr-weekdays">${DR_WEEKDAY_LABELS.map(w=>`<span>${w}</span>`).join('')}</div>
+    <div class="dr-days">${cal.cells.map(c=>`<span class="${drDayClass_(c.iso,c.inMonth)}${c.isToday?' dr-day-today':''}" data-action="dr-day" data-iso="${c.iso}">${c.day}</span>`).join('')}</div>
+  </div>`;
+  const rangeText=drState.from?(fmtDDMMMYYYY(fromISO(drState.from))+' – '+(drState.to?fmtDDMMMYYYY(fromISO(drState.to)):'Select end date')):'Select a date range';
+  el.innerHTML=`<div class="dr-popup-inner">
+    <div class="dr-body">
+      <div class="dr-presets">${presetsHtml}</div>
+      <div class="dr-cals">${calHtml(leftCal,'left')}${calHtml(rightCal,'right')}</div>
+    </div>
+    <div class="dr-footer">
+      <span class="dr-range-text">${esc(rangeText)}</span>
+      <div class="dr-footer-actions">
+        <button type="button" class="btn btn-ghost" data-action="dr-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" data-action="dr-apply">Apply</button>
+      </div>
+    </div>
+  </div>`;
+  el.style.display='block';
+  positionDrPopup_(drState.anchorEl);
+}
+function openDateRange(table,col,anchorEl){
+  const st=tableState(table);
+  const existing=(st.dateFilters&&st.dateFilters[col])||{from:'',to:''};
+  drState.open=true;drState.table=table;drState.col=col;drState.anchorEl=anchorEl;
+  drState.from=existing.from||null;drState.to=existing.to||null;
+  drState.preset=drDetectPreset_(drState.from,drState.to);
+  const baseDate=drState.from?fromISO(drState.from):new Date();
+  drState.baseYear=baseDate.getFullYear();drState.baseMonth=baseDate.getMonth();
+  renderDrPopup_();
+}
+function closeDrPopup_(){
+  drState.open=false;drState.table=null;drState.col=null;drState.anchorEl=null;
+  const el=ensureDrPopupEl_();el.style.display='none';
+}
+function drSelectPreset(key){
+  const r=drPresetRange_(key);
+  drState.from=r.from||null;drState.to=r.to||null;drState.preset=key;
+  const baseDate=drState.from?fromISO(drState.from):new Date();
+  drState.baseYear=baseDate.getFullYear();drState.baseMonth=baseDate.getMonth();
+  renderDrPopup_();
+}
+function drSelectDay(iso){
+  // First click of a fresh selection (or re-clicking after a complete range already
+  // existed) starts a new range; the second click completes it — swapping start/end
+  // if the user clicked backwards. Any manual day click clears the preset highlight.
+  if(!drState.from||drState.to){drState.from=iso;drState.to=null;}
+  else if(iso<drState.from){drState.to=drState.from;drState.from=iso;}
+  else drState.to=iso;
+  drState.preset=drDetectPreset_(drState.from,drState.to);
+  renderDrPopup_();
+}
+function drShiftMonth(delta){
+  const d=new Date(drState.baseYear,drState.baseMonth+delta,1);
+  drState.baseYear=d.getFullYear();drState.baseMonth=d.getMonth();
+  renderDrPopup_();
+}
+function applyDateRange(){
+  if(!drState.table)return;
+  const st=tableState(drState.table);
+  if(!st.dateFilters)st.dateFilters={};
+  if(drState.from||drState.to)st.dateFilters[drState.col]={from:drState.from||drState.to,to:drState.to||drState.from};
+  else delete st.dateFilters[drState.col];
+  st.page=1;
+  closeDrPopup_();
+  render();
+}
+function cancelDateRange(){closeDrPopup_();}
+
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='date-icon'){
+      const t=el.getAttribute('data-table'),c=el.getAttribute('data-col');
+      if(drState.open&&drState.table===t&&drState.col===c)closeDrPopup_();
+      else openDateRange(t,c,el);
+      return;
+    }
+    if(a==='dr-preset'){drSelectPreset(el.getAttribute('data-preset'));return;}
+    if(a==='dr-day'){drSelectDay(el.getAttribute('data-iso'));return;}
+    if(a==='dr-prev'){drShiftMonth(-1);return;}
+    if(a==='dr-next'){drShiftMonth(1);return;}
+    if(a==='dr-apply'){applyDateRange();return;}
+    if(a==='dr-cancel'){cancelDateRange();return;}
+  }
+  if(drState.open){
+    const insidePopup=e.target.closest('#drPopupRoot');
+    const isTrigger=e.target.closest('[data-action="date-icon"]');
+    if(!insidePopup&&!isTrigger)closeDrPopup_();
+  }
+});
+// Scrolling any table/page area or resizing the window while the popup is open would
+// otherwise leave a stale floating popup disconnected from its trigger icon.
+document.addEventListener('scroll',()=>{if(drState.open)closeDrPopup_();},true);
+window.addEventListener('resize',()=>{if(drState.open)closeDrPopup_();});
+</script>

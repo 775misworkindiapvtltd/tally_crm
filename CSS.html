@@ -1,51 +1,134 @@
 <style>
 :root{
-  --sidebar:#0C1017;--sidebar-hover:#151B24;--sidebar-active:#1A2130;--sidebar-line:#1E2531;
-  --bg:#F2F1ED;--surface:#FFFFFF;--ink:#1A1712;--ink-secondary:#48443D;--muted:#8A8479;
-  --line:#E2DED6;--line-light:#EEECE6;--accent:#B4862B;--accent-dark:#8C6720;--accent-tint:#F6ECD6;--accent-tint2:#FDF8EE;
-  --danger:#C4291C;--danger-tint:#FBEAE9;--success:#2E7D46;--success-tint:#E5F5EA;
-  --recv:#2563EB;--recv-tint:#EFF6FF;--pay:#B4862B;--pay-tint:#F6ECD6;
+  --sidebar:#111729;--sidebar-hover:#1A2238;--sidebar-active:#202B47;--sidebar-line:#232C42;--sidebar-sub:#7C87A3;
+  --bg:#F3F5FA;--surface:#FFFFFF;--ink:#151A2C;--ink-secondary:#4B5570;--muted:#8992AA;
+  --line:#E7EAF2;--line-light:#EEF0F7;
+  --blue:#2E6BF2;--blue-tint:#E9F0FE;--blue-dark:#1E4FC4;
+  --green:#16A34A;--green-tint:#E7F7ED;
+  --red:#E23A3A;--red-tint:#FCEAEA;
+  --orange:#F08A1D;--orange-tint:#FDF0DE;
+  --purple:#7C5CFC;--purple-tint:#EFEAFF;
+  --teal:#0DA1A0;--teal-tint:#E2F6F5;
+  --indigo:#4C5FE0;--indigo-tint:#EAEDFC;
+  --gold:#B4862B;--gold-tint:#F6ECD6;
+  --recv:#2E6BF2;--recv-tint:#E9F0FE;--pay:#F08A1D;--pay-tint:#FDF0DE;
+  --danger:#E23A3A;--danger-tint:#FCEAEA;--success:#16A34A;--success-tint:#E7F7ED;
+  --data-scale:1;
+  /* ============ DYNAMIC APPEARANCE ENGINE — PRIMARY COLOR TOKENS ============
+     Every accent color scheme (see [data-theme="..."] blocks near the end of this
+     file, and COLOR_SCHEMES in Common.html) sets ONLY these 5 raw tokens. Every
+     other variable that used to be a hardcoded blue (--accent/--accent-dark/
+     --accent-tint/--accent-tint2, plus the .btn-primary gradient, .avatar, and
+     .brand-icon gradient below) is now DERIVED from these, so switching a color
+     scheme recolors the entire app without touching a single component rule. */
+  --color-primary:#2E6BF2;--color-primary-hover:#1E4FC4;--color-primary-light:#E9F0FE;
+  --color-primary-glow:rgba(46,107,242,.35);--color-primary-soft:#F5F8FF;
+  --accent:var(--color-primary);--accent-dark:var(--color-primary-hover);
+  --accent-tint:var(--color-primary-light);--accent-tint2:var(--color-primary-soft);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
+/* Fixes "swiping left/right with two fingers logs me out": on trackpads/touchpads,
+   a horizontal two-finger swipe over page content that has no horizontal scroll of
+   its own is interpreted by the browser as a back/forward navigation gesture. That
+   reloads the whole single-page app, wiping the in-memory login state and dropping
+   the user back to the login screen — it was never really "logging out", the whole
+   page was reloading. overscroll-behavior-x:none tells the browser not to trigger
+   that navigation gesture from within our own scroll containers (a matching
+   overscroll-behavior-x is also set on .content/.dt-scroll below, since the gesture
+   is triggered from whichever element the swipe actually happens over). Session
+   persistence (see persistSessionUserId_/loadAll() in Common.html) is the second,
+   belt-and-suspenders half of the fix, in case any browser reload still slips through.*/
+html,body{overscroll-behavior-x:none;}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:13px;transition:background .3s,color .3s;overflow:hidden;}
 html.dark{
-  --bg:#0C1017;--surface:#151B24;--ink:#E8E0D0;--ink-secondary:#A8A297;--muted:#6B6560;
-  --line:#2A2F38;--line-light:#1E2531;--accent:#C6952F;--accent-dark:#E8B84A;--accent-tint:#2A2518;--accent-tint2:#1A1710;
-  --danger:#EF5350;--danger-tint:#2A1515;--success:#4CAF50;--success-tint:#152A18;
-  --recv:#60A5FA;--recv-tint:#1A2540;--pay:#C6952F;--pay-tint:#2A2518;
+  --sidebar:#0A0E1A;--sidebar-hover:#141A2C;--sidebar-active:#1B2338;--sidebar-line:#1C2336;
+  --bg:#0B0F1A;--surface:#131A2B;--ink:#E7EAF4;--ink-secondary:#A6AEC4;--muted:#6D7690;
+  --line:#212A42;--line-light:#1A2236;
+  --blue-tint:#16233F;--green-tint:#132A1F;--red-tint:#2C1717;--orange-tint:#2C2013;--purple-tint:#211C3A;--teal-tint:#112826;--indigo-tint:#1B2040;
+  --recv-tint:#16233F;--pay-tint:#2C2013;--danger-tint:#2C1717;--success-tint:#132A1F;
+  --gold-tint:#2A2518;
+  /* Dark mode uses each color scheme's own --dark-* variant (brighter/more
+     saturated so it stays legible on a near-black surface) instead of the light
+     mode primary — see [data-theme] blocks below, each of which also sets
+     --color-primary-dark/-hover-dark/-light-dark/-soft-dark. Falls back to the
+     original hand-tuned blue if a scheme hasn't defined dark variants yet. */
+  --accent:var(--color-primary-dark,#4C82FF);--accent-dark:var(--color-primary-hover-dark,#7CA3FF);
+  --accent-tint:var(--color-primary-light-dark,#16233F);--accent-tint2:var(--color-primary-soft-dark,#141C30);
 }
-html.dark .login-wrap{background:linear-gradient(145deg,#050810 0%,#0C1017 50%,#151B24 100%);}
+html.dark .login-wrap{background:linear-gradient(145deg,#05070C 0%,#0A0E1A 50%,#111729 100%);}
 html.dark .login-card{background:var(--surface);box-shadow:0 40px 80px -30px rgba(0,0,0,.8);}
-html.dark .field input{background:#0C1017;border-color:var(--line);color:var(--ink);}
-html.dark .field input:focus{background:#0A0E14;border-color:var(--accent);}
+html.dark .field input,html.dark .fbar select,html.dark .fbar input{background:#0B0F1A;border-color:var(--line);color:var(--ink);}
+html.dark .field input:focus{background:#080B12;border-color:var(--accent);}
 html.dark .topbar{background:var(--surface);border-color:var(--line);}
 html.dark .content{background:var(--bg);}
-html.dark .sidebar{border-color:var(--line);}
-html.dark .card{background:var(--surface);border-color:var(--line);}
-html.dark .dt-table-wrap,html.dark .rpt-table-wrap,html.dark .ledger-wrap{background:var(--surface);border-color:var(--line);}
+html.dark .card,html.dark .panel,html.dark .fbar,html.dark .dt-table-wrap,html.dark .ledger-wrap,html.dark .ledger-party-list{background:var(--surface);border-color:var(--line);}
 html.dark table.dt tbody td,html.dark table.ledger-table tbody td{border-color:var(--line-light);color:var(--ink);}
-html.dark table.dt tbody tr:nth-child(even),html.dark table.ledger-table tbody tr:nth-child(even){background:#0F141B;}
+html.dark table.dt tbody tr:nth-child(even),html.dark table.ledger-table tbody tr:nth-child(even){background:#101627;}
 html.dark table.dt tbody tr:hover{background:var(--accent-tint);}
 html.dark .dt-pagination{background:var(--surface);border-color:var(--line);color:var(--ink-secondary);}
-html.dark .dt-pagination select{background:#1A1F28;border-color:#2A2F38;color:var(--ink);}
-html.dark .dt-pagination .nav button{background:#1A1F28;border-color:#2A2F38;color:var(--ink-secondary);}
+html.dark .dt-pagination select{background:#141B2C;border-color:#232C42;color:var(--ink);}
+html.dark .dt-pagination .nav button{background:#141B2C;border-color:#232C42;color:var(--ink-secondary);}
 html.dark .btn-ghost{border-color:var(--line);color:var(--ink-secondary);}
-html.dark .btn-ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-tint);}
+html.dark .btn-ghost:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint);}
 html.dark .topbar-controls{background:var(--surface);border-color:var(--line);}
 html.dark .topbar-controls button{color:var(--ink-secondary);}
-html.dark .modal-card{background:var(--surface);}
-html.dark .ledger-header,html.dark .ledger-party-list{background:var(--surface);border-color:var(--line);}
-html.dark .party-row:hover{background:var(--accent-tint);}
-html.dark .party-row.active{background:var(--accent-tint);}
+html.dark .party-row:hover,html.dark .party-row.active{background:var(--accent-tint);}
 html.dark .bottom-nav{background:var(--sidebar);border-color:var(--sidebar-line);}
+html.dark .qa-btn{background:var(--surface);border-color:var(--line);}
+html.dark .mini-table tbody tr:nth-child(even){background:#101627;}
+
+/* ============ DYNAMIC APPEARANCE ENGINE — 37 ACCENT COLOR SCHEMES ============
+ * Each [data-theme] block sets ONLY the 5 primary tokens (light-mode) plus 4 dark-
+ * mode variants. Every component in the app already reads --accent/--accent-dark/
+ * --accent-tint/--accent-tint2 (derived above), so applying data-theme on <html>
+ * recolors buttons, links, active nav, badges, focus rings, table headers, and
+ * charts app-wide with zero per-component changes. Generated with a consistent
+ * white-blend tint algorithm so every scheme reads equally polished. */
+[data-theme="violet-night"]{--color-primary:#7C3AED;--color-primary-hover:#9333EA;--color-primary-light:#EFE7FD;--color-primary-soft:#F8F5FE;--color-primary-glow:rgba(124,58,237,.35);--color-primary-dark:#945DF0;--color-primary-hover-dark:#AA7FF3;--color-primary-light-dark:#1F1640;--color-primary-soft-dark:#181333;}
+[data-theme="cobalt-blue"]{--color-primary:#2563EB;--color-primary-hover:#3B82F6;--color-primary-light:#E5ECFD;--color-primary-soft:#F4F7FE;--color-primary-glow:rgba(37,99,235,.35);--color-primary-dark:#4C7FEF;--color-primary-hover-dark:#719AF2;--color-primary-light-dark:#0F1D40;--color-primary-soft-dark:#0D1833;}
+[data-theme="emerald-dark"]{--color-primary:#059669;--color-primary-hover:#10B981;--color-primary-light:#E1F2ED;--color-primary-soft:#F3FAF8;--color-primary-glow:rgba(5,150,105,.35);--color-primary-dark:#32A984;--color-primary-hover-dark:#5DBB9E;--color-primary-light-dark:#092628;--color-primary-soft-dark:#091E23;}
+[data-theme="rose-quartz"]{--color-primary:#F43F5E;--color-primary-hover:#FB7185;--color-primary-light:#FEE8EC;--color-primary-soft:#FEF5F7;--color-primary-glow:rgba(244,63,94,.35);--color-primary-dark:#F6627B;--color-primary-hover-dark:#F88296;--color-primary-light-dark:#341726;--color-primary-soft-dark:#261422;}
+[data-theme="amber-forge"]{--color-primary:#F59E0B;--color-primary-hover:#D97706;--color-primary-light:#FEF3E2;--color-primary-soft:#FFFAF3;--color-primary-glow:rgba(245,158,11,.35);--color-primary-dark:#F7AF37;--color-primary-hover-dark:#F9C060;--color-primary-light-dark:#342817;--color-primary-soft-dark:#261F18;}
+[data-theme="crimson-edge"]{--color-primary:#DC2626;--color-primary-hover:#EF4444;--color-primary-light:#FBE5E5;--color-primary-soft:#FDF4F4;--color-primary-glow:rgba(220,38,38,.35);--color-primary-dark:#E24D4D;--color-primary-hover-dark:#E87272;--color-primary-light-dark:#30121C;--color-primary-soft-dark:#23111B;}
+[data-theme="slate-frost"]{--color-primary:#64748B;--color-primary-hover:#475569;--color-primary-light:#ECEEF1;--color-primary-soft:#F7F8F9;--color-primary-glow:rgba(100,116,139,.35);--color-primary-dark:#808DA0;--color-primary-hover-dark:#9AA5B4;--color-primary-light-dark:#1A202E;--color-primary-soft-dark:#151A28;}
+[data-theme="lime-surge"]{--color-primary:#84CC16;--color-primary-hover:#65A30D;--color-primary-light:#F0F9E3;--color-primary-soft:#F9FCF3;--color-primary-glow:rgba(132,204,22,.35);--color-primary-dark:#9AD540;--color-primary-hover-dark:#AFDE68;--color-primary-light-dark:#203019;--color-primary-soft-dark:#19251A;}
+[data-theme="indigo-wave"]{--color-primary:#6366F1;--color-primary-hover:#4F46E5;--color-primary-light:#ECEDFD;--color-primary-soft:#F7F7FE;--color-primary-glow:rgba(99,102,241,.35);--color-primary-dark:#7F82F4;--color-primary-hover-dark:#9A9CF6;--color-primary-light-dark:#1A1E41;--color-primary-soft-dark:#151934;}
+[data-theme="sunset-orange"]{--color-primary:#EA580C;--color-primary-hover:#F97316;--color-primary-light:#FCEBE2;--color-primary-soft:#FEF7F3;--color-primary-glow:rgba(234,88,12,.35);--color-primary-dark:#EE7638;--color-primary-hover-dark:#F19261;--color-primary-light-dark:#321B17;--color-primary-soft-dark:#251718;}
+[data-theme="orange"]{--color-primary:#FF6B00;--color-primary-hover:#FF8533;--color-primary-light:#FFEDE0;--color-primary-soft:#FFF8F2;--color-primary-glow:rgba(255,107,0,.35);--color-primary-dark:#FF862E;--color-primary-hover-dark:#FF9F59;--color-primary-light-dark:#361F15;--color-primary-soft-dark:#271917;}
+[data-theme="sunset"]{--color-primary:#FDBA74;--color-primary-hover:#FB923C;--color-primary-light:#FFF7EE;--color-primary-soft:#FFFCF8;--color-primary-glow:rgba(253,186,116,.35);--color-primary-dark:#FDC68D;--color-primary-hover-dark:#FED2A5;--color-primary-light-dark:#362D2A;--color-primary-soft-dark:#272325;}
+[data-theme="gold-luxe"]{--color-primary:#EAB308;--color-primary-hover:#CA8A04;--color-primary-light:#FCF6E1;--color-primary-soft:#FEFBF3;--color-primary-glow:rgba(234,179,8,.35);--color-primary-dark:#EEC134;--color-primary-hover-dark:#F1CE5E;--color-primary-light-dark:#322C17;--color-primary-soft-dark:#252218;}
+[data-theme="ruby"]{--color-primary:#E11D48;--color-primary-hover:#BE123C;--color-primary-light:#FBE4E9;--color-primary-soft:#FEF4F6;--color-primary-glow:rgba(225,29,72,.35);--color-primary-dark:#E64669;--color-primary-hover-dark:#EC6C88;--color-primary-light-dark:#311122;--color-primary-soft-dark:#241020;}
+[data-theme="berry-punch"]{--color-primary:#D946EF;--color-primary-hover:#C026D3;--color-primary-light:#FAE9FD;--color-primary-soft:#FDF6FE;--color-primary-glow:rgba(217,70,239,.35);--color-primary-dark:#E067F2;--color-primary-hover-dark:#E687F5;--color-primary-light-dark:#2F1840;--color-primary-soft-dark:#231534;}
+[data-theme="pink"]{--color-primary:#EC4899;--color-primary-hover:#DB2777;--color-primary-light:#FDE9F3;--color-primary-soft:#FEF6FA;--color-primary-glow:rgba(236,72,153,.35);--color-primary-dark:#EF69AB;--color-primary-hover-dark:#F388BD;--color-primary-light-dark:#331831;--color-primary-soft-dark:#251529;}
+[data-theme="fuchsia-bloom"]{--color-primary:#A855F7;--color-primary-hover:#9333EA;--color-primary-light:#F5EBFE;--color-primary-soft:#FBF7FF;--color-primary-glow:rgba(168,85,247,.35);--color-primary-dark:#B874F8;--color-primary-hover-dark:#C691FA;--color-primary-light-dark:#261B42;--color-primary-soft-dark:#1D1735;}
+[data-theme="plum"]{--color-primary:#8B5CF6;--color-primary-hover:#7C3AED;--color-primary-light:#F1EBFE;--color-primary-soft:#F9F7FF;--color-primary-glow:rgba(139,92,246,.35);--color-primary-dark:#A079F8;--color-primary-hover-dark:#B495F9;--color-primary-light-dark:#211C42;--color-primary-soft-dark:#191734;}
+[data-theme="midnight-navy"]{--color-primary:#1E3A8A;--color-primary-hover:#1E40AF;--color-primary-light:#E4E7F1;--color-primary-soft:#F4F5F9;--color-primary-glow:rgba(30,58,138,.35);--color-primary-dark:#475D9F;--color-primary-hover-dark:#6D7FB3;--color-primary-light-dark:#0E162E;--color-primary-soft-dark:#0C1327;}
+[data-theme="sky-wave"]{--color-primary:#0EA5E9;--color-primary-hover:#0284C7;--color-primary-light:#E2F4FC;--color-primary-soft:#F3FBFE;--color-primary-glow:rgba(14,165,233,.35);--color-primary-dark:#39B5ED;--color-primary-hover-dark:#62C5F1;--color-primary-light-dark:#0B293F;--color-primary-soft-dark:#0A2033;}
+[data-theme="cyan-pulse"]{--color-primary:#06B6D4;--color-primary-hover:#0891B2;--color-primary-light:#E1F6FA;--color-primary-soft:#F3FBFD;--color-primary-glow:rgba(6,182,212,.35);--color-primary-dark:#33C3DC;--color-primary-hover-dark:#5DD0E3;--color-primary-light-dark:#092C3B;--color-primary-soft-dark:#0A2230;}
+[data-theme="teal-tide"]{--color-primary:#14B8A6;--color-primary-hover:#0D9488;--color-primary-light:#E3F6F4;--color-primary-soft:#F3FBFB;--color-primary-glow:rgba(20,184,166,.35);--color-primary-dark:#3EC5B6;--color-primary-hover-dark:#66D1C5;--color-primary-light-dark:#0C2D33;--color-primary-soft-dark:#0B222B;}
+[data-theme="mint-surge"]{--color-primary:#10B981;--color-primary-hover:#059669;--color-primary-light:#E2F7F0;--color-primary-soft:#F3FCF9;--color-primary-glow:rgba(16,185,129,.35);--color-primary-dark:#3BC698;--color-primary-hover-dark:#64D2AD;--color-primary-light-dark:#0B2D2D;--color-primary-soft-dark:#0B2326;}
+[data-theme="chartreuse"]{--color-primary:#A3E635;--color-primary-hover:#84CC16;--color-primary-light:#F4FCE7;--color-primary-soft:#FAFEF5;--color-primary-glow:rgba(163,230,53,.35);--color-primary-dark:#B4EB59;--color-primary-hover-dark:#C3EF7C;--color-primary-light-dark:#26351F;--color-primary-soft-dark:#1C281D;}
+[data-theme="forest"]{--color-primary:#15803D;--color-primary-hover:#166534;--color-primary-light:#E3F0E8;--color-primary-soft:#F3F9F5;--color-primary-glow:rgba(21,128,61,.35);--color-primary-dark:#3F9760;--color-primary-hover-dark:#67AC81;--color-primary-light-dark:#0C2320;--color-primary-soft-dark:#0B1C1E;}
+[data-theme="jade"]{--color-primary:#047857;--color-primary-hover:#065F46;--color-primary-light:#E1EFEB;--color-primary-soft:#F2F8F7;--color-primary-glow:rgba(4,120,87,.35);--color-primary-dark:#319075;--color-primary-hover-dark:#5CA792;--color-primary-light-dark:#092125;--color-primary-soft-dark:#091B21;}
+[data-theme="seafoam"]{--color-primary:#2DD4BF;--color-primary-hover:#14B8A6;--color-primary-light:#E6FAF7;--color-primary-soft:#F5FDFC;--color-primary-glow:rgba(45,212,191,.35);--color-primary-dark:#53DCCB;--color-primary-hover-dark:#77E3D5;--color-primary-light-dark:#103238;--color-primary-soft-dark:#0E262E;}
+[data-theme="azure"]{--color-primary:#38BDF8;--color-primary-hover:#0284C7;--color-primary-light:#E7F7FE;--color-primary-soft:#F5FCFF;--color-primary-glow:rgba(56,189,248,.35);--color-primary-dark:#5CC9F9;--color-primary-hover-dark:#7ED4FA;--color-primary-light-dark:#122E42;--color-primary-soft-dark:#102335;}
+[data-theme="periwinkle"]{--color-primary:#818CF8;--color-primary-hover:#4F46E5;--color-primary-light:#F0F1FE;--color-primary-soft:#F9F9FF;--color-primary-glow:rgba(129,140,248,.35);--color-primary-dark:#98A1F9;--color-primary-hover-dark:#ADB4FA;--color-primary-light-dark:#1F2542;--color-primary-soft-dark:#181D35;}
+[data-theme="lavender"]{--color-primary:#C084FC;--color-primary-hover:#A855F7;--color-primary-light:#F7F0FF;--color-primary-soft:#FCF9FF;--color-primary-glow:rgba(192,132,252,.35);--color-primary-dark:#CB9AFD;--color-primary-hover-dark:#D6AFFD;--color-primary-light-dark:#2B2343;--color-primary-soft-dark:#201C35;}
+[data-theme="orchid"]{--color-primary:#E879F9;--color-primary-hover:#D946EF;--color-primary-light:#FCEFFE;--color-primary-soft:#FEF8FF;--color-primary-glow:rgba(232,121,249,.35);--color-primary-dark:#EC91FA;--color-primary-hover-dark:#F0A8FB;--color-primary-light-dark:#322142;--color-primary-soft-dark:#251B35;}
+[data-theme="flamingo"]{--color-primary:#FB7185;--color-primary-hover:#F43F5E;--color-primary-light:#FFEEF0;--color-primary-soft:#FFF8F9;--color-primary-glow:rgba(251,113,133,.35);--color-primary-dark:#FC8B9B;--color-primary-hover-dark:#FCA3B0;--color-primary-light-dark:#35202D;--color-primary-soft-dark:#271A27;}
+[data-theme="grapefruit"]{--color-primary:#FF6B6B;--color-primary-hover:#EE5253;--color-primary-light:#FFEDED;--color-primary-soft:#FFF8F8;--color-primary-glow:rgba(255,107,107,.35);--color-primary-dark:#FF8686;--color-primary-hover-dark:#FF9F9F;--color-primary-light-dark:#361F29;--color-primary-soft-dark:#271924;}
+[data-theme="wine"]{--color-primary:#9F1239;--color-primary-hover:#881337;--color-primary-light:#F3E3E7;--color-primary-soft:#FAF3F5;--color-primary-glow:rgba(159,18,57,.35);--color-primary-dark:#B03D5D;--color-primary-hover-dark:#C1657E;--color-primary-light-dark:#250F20;--color-primary-soft-dark:#1C0E1E;}
+[data-theme="copper"]{--color-primary:#B45309;--color-primary-hover:#92400E;--color-primary-light:#F6EAE1;--color-primary-soft:#FBF6F3;--color-primary-glow:rgba(180,83,9,.35);--color-primary-dark:#C27235;--color-primary-hover-dark:#CE8F5F;--color-primary-light-dark:#291A17;--color-primary-soft-dark:#1E1618;}
+[data-theme="tangerine"]{--color-primary:#F97316;--color-primary-hover:#EA580C;--color-primary-light:#FEEEE3;--color-primary-soft:#FFF8F3;--color-primary-glow:rgba(249,115,22,.35);--color-primary-dark:#FA8C40;--color-primary-hover-dark:#FBA468;--color-primary-light-dark:#352019;--color-primary-soft-dark:#271A1A;}
+[data-theme="honey"]{--color-primary:#FACC15;--color-primary-hover:#EAB308;--color-primary-light:#FEF9E3;--color-primary-soft:#FFFCF3;--color-primary-glow:rgba(250,204,21,.35);--color-primary-dark:#FBD53F;--color-primary-hover-dark:#FCDE67;--color-primary-light-dark:#353019;--color-primary-soft-dark:#272519;}
 
 #app{height:100vh;}
 h1,h2,h3,.disp{font-family:'Space Grotesk',sans-serif;}
 input,select,button{font-family:inherit;font-size:13px;}
 ::-webkit-scrollbar{width:7px;height:7px;}
 ::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:#CCC8BE;border-radius:10px;}
+::-webkit-scrollbar-thumb{background:#CCD0DC;border-radius:10px;}
 ::-webkit-scrollbar-thumb:hover{background:var(--accent);}
 
 .loading-screen{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--muted);background:var(--bg);}
@@ -53,20 +136,21 @@ input,select,button{font-family:inherit;font-size:13px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 /* ---------- LOGIN ---------- */
-.login-wrap{height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#0C1017 0%,#151B24 50%,#1A2130 100%);padding:20px;overflow-y:auto;}
+.login-wrap{height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#111729 0%,#1A2238 50%,#202B47 100%);padding:20px;overflow-y:auto;}
 .login-card{width:400px;max-width:100%;background:var(--surface);border-radius:12px;box-shadow:0 40px 80px -30px rgba(0,0,0,.6);overflow:hidden;}
-.login-top{background:linear-gradient(135deg,#0C1017,#1A2130);color:#EDE6D6;padding:32px 34px 26px;border-bottom:3px solid var(--accent);}
-.login-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;}
+.login-top{background:linear-gradient(135deg,#111729,#202B47);color:#EDF0F8;padding:32px 34px 26px;border-bottom:3px solid var(--accent);}
+.login-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:#7CA3FF;text-transform:uppercase;}
 .login-top h1{font-size:22px;margin:8px 0 0;font-weight:600;letter-spacing:-.01em;color:#fff;}
 .login-body{padding:30px 34px 34px;}
 .field{margin-bottom:18px;}
 .field label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;}
-.field input{width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:8px;background:#FAFAF7;color:var(--ink);transition:border .15s,box-shadow .15s;}
+.field input{width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:8px;background:#FAFBFD;color:var(--ink);transition:border .15s,box-shadow .15s;}
 .field input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-tint);}
-.btn{border:none;border-radius:8px;padding:11px 18px;font-weight:600;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;}
+.btn{border:none;border-radius:8px;padding:11px 18px;font-weight:600;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;white-space:nowrap;}
 .btn:active{transform:scale(.98);}
-.btn-gold{background:linear-gradient(135deg,#C69530,#A07520);color:#fff;box-shadow:0 2px 8px rgba(180,134,43,.3);}
-.btn-gold:hover{box-shadow:0 4px 14px rgba(180,134,43,.4);filter:brightness(1.05);}
+.btn-primary,.btn-gold{background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));color:#fff;box-shadow:0 2px 8px var(--color-primary-glow);}
+.btn-primary:hover,.btn-gold:hover{box-shadow:0 4px 14px var(--color-primary-glow);filter:brightness(1.05);}
+.btn-primary:focus-visible,.btn-ghost:focus-visible,.qa-btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;box-shadow:0 0 0 3px var(--color-primary-glow);}
 .btn-ghost{background:transparent;color:var(--muted);border:1.5px solid var(--line);}
 .btn-ghost:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
 .btn-block{width:100%;justify-content:center;}
@@ -76,128 +160,1141 @@ input,select,button{font-family:inherit;font-size:13px;}
 
 /* ---------- SHELL / NAV ---------- */
 .shell{display:flex;height:100vh;overflow:hidden;}
-.sidebar{width:216px;flex:none;background:var(--sidebar);color:#A8A297;display:flex;flex-direction:column;height:100vh;border-right:1px solid var(--sidebar-line);transition:transform .25s ease;}
-.brand{padding:14px 14px 12px;border-bottom:1px solid var(--sidebar-line);display:flex;align-items:center;justify-content:space-between;}
-.brand-inner{display:flex;flex-direction:column;}
-.brand-icon{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,var(--accent),#C6952F);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;margin-bottom:8px;}
-.brand .eyebrow{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.2em;color:#6B6560;text-transform:uppercase;}
-.brand h1{font-size:13px;margin:2px 0 0;color:#F0EAD8;font-weight:600;letter-spacing:-.01em;}
-.sidebar-close{display:none;border:none;background:transparent;color:#8E887D;font-size:18px;cursor:pointer;padding:4px 8px;}
-.nav{flex:1;padding:8px 6px;overflow-y:auto;}
-.nav-group-label{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#5A5F68;font-weight:700;padding:12px 10px 4px 12px;}
-.nav-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:6px;color:#B8B2A6;font-size:12.5px;font-weight:600;cursor:pointer;transition:background .12s,color .12s;}
-.nav-item .n-ic{width:16px;height:16px;flex:none;display:flex;align-items:center;justify-content:center;opacity:.85;}
-.nav-item:hover{background:var(--sidebar-hover);color:#E8E0D0;}
-.nav-item.active{background:var(--sidebar-active);color:#F0EAD8;box-shadow:inset 3px 0 0 var(--accent);}
-.nav-empty{font-size:10.5px;color:#5A5F68;padding:8px 10px;font-style:italic;}
-.sidebar-foot{padding:10px 10px 14px;border-top:1px solid var(--sidebar-line);}
-.logout-btn{font-size:11px;color:#8E887D;cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;transition:all .12s;}
-.logout-btn:hover{background:var(--sidebar-hover);color:#E8E0D0;}
+.sidebar{width:236px;flex:none;background:var(--sidebar);color:var(--sidebar-sub);display:flex;flex-direction:column;height:100vh;border-right:1px solid var(--sidebar-line);overflow:hidden;transition:transform .25s ease,width .2s ease;}
+.brand{padding:16px 16px 14px;border-bottom:1px solid var(--sidebar-line);display:flex;align-items:flex-start;justify-content:space-between;}
+.brand-inner{display:flex;align-items:center;gap:10px;}
+/* Tied to the active color scheme via --accent/--accent-dark (NOT the raw
+   --color-primary/-hover tokens) — --accent is the one variable every other
+   component in the app already reads, and it is the ONLY one that also swaps to
+   the brighter dark-mode-tuned color in html.dark (see :root/html.dark above).
+   Using --color-primary directly here meant this gradient still changed with the
+   color-scheme picker but silently ignored the light/dark display-mode brightness
+   adjustment — fixed per explicit user instruction ("jo circle kiya hai vo
+   appearance mein change nahi ho rha hai usmein bhi kardo"). */
+.brand-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:7px;flex:none;}
+.brand-icon span{background:rgba(255,255,255,.85);border-radius:2px;}
+.brand-text .eyebrow{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#F3F5FC;letter-spacing:-.01em;}
+.brand-text .eyebrow sup{font-size:9px;color:#7C87A3;}
+.brand-text h1{font-size:9.5px;margin:1px 0 0;color:#7C87A3;font-weight:600;letter-spacing:.02em;text-transform:none;}
+.sidebar-close{display:none;border:none;background:transparent;color:var(--sidebar-sub);font-size:18px;cursor:pointer;padding:4px 8px;}
+.nav{flex:1;padding:10px 8px;overflow-y:auto;}
+.nav-group-label{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#525C78;font-weight:700;padding:14px 10px 5px 12px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;color:#AAB2C8;font-size:12.5px;font-weight:600;cursor:pointer;transition:background .12s,color .12s;position:relative;}
+.nav-item .n-ic{width:16px;height:16px;flex:none;display:flex;align-items:center;justify-content:center;opacity:.9;}
+/* Sidebar hover/active states blend the active color scheme's accent into the
+   existing dark navy sidebar tint (color-mix), instead of a fixed navy shade that
+   never changed with Appearance — per explicit user instruction ("apprearance is
+   not working for side bar and header color"). The plain --sidebar-hover/-active
+   value stays first as a fallback for browsers without color-mix() support. */
+.nav-item:hover{background:var(--sidebar-hover);background:color-mix(in srgb, var(--accent) 18%, var(--sidebar-hover));color:#F0F2FA;}
+.nav-item.active{background:var(--sidebar-active);background:color-mix(in srgb, var(--accent) 36%, var(--sidebar-active));color:#FFFFFF;}
+.nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--accent);}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9.5px;font-weight:700;border-radius:9px;padding:1px 6px;min-width:16px;text-align:center;}
+.nav-empty{font-size:10.5px;color:#525C78;padding:8px 10px;font-style:italic;}
+.sidebar-foot{padding:12px 14px 14px;border-top:1px solid var(--sidebar-line);}
+.sidebar-foot .su{font-size:9.5px;color:#525C78;margin-bottom:8px;}
+.logout-btn{font-size:11px;color:#8E97AF;cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;transition:all .12s;}
+.logout-btn:hover{background:var(--sidebar-hover);color:#F0F2FA;}
+.sync-btn{width:100%;justify-content:center;margin-top:6px;padding:9px;font-size:12px;}
+.sync-status{margin-top:8px;display:flex;flex-direction:column;gap:2px;font-size:9.5px;line-height:1.25;color:#7C87A3;}
+.sync-status .sync-state{font-weight:600;color:#AAB2C8;}.sync-status b{font-size:10.5px;color:#D7DCEA;font-weight:700;}.sync-status .sync-source{color:#6E7893;}
 .sidebar-overlay{display:none;}
 
 .main{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
-.topbar{background:var(--surface);border-bottom:1px solid var(--line);padding:0 16px;height:44px;display:flex;align-items:center;justify-content:space-between;flex:none;}
-.topbar-left{display:flex;align-items:center;gap:10px;min-width:0;}
+/* box-shadow (not border) carries the color-scheme accent along the header's
+   bottom edge so it visibly reacts to Appearance without fighting the plain
+   border-bottom color the html.dark override below also sets, per explicit user
+   instruction ("apprearance is not working for side bar and header color"). */
+.topbar{background:var(--surface);border-bottom:1px solid var(--line);box-shadow:inset 0 -2px 0 0 var(--accent);padding:0 18px;height:56px;display:flex;align-items:center;justify-content:space-between;flex:none;}
+.topbar-left{display:flex;align-items:center;gap:12px;min-width:0;}
 .hamburger{display:none;border:none;background:transparent;cursor:pointer;color:var(--ink-secondary);font-size:18px;padding:4px 6px;}
-.topbar-left h2{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.topbar-right{display:flex;align-items:center;gap:10px;}
-.topbar-controls{display:flex;align-items:center;gap:4px;background:var(--bg);border:1.5px solid var(--line);border-radius:6px;padding:2px 4px;}
-.topbar-controls button{border:none;background:transparent;cursor:pointer;padding:3px 6px;border-radius:4px;font-size:12px;color:var(--ink-secondary);font-weight:700;transition:all .12s;line-height:1;}
+/* Back-navigation button — only rendered when there's actually somewhere to go
+   back to (S.pageHistory has entries), per explicit user instruction ("I do not
+   have any option to go back to my previous page, can we add that"). Sits to the
+   LEFT of the hamburger/page title, desktop and mobile alike. */
+.back-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink-secondary);cursor:pointer;flex:none;transition:all .12s;}
+.back-btn svg{width:16px;height:16px;}
+.back-btn:hover{background:var(--accent-tint2);color:var(--accent-dark);border-color:var(--accent);}
+.topbar-left .tb-title h2{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;}
+.topbar-left .tb-title .sub{font-size:10.5px;color:var(--muted);font-weight:500;margin-top:1px;}
+/* Live sync status pill next to the page title — green while a background refresh
+   is running, then swaps to a plain "Last Refreshed on ..." pill once it finishes,
+   per explicit user instruction (screenshot showed a green "REFRESHING" highlight
+   next to the title, replaced by the last-refreshed time once data lands). */
+.tb-refresh-pill{flex:none;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap;}
+.tb-refresh-pill.refreshing{background:var(--success-tint);color:var(--success);}
+.tb-refresh-pill.done{background:var(--accent-tint2);color:var(--ink-secondary);}
+.tb-refresh-dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex:none;animation:tb-refresh-pulse 1s ease-in-out infinite;}
+@keyframes tb-refresh-pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+.topbar-right{display:flex;align-items:center;gap:14px;}
+.tb-search{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 12px;color:var(--muted);font-size:12px;min-width:180px;}
+.topbar-controls{display:flex;align-items:center;gap:2px;background:var(--bg);border:1.5px solid var(--line);border-radius:6px;padding:2px 4px;}
+.topbar-controls button{border:none;background:transparent;cursor:pointer;padding:5px 7px;border-radius:4px;font-size:13px;color:var(--ink-secondary);font-weight:700;transition:all .12s;line-height:1;position:relative;}
 .topbar-controls button:hover{background:var(--accent-tint);color:var(--accent-dark);}
-.topbar-controls .divider{width:1px;height:14px;background:var(--line);margin:0 2px;}
-.topbar-welcome{font-size:11px;color:var(--ink-secondary);font-weight:500;}
-.topbar-welcome b{color:var(--ink);font-weight:600;}
-.avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#C6952F);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:11px;flex:none;}
-.content{padding:12px 16px 16px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto;}
+.tb-icon-btn{position:relative;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-secondary);}
+.tb-icon-btn:hover{background:var(--accent-tint2);color:var(--accent-dark);}
+.tb-icon-btn .dot{position:absolute;top:-3px;right:-3px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:0 4px;line-height:14px;min-width:14px;text-align:center;}
+.topbar-welcome{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;}
+.topbar-welcome b{color:var(--ink);font-weight:700;font-size:12px;}
+.topbar-welcome span{font-size:10px;color:var(--muted);}
+/* Square (rounded-square) avatar instead of a circle, per explicit user instruction
+   ("instead of circle use square") — radius matches .brand-icon/buttons elsewhere
+   in the shell for a consistent look. Background uses --accent/--accent-dark (same
+   fix/reasoning as .brand-icon above) so this reliably reacts to BOTH the color
+   scheme AND the light/dark display mode, per explicit user instruction ("jo circle
+   kiya hai vo appearance mein change nahi ho rha hai usmein bhi kardo"). */
+.avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:12px;flex:none;}
+.content{padding:6px 8px 0;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;overscroll-behavior-x:none;}
+/* Pages with embedded grids that need sticky headers + bottom pagination visible:
+   .content-zoom stays a non-scrolling flex column so the grid's own .dt-scroll is
+   the ONLY vertical scroll area. Other pages (dashboard, ledger) still scroll at
+   this level via .content-zoom overflow:auto. */
+.content.page-ageingRecv .content-zoom,
+.content.page-ageingPay .content-zoom,
+.content.page-receipt .content-zoom,
+.content.page-salesReport .content-zoom,
+.content.page-expense .content-zoom{overflow:hidden;flex:1;}
+/* .content-zoom is now a simple flex column that fills .content. No CSS `zoom` or
+   size compensation is applied — A-/A/A+ only scale table body cells via
+   --data-scale. This eliminates the grey gap permanently because .content itself
+   is overflow:hidden and .content-zoom fills it without any shrink/grow mismatch. */
+.content-zoom{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;}
+/* Text size control (A- / A / A+ / A++) — sits top-right in the topbar, next to the
+   dark/light toggle. "A" (100%, normal website font) is the default the first time
+   the app opens since it reads best in dense tables, per explicit user instruction;
+   the chosen size is remembered afterwards via localStorage (see Common.html). The
+   active preset is highlighted the same way the dark/light toggle button is. */
+.topbar-fontsize{display:flex;align-items:center;gap:2px;background:var(--bg);border:1.5px solid var(--line);border-radius:6px;padding:2px;flex:none;}
+.topbar-fontsize button{border:none;background:transparent;cursor:pointer;padding:5px 8px;border-radius:4px;font-size:11px;font-weight:700;color:var(--ink-secondary);transition:all .12s;line-height:1;font-family:'Inter',system-ui,sans-serif;}
+.topbar-fontsize button:hover{background:var(--accent-tint);color:var(--accent-dark);}
+.topbar-fontsize button.active{background:var(--accent);color:#fff;}
+.topbar-fontsize button:disabled{opacity:.35;cursor:default;}
+.topbar-fontsize button:disabled:hover{background:transparent;color:var(--ink-secondary);}
+/* Receivable/Payable Ageing switch — moved back OUT of the topbar and into the
+   page body per explicit user instruction (renders as its own row ABOVE the All
+   Data/Ageing Wise mode tabs — see .ageing-kind-tabs below, and kindTabs in
+   renderAgeing() in Receivables.html). The old topbar-only placement is gone. */
 
 .toast{position:fixed;top:16px;right:16px;z-index:100;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.12);display:flex;align-items:center;gap:10px;animation:toast-in .22s cubic-bezier(.2,.8,.4,1);background:var(--success-tint);color:var(--success);border:1px solid #BEE3C9;}
 @keyframes toast-in{from{opacity:0;transform:translateY(-10px) scale(.96);}to{opacity:1;transform:none;}}
 .toast.err{background:var(--danger-tint);color:var(--danger);border-color:#F3C6C3;}
 
-/* ---------- DASHBOARD CARDS ---------- */
-.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:box-shadow .15s,transform .1s;}
-.card:hover{box-shadow:0 6px 18px rgba(0,0,0,.08);transform:translateY(-1px);}
+/* ---------- FILTER BAR ---------- */
+.fbar{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;flex:none;}
+.fbar-group{display:flex;flex-direction:column;gap:4px;min-width:110px;}
+.fbar-group label{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.fbar select,.fbar input[type="date"],.fbar input[type="text"]{padding:7px 10px;border:1.5px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;min-width:100px;}
+.fbar select:focus,.fbar input:focus{outline:none;border-color:var(--accent);}
+.fbar-daterange{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-secondary);font-weight:600;}
+.fbar-daterange input{min-width:118px;cursor:pointer;}
+.fbar-presets{display:flex;align-items:center;gap:4px;background:var(--bg);border-radius:8px;padding:3px;}
+.fbar-presets button{border:none;background:transparent;padding:6px 11px;border-radius:6px;font-size:11.5px;font-weight:700;color:var(--ink-secondary);cursor:pointer;transition:all .12s;}
+.fbar-presets button:hover{color:var(--accent-dark);}
+.fbar-presets button.active{background:var(--accent);color:#fff;box-shadow:0 1px 4px var(--color-primary-glow);}
+.fbar-compare{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:var(--ink-secondary);cursor:pointer;user-select:none;padding:7px 4px;}
+.fbar-compare input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;}
+.fbar .spacer{flex:1;}
+.fbar-btn-filters{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.fbar-btn-filters:hover{background:var(--accent-dark);}
+.compare-note{font-size:10.5px;color:var(--muted);padding:2px 4px 0;}
+.fy-only-bar{align-items:center;position:relative;z-index:12;gap:10px;padding-top:9px;padding-bottom:9px;flex-wrap:nowrap;}
+.fy-inline-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+.fy-multi{position:relative;flex:0 1 270px;min-width:190px;}
+.fy-multi-btn{width:100%;min-width:0;padding:7px 9px;border:1.5px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fy-multi-btn:hover{border-color:var(--accent);}
+.fy-menu{position:absolute;left:0;top:calc(100% + 6px);z-index:80;min-width:280px;max-height:300px;overflow:auto;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;box-shadow:0 16px 45px rgba(0,0,0,.16);padding:8px;}
+.fy-option{display:flex!important;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;cursor:pointer;font-size:11px!important;color:var(--ink-secondary)!important;text-transform:none!important;letter-spacing:0!important;}
+.fy-option:hover{background:var(--accent-tint2);}.fy-option input{accent-color:var(--accent);}.fy-all{border-bottom:1px solid var(--line-light);margin-bottom:4px;font-weight:700;}
+.fy-empty{padding:12px;color:var(--muted);font-size:10.5px;line-height:1.5;}.fy-selection-note{font-size:10.5px;color:var(--muted);padding-bottom:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fy-selection-note b{color:var(--ink-secondary);}
+.nav-parent .nav-chevron{margin-left:auto;font-size:16px;}.nav-children{padding-left:16px}.nav-children .nav-item{font-size:11.5px;padding-top:7px;padding-bottom:7px;}
+.view-toggle{display:inline-flex;align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:4px;margin-bottom:14px;gap:3px;}
+.view-toggle button{border:0;background:transparent;color:var(--ink-secondary);padding:8px 16px;border-radius:6px;font-weight:700;cursor:pointer;}.view-toggle button.active{background:var(--accent);color:#fff;}.ageing-summary-cards{grid-template-columns:repeat(3,1fr);}
+
+/* ---------- AGEING PARTY PIVOT (party-in-middle, overdue-left, not-yet-due-right) ---------- */
+.apv-searchbar{display:flex;align-items:center;gap:10px;flex:none;}
+.apv-searchbar input{flex:none;width:220px;padding:6px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);font-size:12px;}
+.apv-searchbar input:focus{outline:none;border-color:var(--accent);}
+.apv-count{font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap;}
+/* Column widths/padding trimmed down (was 110px per bucket / 240px name / 150px
+   total ≈1270px total table width) so the whole pivot — sidebar + table — fits on
+   one screen without horizontal scrolling on a 13"-14" laptop, per explicit user
+   instruction ("lot of extra space in columns... so that including table it fits
+   in one screen of my mac and other laptops too"). New total ≈1050px. */
+table.apv-table{table-layout:fixed;}
+table.apv-table thead tr.apv-totals-row th{display:none;} /* keep header cell semantics but hide duplicate; totals rendered as td row */
+table.apv-table thead .apv-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:center;padding:5px 5px;border-bottom:1px solid var(--line);letter-spacing:-0.5px;}
+table.apv-table thead .apv-totals-row td.apv-name{background:var(--surface);}
+table.apv-table thead .apv-totals-row td.apv-tot-name{background:var(--surface);color:var(--muted);font-family:inherit;font-size:9px;letter-spacing:.06em;}
+/* Same Appearance-accent header color as every other grid (table.dt above) — was a
+   hardcoded blue, per explicit user instruction ("jitne bhi tab hai sabke header
+   same color ke kardo"). */
+table.apv-table thead tr:not(.apv-totals-row) th{position:sticky;top:23px;z-index:6;background:var(--accent);color:#fff;text-align:center;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+table.apv-table thead tr:not(.apv-totals-row) th.apv-name{background:var(--surface);color:var(--ink);}
+/* Header label stays CENTER-aligned (per explicit user instruction: "header center
+   align he rehne dena") — only the body cells below change alignment. */
+table.apv-table thead .apv-th-inner{display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:normal;overflow-wrap:break-word;line-height:1.2;}
+table.apv-table thead th.apv-name .apv-th-inner{color:var(--ink);}
+table.apv-table thead th.apv-sorted{background:var(--accent-dark);}
+table.apv-table thead th.apv-name.apv-sorted{background:var(--accent-tint);}
+table.apv-table thead .apv-sort-ic{font-size:8.5px;flex:none;}
+/* Party Name body cells: LEFT-aligned per explicit user instruction ("i want this
+   section to be left aligned"), while the header above stays centered (unchanged). */
+table.apv-table tbody td.apv-name{font-weight:700;color:var(--ink);text-align:left;padding:6px 10px;background:var(--accent-tint2);border-left:1px solid var(--line);border-right:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+table.apv-table tbody td.apv-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:calc(11px * var(--data-scale));padding:6px 8px;letter-spacing:-0.5px;}
+/* Base red/green tint below is now only a FALLBACK for zero-value cells (the
+   .apv-zero rule further down always wins there) — every non-zero overdue/
+   not-yet-due cell gets its actual heatmap shade from an inline style instead
+   (see ageingHeatmapStyle_() in Receivables.html: bigger amount = darker red on
+   the left / darker green on the right, smaller amount = lighter, per explicit
+   user instruction "bda number dardk color chota number light color left wala red
+   mein right wala green mein"). transition+border mirror the Sales Report heatmap
+   cell treatment (.heatmap-cell below) so adjacent shaded cells stay visually
+   separated. */
+table.apv-table tbody td.apv-cell.apv-od{color:#B4231E;background:#FEF4F3;transition:background .15s;border-right:1px solid rgba(255,255,255,.5);}
+table.apv-table tbody td.apv-cell.apv-nd{color:#0E7C3F;background:#F2FBF6;transition:background .15s;border-right:1px solid rgba(255,255,255,.5);}
+table.apv-table tbody td.apv-cell.apv-total{color:var(--ink);font-weight:700;background:var(--accent-tint2);}
+table.apv-table tbody td.apv-cell.apv-zero{color:#C7CCDA;background:transparent;}
+table.apv-table tbody tr:hover td{filter:brightness(0.97);}
+table.apv-table tbody td.apv-cell.apv-zero:hover{filter:none;}
+
+/* Ageing kind tabs (Receivable/Payable Ageing) + mode tabs (All Data/Ageing Wise) —
+   both rows are left-aligned (align-self:flex-start on .view-toggle already does
+   this) and the mode-tabs row shares ONE line with the party search box so nothing
+   pushes onto an extra line, per explicit user instruction. */
+/* Row 1 above the mode tabs — Receivable Ageing Summary / Payable Ageing Summary
+   switch, moved here from the topbar per explicit user instruction ("Receivable
+   Ageing Summary and payable ageing summary button, All Data/Ageing Wise inke
+   button se pehel aa jaye...basically in second line"). Kept compact/small like
+   the mode tabs below it, not the larger default .view-toggle size, so this extra
+   row stays neat and doesn't eat vertical space. */
+.ageing-kind-tabs{padding:3px;gap:2px;margin-bottom:0;}
+.ageing-kind-tabs button{padding:5px 12px;font-size:11px;border-radius:5px;}
+/* Single combined bar for Receivable/Payable + All Data/Ageing Wise + Search —
+   everything on ONE row to maximise visible data rows. */
+.ageing-single-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.ageing-single-bar .view-toggle{margin-bottom:0;}
+.ageing-single-bar .apv-searchbar{margin-left:auto;}
+/* Refresh + Columns for the embedded receivablesDashboard grid (All Data tab) —
+   folded into this same row (right-aligned, small font) instead of that grid
+   rendering its own separate toolbar row underneath, per explicit user instruction
+   ("refresh and column bhi ismi me right me adjust ho jaaye...ye ek line ka screen
+   bacha lega"). */
+.ageing-dash-controls{display:flex;align-items:center;gap:8px;flex:none;}
+.ageing-dash-controls .btn{padding:5px 12px;font-size:11.5px;}
+.ageing-mode-tabs{padding:3px;gap:2px;}
+.ageing-mode-tabs button{padding:5px 10px;font-size:11px;border-radius:5px;}
+.ageing-page-cards{margin-bottom:6px;gap:8px;}
+/* Ageing KPI cards — a really thin single-row layout (icon on the left, label +
+   value + sub packed tightly to its right on ONE line where it fits) instead of
+   the taller icon-on-top/value-below stack every other .card uses — even thinner
+   than the Main Dashboard's own kpi-strip cards, per explicit user instruction
+   ("kpi kards...koi aur layout hoga to chalega, i want really thin layout for
+   these...that will save my screen"). */
+.ageing-kpi-card{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:default;}
+.ageing-kpi-card:hover{box-shadow:0 1px 3px rgba(0,0,0,.03);transform:none;}
+.ageing-kpi-card .card-icon{width:24px;height:24px;border-radius:6px;flex:none;}
+.ageing-kpi-card .card-icon svg{width:12px;height:12px;}
+.ageing-kpi-body{min-width:0;flex:1;}
+.ageing-kpi-card .card-label{font-size:8px;display:block;margin-bottom:1px;}
+.ageing-kpi-vs{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+.ageing-kpi-card .card-value{font-size:13px;line-height:1;}
+.ageing-kpi-card .card-sub{font-size:9px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* ---------- AGEING SUMMARY — LANDING OVERVIEW (fully separate Recv/Pay panels) ---------- */
+/* Two FULLY independent panels (Receivables Ageing / Payables Ageing) — per
+   explicit user feedback, Receivables (asset) and Payables (liability) numbers
+   must NEVER be blended into one combined figure anywhere on this page, so each
+   panel below carries its own header, stats, and its OWN Ageing Snapshot buckets.
+   Restyled into a denser, more "dashboard" look — a colored left accent bar,
+   a 3-stat inline row instead of stacked KPI cards, and larger, clearly-actionable
+   buttons — per explicit user instruction ("look wise kafi sleek prfessional
+   dikhan chiaye...make it lokk like a prfoessional dashboard"). */
+.ageing-panels-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+.ageing-panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);overflow:hidden;position:relative;padding-left:5px;}
+.ageing-panel::before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;}
+.ageing-panel-recv::before{background:var(--recv);}
+.ageing-panel-pay::before{background:var(--pay);}
+.ageing-panel-head{display:flex;align-items:center;gap:12px;padding:18px 20px 14px;}
+.ageing-panel-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:none;}
+.ageing-panel-icon svg{width:20px;height:20px;}
+.ageing-panel-icon.recv{background:var(--recv-tint);color:var(--recv);}
+.ageing-panel-icon.pay{background:var(--pay-tint);color:var(--pay);}
+.ageing-panel-head-text{flex:1;min-width:0;}
+.ageing-panel-title{font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:700;color:var(--ink);}
+.ageing-panel-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.ageing-panel-total{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:800;color:var(--ink);white-space:nowrap;flex:none;}
+.ageing-panel-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-light);margin:0 20px;border-radius:10px;overflow:hidden;border:1px solid var(--line-light);}
+.ageing-stat{background:var(--bg);padding:11px 12px;text-align:center;}
+.ageing-stat-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+.ageing-stat-value{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ageing-stat.danger .ageing-stat-value{color:var(--danger);}
+.ageing-stat.success .ageing-stat-value{color:var(--success);}
+.ageing-stat.neutral .ageing-stat-value{color:var(--ink);}
+.ageing-stat-count{font-size:9.5px;color:var(--muted);margin-top:2px;}
+.ageing-panel-buckets{padding:16px 20px 4px;}
+.ageing-panel-buckets-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;}
+.age-buckets-sm .age-bucket{padding:7px 5px;}
+.age-buckets-sm .ab-label{font-size:9px;}
+.age-buckets-sm .ab-val{font-size:11px;}
+/* Larger, clearly-actionable buttons — "All Data" reads as the PRIMARY action
+   (solid accent fill), "Ageing Wise" as a bold secondary (outlined, thicker border
+   than a standard .btn-ghost) — replacing the old plain .btn-ghost pair that per
+   explicit user feedback "dont look like button, small kara hai". */
+.ageing-panel-actions{display:flex;gap:10px;padding:16px 20px 20px;}
+.ageing-action-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 14px;border-radius:10px;font-size:12.5px;font-weight:700;cursor:pointer;transition:all .15s;border:2px solid var(--line);background:var(--surface);color:var(--ink-secondary);}
+.ageing-action-btn .aa-ic{width:15px;height:15px;display:flex;flex:none;}
+.ageing-action-btn .aa-ic svg{width:15px;height:15px;}
+.ageing-action-btn:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);transform:translateY(-1px);}
+.ageing-action-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px var(--color-primary-glow);}
+.ageing-action-btn.primary:hover{background:var(--accent-dark);border-color:var(--accent-dark);color:#fff;box-shadow:0 4px 14px var(--color-primary-glow);}
+@media (max-width:900px){
+  .ageing-panels-grid{grid-template-columns:1fr;}
+}
+@media (max-width:500px){
+  .ageing-panel-stats{grid-template-columns:1fr;}
+}
+
+/* ---------- SALES REPORT — DURATION (CATEGORY/PARTY NAME/STATE) PIVOT ---------- */
+/* Toolbar row: row-count + Refresh + Sales/Duration toggle ALL on one line. The
+   Sales/Duration toggle itself now sits on the LEFT on the master Sales grid (see
+   .report-switcher-toolbar — GRID_DEFS.salesReport.reportTabs in Grids.html), per
+   explicit user instruction ("sales and duration left me dikha do"). This
+   right-aligning rule is scoped to ONLY the bespoke Duration/category pivot's own
+   toolbar below (.sales-cat-toolbar), which keeps its previous established layout
+   (row count + Refresh on the left, the toggle on the right) unchanged. */
+/* Sales/Duration toggle, Mode toggle (Monthly/Yearly/Custom Range) all sit on the
+   SAME toolbar row now (Sales/Duration on the left, mode pills next, count+Refresh
+   pushed to the right) per explicit user instruction. Height reduced per explicit
+   user instruction ("point 1 and point 2 ka height kum kardo"). */
+.sales-cat-toolbar{flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+/* Sales/Duration toggle — always compact (same thin size on BOTH the Sales grid's
+   report-switcher toolbar AND the Duration pivot's sales-cat-toolbar), per explicit
+   user instruction ("image 1 and image 2 jo size button hai vo same nahi hai,
+   jismein patla hai vo wala karna hai dono mein"). */
+.sales-report-view-toggle{padding:1px!important;gap:1px!important;margin:0!important;border-radius:6px!important;}
+.sales-report-view-toggle button{padding:4px 10px!important;font-size:10.5px!important;border-radius:4px!important;}
+.sales-cat-toolbar .sales-cat-mode-toggle{margin:0;flex:none;padding:1px;gap:1px;border-radius:6px;}
+.sales-cat-toolbar .sales-cat-mode-toggle button{padding:4px 10px;font-size:10.5px;border-radius:4px;}
+.sales-cat-toolbar .sales-cat-range-multi{margin:0;flex:none;}
+.sales-cat-toolbar .sales-cat-range-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+/* Expense Report pivot toolbar — mirrors sales-cat-toolbar styling exactly */
+.expense-cat-toolbar{flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+.expense-report-view-toggle{padding:1px!important;gap:1px!important;margin:0!important;border-radius:6px!important;}
+.expense-report-view-toggle button{padding:4px 10px!important;font-size:10.5px!important;border-radius:4px!important;}
+.expense-cat-toolbar .expense-cat-mode-toggle{margin:0;flex:none;padding:1px;gap:1px;border-radius:6px;}
+.expense-cat-toolbar .expense-cat-mode-toggle button{padding:4px 10px;font-size:10.5px;border-radius:4px;}
+.expense-cat-toolbar .expense-cat-range-multi{margin:0;flex:none;}
+.expense-cat-toolbar .expense-cat-range-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+.expense-cross-filter-multi{flex:none;min-width:160px;}
+.expense-cross-filter-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+.expense-cross-menu{min-width:260px;max-height:350px;overflow:auto;}
+.expense-cat-range-multi{flex:0 1 240px;min-width:170px;}
+.expense-cat-range-menu{padding:12px;min-width:260px;}
+.expense-cat-wrap table.dt.scp-table{table-layout:fixed;}
+.dt-table-wrap.expense-cat-wrap{overflow:visible;}
+/* Cross-filter dropdown (Category filter when Party Name is the dimension, and vice
+   versa) — searchable multi-select, same .fy-multi pattern as the FY picker, per
+   explicit user instruction ("dono dropdown multiselect wale chahiye AND type bhi
+   kar sake"). */
+.sales-cross-filter-multi{flex:none;min-width:160px;}
+.sales-cross-filter-multi .fy-multi-btn{padding:5px 12px;font-size:11px;border-radius:5px;}
+.sales-cross-menu{min-width:260px;max-height:350px;overflow:auto;}
+.cross-filter-search{width:100%;padding:7px 10px;border:1.5px solid var(--line);border-radius:7px;background:var(--bg);font-size:11.5px;margin-bottom:6px;}
+.cross-filter-search:focus{outline:none;border-color:var(--accent);}
+.cross-filter-options{max-height:220px;overflow-y:auto;}
+.cross-filter-clear{padding-top:6px;border-top:1px solid var(--line-light);margin-top:6px;}
+/* Duration pivot's "Custom Range" control — an FY-style button + popover (reusing
+   the app-wide .fy-multi/.fy-multi-btn/.fy-menu look from the main Financial Year
+   filter) instead of two bare date inputs sitting directly in the toolbar, per
+   explicit user instruction ("Customer range financial year button chaiye rather
+   than input boxes"). */
+.sales-cat-range-multi{flex:0 1 240px;min-width:170px;}
+.sales-cat-range-menu{padding:12px;min-width:260px;}
+.sales-cat-range-menu .sales-cat-daterange{margin-bottom:0;}
+/* Removes the default .view-toggle margin-bottom so the Sales/Duration toggle sits
+   flush within a single-line toolbar row instead of pushing extra space below it —
+   same reasoning as .ageing-mode-bar .view-toggle{margin-bottom:0;} elsewhere. */
+.report-switcher-toolbar .view-toggle{margin-bottom:0;}
+.sales-cat-mode-toggle{margin-bottom:0;}
+.sales-cat-daterange{margin-bottom:0;}
+.sales-cat-wrap table.dt.scp-table{table-layout:fixed;}
+/* The Duration pivot's own .dt-scroll must have a bounded height so IT (not the
+   page-level .content) becomes the scroll container — this is what makes
+   position:sticky on the <thead> cells actually work (sticky only activates relative
+   to the NEAREST scrolling ancestor). calc(100vh - 170px) leaves room for the topbar
+   + toolbar row above, per explicit user instruction ("header freeze nahi hue hai
+   niche ka table ho gya hai"). */
+/* The Duration pivot inherits the global .dt-table-wrap flex:none + .dt-scroll
+   max-height rules above. overflow:visible is still needed specifically here so
+   position:sticky on cells works (the generic overflow:hidden would clip them). */
+.dt-table-wrap.sales-cat-wrap{overflow:visible;flex:1;}
+/* box-sizing:border-box ensures that when the column resize handler reads
+   getBoundingClientRect().width (which includes border+padding) and writes it back
+   as style.width, the column stays at the exact same visual width instead of
+   drifting by the border/padding amount each time, per explicit user instruction
+   ("col resize properly nahi ho rha hai...exact jagah pe fit nahi hota hai"). */
+table.scp-table th,table.scp-table td{box-sizing:border-box;}
+/* LEFT-FREEZE: S.No, Total, % Amt, and Category/Party Name columns stay pinned on
+   the left when scrolling horizontally through the month/year period columns, per
+   explicit user instruction ("ye right scroll mein hide na ho freeze ho jaye").
+   The actual left:Xpx values are computed inline from the current column widths in
+   Finance.html (since the user can resize columns) — CSS just sets position:sticky
+   and the z-index layering. */
+table.scp-table .scp-sno{position:sticky;z-index:3;}
+table.scp-table .scp-total{position:sticky;z-index:3;}
+table.scp-table .scp-pct{position:sticky;z-index:3;}
+table.scp-table .scp-cat{position:sticky;z-index:3;border-right:2px solid var(--line)!important;}
+/* Header row cells need higher z-index since they're BOTH sticky-top AND sticky-left */
+table.scp-table thead .scp-sno,table.scp-table thead .scp-total,table.scp-table thead .scp-pct,table.scp-table thead .scp-cat{z-index:6;}
+/* Body cells need a solid background so scrolled content doesn't show through */
+table.scp-table tbody td.scp-sno,table.scp-table tbody td.scp-total,table.scp-table tbody td.scp-pct,table.scp-table tbody td.scp-cat{background:var(--surface);}
+table.scp-table tbody tr:nth-child(even) td.scp-sno,table.scp-table tbody tr:nth-child(even) td.scp-total,table.scp-table tbody tr:nth-child(even) td.scp-pct,table.scp-table tbody tr:nth-child(even) td.scp-cat{background:#FAFBFD;}
+/* Totals row frozen cells — need z-index higher than both regular sticky-top and
+   regular sticky-left so the intersection (top-left corner) always stays on top */
+table.scp-table thead tr.scp-totals-row td.scp-sno,table.scp-table thead tr.scp-totals-row td.scp-total,table.scp-table thead tr.scp-totals-row td.scp-pct,table.scp-table thead tr.scp-totals-row td.scp-cat{z-index:9;background:#F5F8FF;}
+table.scp-table thead tr.scp-totals-row td{position:sticky;top:0;z-index:5;background:#F5F8FF;color:var(--ink);font-family:Tahoma,Geneva,sans-serif;font-weight:700;font-size:11px;text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);border-right:1px solid var(--line-light);white-space:nowrap;letter-spacing:-0.5px;}
+table.scp-table thead tr.scp-totals-row td.scp-cat{text-align:left;color:var(--muted);font-family:inherit;font-size:9.5px;letter-spacing:.06em;background:var(--surface);}
+table.scp-table thead tr.scp-totals-row td.scp-sno{background:var(--surface);}
+/* Same Appearance-accent header color as every other grid — was a hardcoded blue,
+   per explicit user instruction ("jitne bhi tab hai sabke header same color ke
+   kardo"). */
+table.scp-table thead tr:not(.scp-totals-row) th{position:sticky;top:22px;z-index:6;background:var(--accent);color:#fff;text-align:right;padding:0;cursor:pointer;border-right:1px solid rgba(255,255,255,.15);}
+table.scp-table thead th.scp-cat,table.scp-table thead th.scp-sno{text-align:left;background:var(--surface);color:var(--ink);cursor:default;}
+/* Frozen header cells (both sticky-top + sticky-left) need higher z-index so they
+   layer above BOTH the body cells AND the non-frozen header cells when scrolling
+   in both directions simultaneously */
+table.scp-table thead tr:not(.scp-totals-row) th.scp-sno,table.scp-table thead tr:not(.scp-totals-row) th.scp-total,table.scp-table thead tr:not(.scp-totals-row) th.scp-pct,table.scp-table thead tr:not(.scp-totals-row) th.scp-cat{z-index:8;}
+.scp-th-inner{display:flex;align-items:center;justify-content:flex-end;gap:5px;padding:6px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:normal;word-break:normal;overflow-wrap:break-word;line-height:1.2;position:relative;}
+table.scp-table th.scp-cat .scp-th-inner{justify-content:flex-start;}
+/* Dimension header dropdown (Category/Party Name/State) — sits inline with the
+   sort arrow, styled to read as part of the dark header row rather than a plain
+   form control, so switching the grouping dimension doesn't break the header's look. */
+.scp-dim-inner{gap:6px;}
+.scp-dim-select{flex:1;min-width:0;background:transparent;border:1px solid rgba(255,255,255,.35);border-radius:4px;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 4px;cursor:pointer;}
+.scp-dim-select option{background:var(--surface);color:var(--ink);}
+.scp-dim-select:hover,.scp-dim-select:focus{border-color:rgba(255,255,255,.6);outline:none;}
+.scp-sort-ic{font-size:9px;flex:none;}
+.scp-sort-ic[data-action]{cursor:pointer;}
+.scp-resize{position:absolute;right:-4px;top:0;bottom:0;width:12px;cursor:col-resize;z-index:5;}
+.scp-resize:hover{background:rgba(255,255,255,.25);}
+table.scp-table th.scp-cat .scp-resize:hover{background:rgba(46,107,242,.25);}
+table.scp-table tbody td.scp-cell{text-align:right;font-family:Tahoma,Geneva,sans-serif;font-size:calc(11px * var(--data-scale));padding:5px 8px;border-right:1px solid var(--line-light);letter-spacing:-0.5px;vertical-align:middle;}
+/* Period (month/year) amount cells: must never wrap mid-number — when the column is
+   resized narrower than the value, the font shrinks instead of wrapping, per explicit
+   user instruction ("amount wrap na ho uska font chota ho jaye in case agar col size
+   chota hai to"). Using Tahoma (very tight comma glyph — no visible space around
+   commas unlike Verdana/JetBrains Mono) + negative letter-spacing for extra
+   tightness, per explicit user instruction ("46,000 ye font aisa use karo ki comma
+   ke baad space na dikhe"). */
+/* Body-row period/month/year AMOUNT cells (the right-side columns in the Sales +
+   Expense Duration pivots) previously hardcoded a viewport-based clamp() that never
+   multiplied by var(--data-scale) — so clicking A-/A/A+ visibly resized the
+   Category column (inherits font-size:calc(11px * var(--data-scale)) from
+   .scp-cell) but had ZERO effect on these amount columns, per explicit user
+   instruction ("left col chote bade ho rahe hai but right wale jinmein amt aata
+   hai vo chota bda nahi hota"). Wrapping the existing clamp in calc(...*
+   var(--data-scale)) keeps the original anti-wrap shrink-on-narrow-column behavior
+   while ALSO responding to the A-/A/A+ control — and since Sales Duration AND
+   Expense Duration both render this exact class, one fix here covers both reports.
+   The THEAD totals-row variant stays on the plain (unscaled) clamp — headers,
+   like every other header in the app, intentionally do NOT resize with A-/A/A+. */
+table.scp-table tbody td.scp-cell.scp-period{white-space:nowrap;overflow:hidden;text-overflow:clip;font-family:Tahoma,Geneva,sans-serif;font-size:calc(clamp(8px,1.1vw,11px) * var(--data-scale));font-weight:600;letter-spacing:-0.5px;}
+table.scp-table thead tr.scp-totals-row td.scp-period{white-space:nowrap;overflow:hidden;text-overflow:clip;font-family:Tahoma,Geneva,sans-serif;font-size:clamp(8px,1.1vw,11px);font-weight:600;letter-spacing:-0.5px;}
+table.scp-table tbody td.scp-cell.scp-total,
+table.scp-table thead tr.scp-totals-row td.scp-total{white-space:nowrap;font-family:Tahoma,Geneva,sans-serif;font-weight:700;letter-spacing:-0.5px;}
+table.scp-table tbody td.scp-cell.scp-cat{text-align:left;font-weight:700;color:var(--ink);font-family:inherit;background:var(--accent-tint2);}
+table.scp-table tbody td.scp-cell.scp-total{font-weight:700;color:var(--ink);background:var(--accent-tint2);}
+table.scp-table tbody td.scp-cell.scp-pct{color:var(--muted);font-weight:600;background:var(--accent-tint2);}
+table.scp-table thead tr.scp-totals-row td.scp-pct{color:var(--ink-secondary);}
+table.scp-table tbody td.scp-cell.scp-sno{font-weight:600;}
+table.scp-table tbody td.scp-cell.scp-zero{color:#C7CCDA;background:transparent!important;}
+table.scp-table tbody tr:nth-child(even) td.scp-cell:not(.scp-cat):not(.scp-total):not(.scp-pct):not(.scp-sno){background:#FAFBFD;}
+table.scp-table tbody tr:hover td{filter:brightness(0.95);}
+
+/* ---------- INDIA MAP VIEW ---------- */
+.map-shell{position:relative;display:grid;grid-template-columns:minmax(0,1.65fr) minmax(330px,1fr);gap:14px;min-height:650px;height:clamp(650px,calc(100vh - 165px),900px);transition:grid-template-columns .2s ease;}
+.map-shell.map-side-closed{grid-template-columns:minmax(0,1fr);}
+.map-shell.map-side-closed .map-side{display:none;}
+.map-panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;overflow:hidden;min-height:0;box-shadow:0 8px 28px rgba(15,23,42,.06);}
+.map-toolbar{min-height:62px;padding:10px 14px;border-bottom:1px solid var(--line-light);display:flex;align-items:center;gap:12px;background:linear-gradient(180deg,var(--surface),var(--bg));}
+.map-heading{display:flex;flex-direction:column;gap:2px;min-width:190px;}
+.map-title{font-weight:800;font-size:14px;color:var(--ink);letter-spacing:-.01em;}
+.map-subtitle{font-size:9.5px;font-weight:600;color:var(--muted);white-space:nowrap;}
+.map-zoom-controls{display:flex;align-items:center;gap:5px;margin-left:auto;}
+.map-zoom-controls .btn{height:32px;padding:5px 10px;font-size:11px;white-space:nowrap;}
+.map-zoom-controls .map-zoom-btn{width:32px;padding:0;font-size:18px;line-height:1;font-weight:700;}
+.map-reset-btn{min-width:38px;}
+.map-side-toggle{display:inline-flex!important;align-items:center;gap:6px;min-width:82px;justify-content:center;border-color:var(--accent)!important;color:var(--accent-dark)!important;}
+.map-side-toggle:not(.is-open){background:var(--accent)!important;color:#fff!important;box-shadow:0 2px 7px var(--color-primary-glow);}
+.map-side-toggle b{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:currentColor;font-size:13px;line-height:1;}
+.map-side-toggle b::first-line{color:inherit;}.map-side-toggle:not(.is-open) b{background:rgba(255,255,255,.2);color:#fff;}.map-side-toggle.is-open b{background:var(--accent-tint);color:var(--accent-dark);}
+.map-canvas-wrap{--map-empty-fill:#E8EDF4;--map-state-backdrop:#F8FAFC;--map-state-fallback:#DCEAFE;position:relative;flex:1;min-height:0;display:block;overflow:hidden;padding:0;background:radial-gradient(circle at 50% 42%,rgba(219,234,254,.34),rgba(248,250,252,.76) 58%,rgba(241,245,249,.92));isolation:isolate;}
+.map-canvas-wrap>.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;}
+.india-map-svg{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
+.india-map-svg.is-grabbing{cursor:grabbing;}
+.map-state-path{cursor:pointer;transition:opacity .12s,filter .12s;vector-effect:non-scaling-stroke;}
+.map-state-path:hover,.map-state-path.hover{opacity:.88;filter:saturate(1.14) brightness(.98);stroke:#0F172A !important;stroke-width:2.2 !important;}
+.map-state-backdrop{fill:var(--map-state-backdrop,#F8FAFC);stroke:none;}
+.map-state-fallback{fill:var(--map-state-fallback,#DCEAFE);stroke:none;}
+.map-selected-outline{fill:none;stroke:#0F172A;stroke-width:3.2;vector-effect:non-scaling-stroke;pointer-events:none;}
+.map-district-path{stroke:#64748B;stroke-opacity:.72;stroke-width:1.45;vector-effect:non-scaling-stroke;transition:filter .12s,opacity .12s;}
+.map-district-path:hover{filter:brightness(.92) saturate(1.08);stroke:#0F172A;stroke-opacity:1;stroke-width:2.2;}
+.map-district-path.has-sales{cursor:help;}
+.map-marker{pointer-events:auto;}
+.map-marker:hover circle:first-of-type{filter:brightness(1.1);}
+.map-label-card{fill:rgba(255,255,255,.96);stroke:#CBD5E1;stroke-width:1;vector-effect:non-scaling-stroke;filter:drop-shadow(0 2px 3px rgba(15,23,42,.16));}
+.map-label-name{font:700 10px 'Inter',sans-serif;fill:#0F172A;}
+.map-label-city{font:600 8px 'Inter',sans-serif;fill:#475569;}
+.map-label-amount{font:800 9px 'JetBrains Mono',monospace;fill:#047857;}
+.map-label-leader{fill:none;stroke:#475569;stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke;}
+.map-label-anchor{fill:#0F766E;stroke:#fff;stroke-width:1.5;vector-effect:non-scaling-stroke;}
+.map-district-label{pointer-events:auto;}
+.map-navigation-hint{position:absolute;right:12px;bottom:10px;display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid rgba(148,163,184,.45);border-radius:8px;background:rgba(255,255,255,.9);box-shadow:0 3px 12px rgba(15,23,42,.08);font-size:9px;font-weight:700;color:#64748B;pointer-events:none;backdrop-filter:blur(5px);}
+.map-navigation-hint span+span{padding-left:8px;border-left:1px solid #CBD5E1;}
+.map-navigation-hint strong{color:#0F766E;font-family:'JetBrains Mono',monospace;}
+.map-coverage-card{position:absolute;left:12px;top:12px;display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid rgba(148,163,184,.4);border-radius:9px;background:rgba(255,255,255,.94);box-shadow:0 4px 16px rgba(15,23,42,.09);font-size:9.5px;font-weight:700;color:#64748B;backdrop-filter:blur(5px);}
+.map-coverage-card .map-coverage-good{color:#047857;}
+.map-coverage-card strong{padding-left:9px;border-left:1px solid #D7DEE8;color:#0F172A;}
+.map-source-warning{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:2px;max-width:310px;padding:9px 11px;border:1px solid #FCD34D;border-radius:9px;background:rgba(255,251,235,.96);font-size:9.5px;color:#92400E;box-shadow:0 4px 14px rgba(146,64,14,.09);}
+.map-source-warning strong{font-size:10.5px;}.map-source-warning button{border:0;background:none;color:#B45309;text-decoration:underline;font:inherit;font-weight:800;cursor:pointer;padding:0;}
+.map-legend{display:flex;align-items:center;gap:8px;min-height:38px;padding:8px 14px;border-top:1px solid var(--line-light);font-size:9.5px;color:var(--muted);font-weight:700;background:var(--surface);}
+.map-legend-bar{width:104px;height:8px;border-radius:5px;background:linear-gradient(90deg,#DBEAFE,#0F766E);box-shadow:inset 0 0 0 1px rgba(100,116,139,.14);}
+.map-boundary-note{margin-left:auto;color:var(--muted);text-align:right;}
+.map-side{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;min-height:0;overflow:hidden;box-shadow:0 8px 28px rgba(15,23,42,.04);}
+.map-side-title{font-size:13px!important;}
+.map-data-note{margin:-2px 0 10px;padding:8px 9px;border:1px solid #BAE6FD;border-radius:8px;background:#F0F9FF;color:#475569;font-size:9.5px;line-height:1.45;}
+.map-data-note strong{color:#0369A1;}
+.map-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
+.map-list-row{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:8px;cursor:pointer;}
+.map-list-row:hover{background:var(--accent-tint2);}
+.mlr-name{width:120px;flex:none;font-size:11.5px;font-weight:600;color:var(--ink-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mlr-track{flex:1;height:10px;background:var(--line-light);border-radius:5px;overflow:hidden;}
+.mlr-fill{height:100%;background:linear-gradient(90deg,var(--accent),#1E5ADC);border-radius:5px;}
+.mlr-val{width:90px;flex:none;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--ink);}
+@media (max-width:1200px){.map-shell{grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);}.map-subtitle{display:none;}.map-toolbar{flex-wrap:wrap;}.map-search-box{order:3;flex:1 1 100%;max-width:none;}.map-search-input{width:100%;}}
+@media (max-width:980px){.map-shell{grid-template-columns:1fr;height:auto;max-height:none;}.map-panel{height:620px;}.map-side{min-height:520px;}.map-heading{min-width:150px;}.map-coverage-card{right:10px;left:10px;justify-content:center;}.map-boundary-note{display:none;}}
+html.dark .map-canvas-wrap{--map-empty-fill:#263248;--map-state-backdrop:#182236;--map-state-fallback:#223A5E;background:radial-gradient(circle at 50% 42%,rgba(30,58,95,.48),rgba(11,15,26,.9) 66%);}
+html.dark .map-navigation-hint,html.dark .map-coverage-card{background:rgba(19,26,43,.94);border-color:#34405A;color:#A6AEC4;}
+html.dark .map-coverage-card strong{color:#E7EAF4;border-color:#34405A;}
+html.dark .map-label-card{fill:rgba(19,26,43,.96);stroke:#44506A;}
+html.dark .map-label-name{fill:#F1F5F9;}html.dark .map-label-city{fill:#B8C0D4;}html.dark .map-label-amount{fill:#5EEAD4;}
+html.dark .map-selected-outline{stroke:#E2E8F0;}html.dark .map-source-warning{background:rgba(69,45,15,.96);border-color:#A16207;color:#FDE68A;}
+html.dark .map-data-note{background:#101E31;border-color:#1E4F73;color:#A6AEC4;}html.dark .map-data-note strong{color:#7DD3FC;}
+
+/* ---------- MAP KPI CARDS ---------- */
+.map-kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;}
+.map-kpi-card{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+/* Map-only composition: KPI cards share the Financial Year row, reclaiming a
+   complete vertical row for the map canvas. Other pages still get the plain FY bar. */
+.fbar-with-trailing{padding:6px 9px;margin-bottom:9px;gap:9px;align-items:center;}
+.fbar-trailing{flex:1;min-width:0;}
+.fbar-trailing .map-kpi-strip{grid-template-columns:repeat(4,minmax(112px,1fr));gap:6px;margin:0;}
+.fbar-trailing .map-kpi-card{min-width:0;min-height:40px;padding:5px 8px;gap:7px;border-radius:8px;}
+.fbar-trailing .map-kpi-card .card-icon{width:25px;height:25px;border-radius:6px;}
+.fbar-trailing .map-kpi-card .card-icon svg{width:12px;height:12px;}
+.fbar-trailing .map-kpi-body{gap:0;}
+.fbar-trailing .map-kpi-body .card-label{font-size:7.5px;}
+.fbar-trailing .map-kpi-body .card-value{font-size:12px;}
+.fbar-trailing .map-kpi-body .card-sub{font-size:8px;margin-top:0;}
+.map-kpi-card .card-icon{width:32px;height:32px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;}
+.map-kpi-card .card-icon svg{width:15px;height:15px;}
+.map-kpi-body{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.map-kpi-body .card-label{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.map-kpi-body .card-value{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.map-kpi-body .card-sub{font-size:10px;color:var(--muted);}
+
+@media (max-width:1380px){.fbar-with-trailing .fy-selection-note{display:none;}.fbar-trailing .map-kpi-strip{grid-template-columns:repeat(4,minmax(100px,1fr));}.fbar-trailing .map-kpi-card{padding-left:6px;padding-right:6px;}}
+@media (max-width:1050px){.fbar-with-trailing{flex-wrap:wrap;}.fbar-with-trailing .fbar-trailing{flex:1 1 100%;}.fbar-trailing .map-kpi-strip{grid-template-columns:repeat(4,minmax(0,1fr));}}
+@media (max-width:700px){.fbar-trailing .map-kpi-strip{grid-template-columns:repeat(2,minmax(0,1fr));}.map-shell{min-height:600px;}.map-side-toggle span{display:none;}.map-side-toggle{min-width:32px!important;width:32px!important;padding:0!important;}}
+
+/* ---------- MAP SEARCH BOX ---------- */
+.map-search-box{position:relative;display:flex;align-items:center;flex:0 1 200px;min-width:140px;}
+.map-search-input{width:100%;padding:6px 28px 6px 10px;border:1.5px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font-size:11.5px;font-weight:500;}
+.map-search-input:focus{outline:none;border-color:var(--accent);}
+.map-search-icon{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none;opacity:.6;}
+.map-search-highlight{animation:map-highlight-pulse 1.2s ease-in-out infinite;}
+@keyframes map-highlight-pulse{0%,100%{opacity:1;}50%{opacity:.7;}}
+
+/* ---------- MAP CITY SORTABLE TABLE ---------- */
+.map-city-table-wrap{overflow-y:auto;flex:1;min-height:0;}
+.map-city-table{width:100%;border-collapse:collapse;font-size:11px;}
+.map-city-table thead th{position:sticky;top:0;background:var(--accent-tint);color:var(--accent-dark);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:7px 8px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap;}
+.map-city-table thead th.num{text-align:right;}
+.map-city-table thead th.map-th-active{background:var(--accent);color:#fff;}
+.map-city-table tbody td{padding:6px 8px;border-bottom:1px solid var(--line-light);color:var(--ink-secondary);font-size:11px;}
+.map-city-table tbody td.num{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;}
+.map-city-table tbody tr:nth-child(even){background:#FAFBFD;}
+.map-city-table tbody tr:hover{background:var(--accent-tint2);}
+
+/* ---------- MAP TOP CUSTOMERS ---------- */
+.map-customers-list{display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:180px;}
+.map-cust-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;font-size:11px;}
+.map-cust-row:hover{background:var(--accent-tint2);}
+.map-cust-rank{width:18px;height:18px;border-radius:50%;background:var(--accent-tint);color:var(--accent-dark);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;}
+.map-cust-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink);}
+.map-cust-amt{flex:none;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:10.5px;color:var(--ink);}
+.map-cust-inv{flex:none;font-size:9px;color:var(--muted);font-weight:600;}
+
+@media (max-width:980px){.map-kpi-strip{grid-template-columns:repeat(2,1fr);}.map-search-box{flex:1 1 100%;min-width:0;}}
+
+/* ---------- KPI CARDS ---------- */
+.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.03);cursor:pointer;transition:box-shadow .15s,transform .1s;}
+.card:hover{box-shadow:0 6px 18px rgba(0,0,0,.07);transform:translateY(-1px);}
 .card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-.card-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none;}
+.card-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;}
+.card-icon svg{width:18px;height:18px;}
+.card-icon.c-green{background:var(--green-tint);color:var(--green);}
+.card-icon.c-orange{background:var(--orange-tint);color:var(--orange);}
+.card-icon.c-blue{background:var(--blue-tint);color:var(--blue);}
+.card-icon.c-red{background:var(--red-tint);color:var(--red);}
+.card-icon.c-purple{background:var(--purple-tint);color:var(--purple);}
+.card-icon.c-teal{background:var(--teal-tint);color:var(--teal);}
+.card-icon.c-indigo{background:var(--indigo-tint);color:var(--indigo);}
 .card-icon.recv{background:var(--recv-tint);color:var(--recv);}
 .card-icon.pay{background:var(--pay-tint);color:var(--pay);}
 .card-icon.exp{background:var(--danger-tint);color:var(--danger);}
 .card-icon.net{background:var(--success-tint);color:var(--success);}
-.card-label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;}
-.card-value{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;color:var(--ink);}
-.card-sub{font-size:10.5px;color:var(--muted);margin-top:4px;}
+.card-label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.card-value{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:700;color:var(--ink);}
+.card-sub{font-size:10.5px;color:var(--muted);margin-top:5px;display:flex;align-items:center;gap:4px;}
+.card-sub .chip{display:inline-flex;align-items:center;gap:2px;font-weight:700;}
+.card-sub .chip.up{color:var(--green);}
+.card-sub .chip.down{color:var(--red);}
 .card-sub.up{color:var(--danger);}
 .card-sub.down{color:var(--success);}
 
-.dash-row{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px;}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
-.panel-title{padding:12px 16px;border-bottom:1px solid var(--line-light);font-size:12.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;justify-content:space-between;}
-.panel-title a{font-size:10.5px;font-weight:600;color:var(--accent-dark);text-decoration:none;cursor:pointer;}
-.panel-body{padding:14px 16px;}
+.kpi-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:14px;}
+.kpi-strip .card{padding:12px 13px;}
+.kpi-strip .card-icon{width:30px;height:30px;border-radius:8px;}
+.kpi-strip .card-icon svg{width:15px;height:15px;}
+.kpi-strip .card-label{font-size:9px;}
+.kpi-strip .card-value{font-size:15.5px;}
+.kpi-strip .card-top{margin-bottom:7px;}
 
-.mini-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line-light);font-size:12px;}
+.dash-row{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px;}
+.dash-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;}
+.dash-row4{display:grid;grid-template-columns:1.25fr 1.25fr 1.2fr .9fr;gap:14px;margin-bottom:14px;}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+.panel-title{padding:12px 16px;border-bottom:1px solid var(--line-light);font-size:12.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.panel-title .pt-actions{display:flex;align-items:center;gap:8px;}
+.panel-title a{font-size:10.5px;font-weight:600;color:var(--accent-dark);text-decoration:none;cursor:pointer;white-space:nowrap;}
+.panel-title select{font-size:11px;font-weight:600;border:1.5px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--surface);color:var(--ink-secondary);cursor:pointer;}
+.panel-body{padding:14px 16px;flex:1;min-height:0;}
+.panel-foot{padding:10px 16px;border-top:1px solid var(--line-light);font-size:11.5px;color:var(--accent-dark);display:flex;align-items:center;justify-content:space-between;font-weight:600;}
+
+.mini-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line-light);font-size:12px;gap:10px;}
 .mini-row:last-child{border-bottom:0;}
 .mini-row .nm{font-weight:600;color:var(--ink);}
 .mini-row .sub{font-size:10.5px;color:var(--muted);}
-.mini-row .amt{font-family:'JetBrains Mono',monospace;font-weight:700;}
+.mini-row .amt{font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;}
 .mini-row .amt.recv{color:var(--recv);}
 .mini-row .amt.pay{color:var(--pay);}
+.mini-row .lft{display:flex;align-items:center;gap:9px;min-width:0;}
+.mini-row .mode-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:var(--accent-tint2);color:var(--accent-dark);flex:none;}
 
 .bar-chart{display:flex;flex-direction:column;gap:10px;}
 .bar-item{display:flex;align-items:center;gap:10px;}
-.bar-item .b-label{width:78px;font-size:10.5px;color:var(--muted);font-weight:600;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bar-item .b-label{width:90px;font-size:10.5px;color:var(--muted);font-weight:600;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .bar-track{flex:1;height:14px;background:var(--line-light);border-radius:7px;overflow:hidden;position:relative;}
-.bar-fill{height:100%;border-radius:7px;background:linear-gradient(90deg,var(--accent),#E0B458);}
+.bar-fill{height:100%;border-radius:7px;background:linear-gradient(90deg,var(--accent),#5B8CFA);}
 .bar-fill.recv{background:linear-gradient(90deg,var(--recv),#7FA8F5);}
-.bar-item .b-val{width:82px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--ink);flex:none;}
+.bar-fill.pay{background:linear-gradient(90deg,var(--pay),#F5B15E);}
+.bar-item .b-val{width:88px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--ink);flex:none;}
 
-.age-buckets{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
-.age-bucket{background:var(--accent-tint2);border:1px solid var(--line);border-radius:9px;padding:10px 8px;text-align:center;}
-.age-bucket .ab-label{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
-.age-bucket .ab-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--ink);margin-top:4px;}
+/* Ageing buckets (Receivable/Payable Ageing Snapshot): the bucket range label
+   ("0-30 Days" etc) must stay on ONE line in a small bold font, with the amount
+   sitting BELOW it in a lighter grey — per the reference screenshot. There are
+   always exactly 4 buckets from ageingBuckets() (0-30/31-60/61-90/90+), so the
+   grid is 4 columns, not 5 — the old repeat(5,1fr) left a dead unused column of
+   white space to the right of every row. */
+.age-buckets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.age-bucket{background:var(--accent-tint2);border:1px solid var(--line);border-radius:9px;padding:8px 6px;text-align:center;}
+.age-bucket .ab-label{font-size:10px;font-weight:700;color:var(--ink-secondary);letter-spacing:.01em;white-space:nowrap;}
+.age-bucket .ab-val{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:600;color:var(--muted);margin-top:3px;white-space:nowrap;}
 .age-bucket.danger{background:var(--danger-tint);}
 .age-bucket.danger .ab-val{color:var(--danger);}
 
-/* ---------- DATA GRID (generic engine) ---------- */
-.dt-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex:none;flex-wrap:wrap;}
-.dt-toolbar .count{font-size:12px;color:var(--muted);font-weight:500;}
+/* ---------- CHARTS ---------- */
+.chart-wrap{position:relative;width:100%;height:220px;}
+.chart-wrap.sm{height:160px;}
+.chart-wrap.donut{height:150px;}
+.donut-panel-body{display:flex;align-items:center;gap:12px;}
+.donut-panel-body .chart-wrap{flex:none;width:128px;height:128px;}
+.donut-legend{flex:1;display:flex;flex-direction:column;gap:7px;}
+.donut-legend .dl-row{display:flex;align-items:center;gap:8px;font-size:11.5px;}
+.donut-legend .dl-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+.donut-legend .dl-label{flex:1;color:var(--ink-secondary);font-weight:600;}
+.donut-legend .dl-val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);}
+.donut-legend .dl-pct{color:var(--muted);font-size:10px;width:34px;text-align:right;}
+
+/* Sales Topline follows the compact donut-and-legend layout from the dashboard
+   reference: an obvious total in the donut, then one clean colour-coded row per
+   category. The vertical layout keeps every value visible in its narrow column. */
+.sales-topline-panel{min-width:0;}
+.sales-topline-title{align-items:flex-start;line-height:1.45;}
+.sales-topline-title>span:first-child{min-width:0;}
+.sales-topline-period{flex:none;margin-top:-2px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:9px;line-height:1.1;font-weight:700;color:var(--muted);white-space:nowrap;}
+.sales-topline-period::after{content:'⌄';margin-left:4px;color:var(--accent-dark);}
+.sales-topline-body{padding:9px 16px 5px;display:flex;flex-direction:column;align-items:stretch;gap:5px;}
+.sales-topline-chart{align-self:center;flex:none;width:88px;height:88px;}
+.sales-topline-summary{display:flex;align-items:center;justify-content:center;gap:7px;padding:0 0 1px;text-transform:uppercase;letter-spacing:.04em;font-size:8.5px;font-weight:700;color:var(--muted);}
+.sales-topline-summary strong{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0;color:var(--ink);white-space:nowrap;}
+.sales-topline-legend{display:flex;flex-direction:column;gap:0;}
+.sales-topline-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:10px;padding:4px 0;border-bottom:1px solid var(--line-light);min-height:21px;font-size:10px;line-height:1.2;}
+.sales-topline-row:last-child{border-bottom:0;}
+.sales-topline-category{display:flex;align-items:center;gap:7px;min-width:0;color:var(--ink-secondary);font-weight:700;}
+.sales-topline-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+.sales-topline-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sales-topline-amount{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--ink);white-space:nowrap;text-align:right;}
+.sales-topline-foot{justify-content:center;padding:6px 16px!important;}
+.sales-topline-foot a{color:var(--accent-dark);font-size:10px;font-weight:700;text-decoration:none;white-space:nowrap;cursor:pointer;}
+.sales-topline-foot a span{margin-left:4px;font-size:13px;line-height:0;vertical-align:-1px;}
+.donut-center-total{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;pointer-events:none;}
+.donut-center-total .dt-val{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:var(--ink);}
+.donut-center-total .dt-lbl{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+
+.cashflow-list{display:flex;flex-direction:column;gap:11px;}
+.cf-item{display:flex;align-items:center;gap:10px;}
+.cf-item .cf-label{width:100px;font-size:11px;color:var(--ink-secondary);font-weight:600;flex:none;}
+.cf-track{flex:1;height:16px;background:var(--line-light);border-radius:5px;overflow:hidden;}
+.cf-fill{height:100%;border-radius:5px;}
+.cf-fill.blue{background:var(--blue);}
+.cf-fill.green{background:var(--green);}
+.cf-fill.red{background:var(--red);}
+.cf-item .cf-val{width:110px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;flex:none;}
+.cf-item .cf-val.pos{color:var(--green);}
+.cf-item .cf-val.neg{color:var(--red);}
+.cf-net{margin-top:6px;padding-top:12px;border-top:1px dashed var(--line);display:flex;align-items:center;justify-content:space-between;}
+.cf-net .lbl{font-size:12px;font-weight:700;color:var(--ink);}
+.cf-net .val{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--green);}
+
+/* ---------- MINI DATA TABLES (dashboard panels) ---------- */
+.mini-table{width:100%;border-collapse:collapse;font-size:11.5px;}
+.mini-table thead th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:0 10px 8px;border-bottom:1px solid var(--line-light);}
+.mini-table thead th.num{text-align:right;}
+.mini-table tbody td{padding:8px 10px;border-bottom:1px solid var(--line-light);color:var(--ink-secondary);}
+.mini-table tbody td.num{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);}
+.mini-table tbody td.nm{font-weight:700;color:var(--ink);}
+.mini-table tbody tr:last-child td{border-bottom:0;}
+.mini-table tbody tr:hover{background:var(--accent-tint2);}
+.status-badge{font-size:9.5px;font-weight:700;padding:3px 9px;border-radius:12px;display:inline-block;white-space:nowrap;}
+.status-badge.overdue{background:var(--danger-tint);color:var(--danger);}
+.status-badge.due-soon{background:var(--orange-tint);color:var(--orange);}
+.status-badge.current{background:var(--success-tint);color:var(--success);}
+.status-badge.paid{background:var(--success-tint);color:var(--success);}
+.mini-cat-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-light);}
+.mini-cat-row:last-child{border-bottom:0;}
+.mini-cat-dot{width:9px;height:9px;border-radius:3px;flex:none;}
+.mini-cat-row .mc-label{flex:none;width:110px;font-size:11.5px;font-weight:600;color:var(--ink-secondary);}
+.mini-cat-row .mc-track{flex:1;height:8px;background:var(--line-light);border-radius:4px;overflow:hidden;}
+.mini-cat-row .mc-fill{height:100%;border-radius:4px;}
+.mini-cat-row .mc-amt{width:78px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;flex:none;}
+.mini-cat-row .mc-pct{width:40px;text-align:right;font-size:10px;color:var(--muted);flex:none;}
+.mini-total-row{display:flex;justify-content:space-between;padding-top:10px;margin-top:2px;border-top:1.5px solid var(--line);font-weight:700;font-size:12px;color:var(--ink);}
+
+/* ---------- REPORTS HUB ---------- */
+/* Reports page groups every report tile under a section heading — "All Reports"
+   (existing set, now also including Sales Report + Expense Report which moved in
+   from the sidebar) and "More Reports" (new report ideas added per explicit user
+   instruction "add all reports u suggested"). */
+.reports-section{margin-bottom:22px;}
+.reports-section:last-child{margin-bottom:0;}
+.reports-section-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line-light);}
+
+/* ---------- QUICK ACTIONS ---------- */
+.qa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.qa-btn{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;transition:all .12s;text-align:center;}
+.qa-btn:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px);}
+.qa-btn .qa-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;}
+.qa-btn .qa-ic svg{width:16px;height:16px;}
+.qa-btn span.qa-txt{font-size:10.5px;font-weight:700;color:var(--ink-secondary);}
+
+/* ---------- DATA GRID (generic engine) ----------
+   Toolbar (row-count + Refresh + Columns) and the pagination footer below the
+   table were both carrying noticeably more top/bottom breathing room than the
+   rest of the compact dashboard — per explicit user instruction ("228 of 228
+   rows, refresh columns ke neeche bhi bahut space hai"), both are tightened here
+   so every grid page reads denser/more professional and saves vertical space. */
+.dt-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex:none;flex-wrap:wrap;}
+/* Every grid's toolbar (not just the report-switcher pages) no longer shows the
+   "N of N rows" count, per explicit user instruction ("jitni bhi table hai isme
+   39 of 39 rows remove kar do"). Refresh + Columns now sit together on the RIGHT
+   side of the toolbar row via .report-switcher-right (reused here for consistency
+   with the report-switcher toolbar layout), instead of Refresh sitting on the left
+   next to a row count. def.toolbarExtra() content (e.g. Sales Report's own
+   Sales/Duration toggle) stays on the left. */
+.dt-toolbar-plain{justify-content:space-between;}
+/* Report-switcher toolbar — used on Customer List/Receipt List/Follow Up
+   List/Credit Notes (see GRID_DEFS[key].reportTabs in Grids.html) and Collection
+   Analysis (rendered directly above its cards in Receivables.html). Per explicit
+   user instruction: the "N of N rows" count is dropped, the tab buttons that jump
+   to any of the 5 Receivables reports come first (left), and Refresh + Columns sit
+   together in the right corner, after the tabs. */
+.report-switcher-toolbar{justify-content:space-between;}
+.report-switcher-right{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.report-switcher-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.report-switcher-tab{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-secondary);padding:7px 13px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .12s;white-space:nowrap;}
+.report-switcher-tab .rst-ic{width:14px;height:14px;display:inline-flex;flex:none;}
+.report-switcher-tab .rst-ic svg{width:14px;height:14px;}
+.report-switcher-tab:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
+.report-switcher-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dt-toolbar .count{font-size:11.5px;color:var(--muted);font-weight:500;}
 .dt-colmenu-wrap{position:relative;margin-left:auto;}
-.dt-colmenu{position:absolute;right:0;top:38px;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.12);padding:12px;min-width:200px;z-index:20;}
+.dt-colmenu{position:absolute;right:0;top:38px;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.12);padding:12px;min-width:270px;max-height:420px;overflow:auto;z-index:20;}
 .dt-colmenu .h{font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.08em;font-weight:700;margin-bottom:8px;}
 .dt-colmenu label{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:5px 4px;cursor:pointer;border-radius:4px;}
 .dt-colmenu label:hover{background:var(--accent-tint2);}
+.dt-colmenu-row{display:flex;align-items:center;gap:8px;border-radius:5px;}.dt-colmenu-row>label{flex:1;min-width:0}.dt-colmenu-row>label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.col-shift{display:flex;gap:3px}.col-shift button{width:25px;height:25px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink-secondary);cursor:pointer}.col-shift button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}.col-shift button:disabled{opacity:.25;cursor:default;}
 .dt-table-wrap{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.04);}
-.dt-scroll{flex:1;overflow:auto;min-height:0;}
+.dt-table-wrap.compact{flex:none;height:390px;}
+.dt-table-wrap.compact .dt-scroll{max-height:390px;}
+/* Dashboard mini reports: dense screenshot-like tables, no S.No column, clipped
+   names with native hover titles, and a permanent vertical scroll gutter. */
+.dashboard-report-panel{min-width:0;}
+/* Height tuned to show ~5 data rows before the scrollbar kicks in (31px header +
+   5 * ~28px rows ≈ 174px); anything beyond row 5 is reachable via the scrollbar.
+   Expense by Category rarely has more than 6 rows, so it gets a shorter box —
+   Top Customers/Top Vendors get a taller one so they read as the primary tables. */
+.dt-table-wrap.compact.dashboard-report{height:180px;border:0;border-radius:0;box-shadow:none;overflow:hidden;}
+.dt-table-wrap.compact.dashboard-report .dt-scroll{max-height:180px;overflow-y:scroll;overflow-x:hidden;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-customers,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors{height:236px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-customers .dt-scroll,.dt-table-wrap.compact.dashboard-report.dashboard-report-vendors .dt-scroll{max-height:236px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses{height:156px;}
+.dt-table-wrap.compact.dashboard-report.dashboard-report-expenses .dt-scroll{max-height:156px;}
+.dt-table-wrap.compact.dashboard-report table.dt{width:100%;table-layout:fixed;}
+/* Same light-blue header theme for all three dashboard mini reports (Top Customers,
+   Top Vendors, Expense by Category) — no dark navy background. Header text/sort icon
+   are centered (both horizontally within the column and vertically within the cell)
+   to match the reference screenshot instead of the generic grid's left-aligned label. */
+.dt-table-wrap.compact.dashboard-report table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);vertical-align:middle;}
+/* Headers were getting visually clipped ("Outstanding (₹)"/"Overdue Days" cut off)
+   because the label was forced to one line with ellipsis at a very tight width.
+   Fix: let the label wrap onto two lines and grow the header row height to fit —
+   nothing is ever hidden now, at the cost of a couple extra px of header height. */
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-inner{padding:6px 6px;min-height:34px;justify-content:center;align-items:center;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-row{gap:3px;justify-content:center;width:100%;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .th-label{font-size:8px;line-height:1.15;letter-spacing:.02em;white-space:normal;overflow:visible;text-overflow:unset;overflow-wrap:break-word;word-break:normal;color:var(--accent-dark);font-weight:700;text-align:center;}
+.dt-table-wrap.compact.dashboard-report table.dt thead th .sort-ic{font-size:7px;width:auto;color:var(--accent-dark);flex:none;}
+.dt-table-wrap.compact.dashboard-report table.dt tbody td{padding:6px 7px;font-size:10px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;border-right:0;}
+.dt-table-wrap.compact.dashboard-report table.dt tbody tr:nth-child(even){background:#FAFBFD;}
+.dt-table-wrap.compact.dashboard-report table.dt tbody tr:hover{background:var(--accent-tint2);}
+.dreport-name{display:flex;align-items:center;gap:7px;min-width:0;max-width:100%;overflow:hidden;color:var(--ink);font-weight:650;}
+.dreport-ellipsis{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dreport-color-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+.dreport-money{font-family:'JetBrains Mono',monospace;font-weight:700;}
+.dashboard-report-customers .dreport-money.recv{color:var(--recv);}.dashboard-report-vendors .dreport-money.pay{color:var(--pay);}.dashboard-report-expenses .dreport-money.expense{color:var(--purple);}
+.dreport-overdue{font-family:'JetBrains Mono',monospace;font-weight:800;}.dreport-overdue.success{color:var(--success);}.dreport-overdue.warning{color:var(--orange);}.dreport-overdue.danger{color:var(--danger);}
+.dashboard-report-panel .panel-foot{font-size:10.5px;padding:8px 12px;}
+.dashboard-report-panel .panel-title{font-size:12px;padding:10px 12px;}
+/* Receivables Dashboard's full invoice grid lives beneath the visual summary.
+   It deliberately keeps its own vertical scroll area while retaining the shared
+   flexible-grid controls: every header sorts/searches/filters, and Columns opens
+   the persisted hide/show, reorder, and resize options. */
+/* The receivablesDashboard table (embedded inside the Ageing Summary "All Data"
+   tab) uses flex:1 so it fills available content height when there are enough rows,
+   but does NOT force a fixed height that would leave visible blank space below
+   short page counts, per explicit user instruction ("niche blank aise achha nahi
+   lag rha hai"). max-height ensures a very long page doesn't push the table beyond
+   one viewport. */
+.recv-dashboard-table{flex:1;min-height:0;display:flex;flex-direction:column;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
+.recv-dashboard-table .dt-toolbar{margin:0 0 6px;gap:8px;flex:none;}
+.recv-dashboard-table .dt-toolbar .count{font-size:11px;}
+.recv-dashboard-table .dt-toolbar .btn{padding:6px 11px!important;font-size:11px;}
+.recv-dashboard-table .dt-table-wrap{flex:1;min-height:0;}
+.recv-dashboard-table .dt-scroll{overflow:auto;max-height:none;}
+.recv-dashboard-table .dt-pagination{flex:none;}
+.recv-dashboard-table table.dt thead th .th-inner{padding:6px 10px;gap:3px;min-height:31px;}
+.recv-dashboard-table table.dt thead th .th-label{font-size:9px;line-height:1.15;letter-spacing:.05em;}
+.recv-dashboard-table table.dt thead th .sort-ic{font-size:8px;}
+.recv-dashboard-table table.dt thead th .search-ic{font-size:10px;}
+.recv-dashboard-table table.dt tbody td{padding:6px 10px;font-size:11.5px;line-height:1.25;}
+.recv-dashboard-table .dt-pagination{padding:7px 10px;font-size:11px;}
+.recv-dashboard-table .dt-pagination select,.recv-dashboard-table .dt-pagination .nav button{font-size:11px;padding:4px 8px;}
+.dt-scroll{flex:1;overflow:auto;min-height:0;overscroll-behavior-x:none;}
+/* ---------- RECEIPT LIST VIEWPORT-FIT PROTOTYPE ----------
+   This shell is deliberately scoped to Receipt List only. It consumes the complete
+   zoom-compensated content height, leaves the toolbar fixed, and allocates every
+   remaining pixel to one bordered table panel. */
+.receipt-grid-shell{display:flex;flex-direction:column;flex:1;height:100%;min-height:0;overflow:hidden;}
+.receipt-grid-shell .dt-toolbar{flex:none;}
+.receipt-grid-table-wrap{display:flex;flex-direction:column;flex:1;min-height:0;border-radius:10px 10px 0 0;overflow:hidden;}
+.receipt-grid-table-wrap>.dt-scroll{flex:1;min-height:0;max-height:none;overflow:auto;background:var(--surface);}
+.receipt-grid-table-wrap>.dt-pagination{flex:none;margin-top:0;}
+.receipt-reset-filters{padding:5px 12px!important;font-size:11.5px!important;}
+.receipt-reset-filters:disabled{opacity:.42;cursor:default;}
+/* Applied filters must be obvious without reopening each header control. */
+/* Filter-active state uses the darker --accent-dark tone (still the same color
+   family as the resting --accent header, just visibly deeper) plus a translucent
+   white underline instead of a fixed navy+cyan combo, so it reads correctly no
+   matter which Appearance color scheme is active. */
+table.dt thead th.filter-active{background:var(--accent-dark);box-shadow:inset 0 -3px rgba(255,255,255,.7);}
+table.dt thead th.filter-active .search-ic{color:#FFFFFF;}
+/* Date/Timestamp column's 📅 icon turns active-colored once a range is applied,
+   same visual language as filter-active above, but scoped to just the icon since
+   the date column no longer has its own inline th-filter row to also highlight. */
+table.dt thead th .search-ic.date-filter-active{color:rgba(255,255,255,.9);}
+
+/* ---------- CALENDAR DATE-RANGE POPUP (shared across every date/timestamp column) ----------
+ * Appended directly to <body> as #drPopupRoot (see DateRange.html) — position:fixed
+ * so .dt-scroll's overflow and the sticky <thead> can never clip it, and it always
+ * renders above every other panel regardless of which grid/page it was opened from. */
+#drPopupRoot{position:fixed;z-index:200;display:none;}
+.dr-popup-inner{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 20px 60px -10px rgba(15,23,42,.35);overflow:hidden;width:max-content;}
+.dr-body{display:flex;}
+.dr-presets{display:flex;flex-direction:column;min-width:150px;padding:10px 8px;border-right:1px solid var(--line-light);background:var(--bg);gap:2px;}
+.dr-preset{text-align:left;border:none;background:transparent;padding:9px 12px;border-radius:7px;font-size:12px;font-weight:600;color:var(--ink-secondary);cursor:pointer;transition:all .12s;}
+.dr-preset:hover{background:var(--accent-tint2);color:var(--accent-dark);}
+.dr-preset.active{background:var(--accent);color:#fff;}
+.dr-cals{display:flex;padding:14px 16px;gap:22px;}
+.dr-cal{width:230px;}
+.dr-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;}
+.dr-cal-title{font-size:12.5px;font-weight:700;color:var(--ink);flex:1;text-align:center;}
+.dr-nav{border:1px solid var(--line);background:var(--surface);color:var(--ink-secondary);width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;flex:none;}
+.dr-nav svg{width:11px;height:11px;display:block;}
+.dr-nav:hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
+.dr-nav-spacer{width:24px;flex:none;display:inline-block;}
+.dr-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}
+.dr-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.dr-day{display:flex;align-items:center;justify-content:center;height:28px;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--ink-secondary);cursor:pointer;background:transparent;}
+.dr-day:hover{background:var(--accent-tint2);}
+.dr-day-outside{color:var(--muted);opacity:.45;}
+.dr-day-today{box-shadow:inset 0 0 0 1.5px var(--accent);}
+.dr-day-inrange{background:var(--accent-tint);border-radius:0;color:var(--accent-dark);}
+.dr-day-edge{background:var(--accent);color:#fff;font-weight:700;}
+.dr-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 16px;border-top:1px solid var(--line-light);background:var(--bg);}
+.dr-range-text{font-size:11.5px;font-weight:700;color:var(--ink-secondary);white-space:nowrap;}
+.dr-footer-actions{display:flex;gap:8px;flex:none;}
+.dr-footer-actions .btn{padding:6px 14px;font-size:11.5px;}
+html.dark .dr-popup-inner{background:var(--surface);border-color:var(--line);}
+html.dark .dr-presets{background:#0B0F1A;border-color:var(--line);}
+html.dark .dr-footer{background:#0B0F1A;}
+html.dark .dr-nav{background:var(--surface);border-color:var(--line);color:var(--ink-secondary);}
+@media (max-width:700px){
+  .dr-body{flex-direction:column;}
+  .dr-presets{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line-light);}
+  .dr-cals{flex-direction:column;gap:14px;}
+  .dr-cal{width:100%;}
+}
+
+/* .dt-scroll is THE scroll container that makes thead position:sticky work.
+   It MUST have a bounded height (flex:1 inside a height-constrained flex parent,
+   OR an explicit max-height) — without that, sticky has no scrolling ancestor to
+   stick within and the header scrolls away with the content. */
+.dt-scroll{flex:1;overflow:auto;min-height:0;max-height:calc(100vh - 160px);overscroll-behavior-x:none;}
+
 table.dt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;}
-table.dt thead th{position:sticky;top:0;background:#0F141B;color:#D6CFC0;z-index:4;padding:0;border-right:1px solid #1E2531;overflow:hidden;}
-table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;gap:5px;position:relative;min-height:36px;}
+/* Every grid header on every page now uses --accent (the active Appearance color
+   scheme) instead of a hardcoded dark navy — same color as the view-toggle/
+   fbar-presets "active" buttons the user pointed at ("jaise appearance color ke
+   hai isme jo buttons ke color hai waise hi"), per explicit user instruction ("jitne
+   bhi tab hai sabke header same color ke kardo"). The border uses a translucent
+   white overlay instead of a fixed hex so it stays legible against ANY accent
+   color, not just the original blue. */
+table.dt thead th{position:sticky;top:0;background:var(--accent);color:#fff;z-index:4;padding:0;border-right:1px solid rgba(255,255,255,.18);overflow:hidden;}
+/* Header cell content is vertically centered top-to-bottom (not just left/right)
+   across every grid on every page, per explicit user instruction ("header top n
+   bottom se center allign karna hai - use for all pages"). justify-content acts on
+   the column flex's main (vertical) axis here. */
+table.dt thead th .th-inner{padding:9px 12px;display:flex;flex-direction:column;justify-content:center;gap:5px;position:relative;min-height:36px;}
 table.dt thead th .th-row{display:flex;align-items:center;gap:6px;}
-table.dt thead th .th-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-table.dt thead th .sort-ic{font-size:9px;color:var(--accent);width:10px;flex:none;}
-table.dt thead th .search-ic{margin-left:auto;cursor:pointer;color:#6B7280;flex:none;font-size:11px;transition:color .15s;}
-table.dt thead th .search-ic:hover{color:var(--accent);}
-table.dt thead th .th-filter input{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #2D3545;background:#0A0E14;color:#E8E0D0;font-size:11.5px;}
+table.dt thead th .th-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;user-select:none;white-space:normal;overflow-wrap:break-word;line-height:1.3;}
+/* Small grey subtitle line under a header label — e.g. Sales Report's "Amount"
+   header showing "With GST"/"W/o GST" beneath it instead of the old "Total Price
+   (Incl. GST)"/"Amount (Excl. GST)" full-length labels, per explicit user
+   instruction. The sub-grid variant below overrides this with an even smaller size. */
+/* Subtitle/sort-arrow colors switched from a fixed light-blue hex to a translucent
+   white overlay — a fixed light-blue read fine against the old navy header but
+   would clash against warmer/lighter accent colors (orange, gold, pink, etc). */
+table.dt thead th .th-sub{display:block;margin-top:2px;color:rgba(255,255,255,.78);font-size:8.5px;font-weight:600;line-height:1.1;letter-spacing:0;text-transform:none;}
+table.dt thead th .th-total{display:block;margin-top:2px;color:rgba(255,255,255,.78);font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:600;line-height:1.1;letter-spacing:0;text-transform:none;}
+table.dt thead th .sort-ic{font-size:9px;color:#fff;width:10px;flex:none;opacity:.85;}
+/* Sales Report deliberately exposes a sort arrow on every header, including
+   unsorted columns, and the arrow is clickable just like the header label. */
+table.dt thead th .sort-ic.sort-ready{cursor:pointer;color:rgba(255,255,255,.78);opacity:.9;}
+table.dt thead th .sort-ic.sort-ready:hover{color:#FFF;opacity:1;}
+/* BUG FIX: this was a fixed medium-grey (#6B7280) — legible against the OLD fixed
+   dark-navy header, but once every header background became the Appearance accent
+   color (table.dt thead th{background:var(--accent);} above), this grey often
+   washed out to near-invisible against many accent colors, making the search icon
+   look like it had disappeared entirely — per explicit user report ("seach option
+   abhi bhi nahi aayi...jise phele tha, har table ke header ke pass"). Switched to
+   translucent white, matching the .sort-ic treatment right above, so it stays
+   clearly visible against ANY accent color. */
+table.dt thead th .search-ic{margin-left:auto;cursor:pointer;color:rgba(255,255,255,.78);flex:none;font-size:11px;transition:color .15s;opacity:.9;}
+table.dt thead th .search-ic:hover{color:#fff;opacity:1;}
+/* Text/select filter inputs trimmed slightly (was 11.5px) to match the more compact
+   numeric filter above, per explicit user instruction ("text size can be small...
+   for inputs in filters, but it should remain readable") — kept at 11px, still
+   comfortably readable. */
+table.dt thead th .th-filter input{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #2D3552;background:#0A0E1A;color:#E7EAF4;font-size:11px;}
+table.dt thead th .th-filter select{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #2D3552;background:#0A0E1A;color:#E7EAF4;font-size:11px;cursor:pointer;}
+/* Operator-based numeric filter (>, ≥, <, ≤, =, Between) — replaces the old fixed
+   Min/Max 4-column grid, per explicit user instruction ("max overdue days, amount
+   me jo filter hai, that should be greater then less than, = to amount etc wala
+   filter hona chaiye. in all the tables"). flex-wrap as a safety net, but the
+   column itself is now auto-widened while this filter is open (see
+   applyNumFilterAutoWidth_() in Common.html) specifically so "Between"'s two value
+   inputs never need to wrap/clip in the first place — per explicit user report with
+   a screenshot ("second box is half visible, i want it to auto adjust the col
+   width...it should resume back to whats it was originally"). Input/select text
+   size trimmed down from the original 10.5-11px to 10/9.5px — smaller footprint to
+   match the auto-widened column staying as compact as possible, per explicit user
+   instruction ("text size can be small...for inputs in filters, but it should
+   remain readable") — still comfortably legible at this size against the dark
+   filter-row background. */
+table.dt thead th .th-num-filter{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:150px;}
+table.dt thead th .th-num-filter .num-op-select{flex:1 1 100%;min-width:0;padding:4px 6px;background:#0A0E1A;color:#E7EAF4;border:1px solid #2D3552;border-radius:5px;font-size:10px;cursor:pointer;}
+table.dt thead th .th-num-filter input[type="number"]{flex:1 1 60px;min-width:0;padding:4px 5px;background:#0A0E1A;color:#E7EAF4;border:1px solid #2D3552;border-radius:5px;font-size:10.5px;}
+table.dt thead th .th-num-filter .date-sep{text-align:center;font-size:9px;color:#8992AA;flex:none;}
+table.dt thead th .dr-clear{cursor:pointer;color:#F87171;text-align:center;font-size:11px;font-weight:700;}
 table.dt thead th .th-filter input::placeholder{color:#5A6070;}
 table.dt thead th .resize-handle{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:5;}
-table.dt thead th .resize-handle:hover,table.dt thead th .resize-handle.active{background:rgba(180,134,43,.5);}
-table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);border-right:1px solid #F2F0EA;font-size:12.5px;white-space:normal;word-break:break-word;vertical-align:top;overflow-wrap:anywhere;}
-table.dt tbody tr:nth-child(even){background:#FAFAF7;}
+table.dt thead th .resize-handle:hover,table.dt thead th .resize-handle.active{background:rgba(255,255,255,.3);}
+table.dt tbody td{padding:8px 12px;border-bottom:1px solid var(--line-light);border-right:1px solid #F2F0EA;font-size:calc(12.5px * var(--data-scale));white-space:normal;word-break:break-word;vertical-align:middle;overflow-wrap:anywhere;}
+/* Columns explicitly flagged nowrap:true (e.g. Sales Report's Invoice No) always
+   stay on ONE line — clipped with an ellipsis rather than wrapping onto a second
+   line, per explicit user instruction ("invoice number bhi ek he row me dikhe"). */
+table.dt tbody td.nowrap{white-space:nowrap;word-break:normal;overflow:hidden;text-overflow:ellipsis;}
+table.dt tbody tr:nth-child(even){background:#FAFBFD;}
 table.dt tbody tr:hover{background:var(--accent-tint2);}
-table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
+table.dt tbody td.num{font-family:Tahoma,Geneva,sans-serif;text-align:right;letter-spacing:-0.5px;}
+/* Heatmap cell (e.g. Sales Report's Amount column) — background/text color are set
+   inline per-cell via heatmapCellStyle_() in Common.html (darker for high values,
+   near-white for low values, per explicit user instruction "heat map...high on
+   dark...then light light"). The <td>'s own inline background already paints over
+   its parent <tr>'s even-row/hover background, so no extra override is needed here
+   — this rule just adds a soft transition and a subtle border so adjacent heat
+   cells stay visually separated even when they're a similar shade. */
+table.dt tbody td.heatmap-cell{transition:background .15s;border-right:1px solid rgba(255,255,255,.4);}
+/* Sales Report expandable master/detail rows. */
+.exp-toggle-cell{text-align:center;padding:0!important;}
+.exp-toggle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;background:var(--accent);font-size:13px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 3px var(--color-primary-glow);transition:all .12s;}
+.exp-toggle:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 3px 8px var(--color-primary-glow);}
+.exp-toggle.open{background:var(--accent-dark);}
+/* Inline expand toggle sits directly to the LEFT of a cell's own value, on the SAME
+   line (Sales Report's Invoice No column), instead of stacked above it or taking a
+   separate dedicated "+" column — per explicit user instruction ("i want it to be
+   on left of invoice number, in small size"). The host <td> uses a simple inline-flex
+   wrapper inside (not display:flex on the <td> itself, which would break the cell's
+   vertical centering within tall multi-line rows), so the toggle chip and the value
+   sit side-by-side while the <td> still vertically centers within the <tr>. */
+td.exp-toggle-host{vertical-align:middle;}
+td.exp-toggle-host .exp-toggle-host-inner{display:inline-flex;align-items:center;gap:5px;}
+.exp-toggle-host-val{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.exp-toggle-inline{flex:none;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;color:#fff;background:var(--accent);font-size:10px;font-weight:700;line-height:1;cursor:pointer;user-select:none;box-shadow:0 1px 2px var(--color-primary-glow);transition:all .12s;}
+.exp-toggle-inline:hover{background:var(--accent-dark);}
+.exp-toggle-inline.open{background:var(--accent-dark);}
+/* The master row that's currently expanded stays visually highlighted while its
+   detail card is open, per explicit user instruction ("jo row expand ke hai vo
+   highlighted dikhe"). */
+table.dt tbody tr.exp-row-open{background:var(--accent-tint)!important;}
+table.dt tbody tr.exp-row-open td{border-bottom-color:var(--accent-tint);}
+html.dark table.dt tbody tr.exp-row-open{background:var(--accent-tint)!important;}
+/* Generic row highlight — independent of the expand/collapse feature above. Used
+   by Follow Up List: after saving the "Mark/Edit Follow Up" popup, every row for
+   that same company stays highlighted, per explicit user instruction ("jab click
+   karen to jo row click ke hai vo highlight ho jaye...teeno me ye update ho
+   jaye"). A slightly warmer tint than .exp-row-open so the two don't read as the
+   exact same state if a grid ever needed both. */
+table.dt tbody tr.row-highlighted{background:var(--gold-tint)!important;}
+table.dt tbody tr.row-highlighted td{border-bottom-color:var(--gold-tint);}
+html.dark table.dt tbody tr.row-highlighted{background:var(--gold-tint)!important;}
+/* The whole expanded strip gets soft padding + a subtle tinted backdrop behind the
+   card so the card itself reads as "floating" above the row it belongs to — this is
+   the "elegant box" look requested, as opposed to the plain nested table before. */
+.exp-detail-row td{background:var(--bg);padding:8px 16px 12px!important;border-bottom:2px solid var(--line);}
+.exp-detail-wrap{max-width:100%;}
+/* The "Line items for Invoice X..." label row was removed (see
+   renderSalesReportDetail_ in Grids.html) — the highlighted parent row above now
+   conveys which invoice this card belongs to, so the card's own top padding is
+   tightened since there's no label to give it breathing room from. Padding trimmed
+   further (was 10px 12px 12px) — with the sub-grid's own toolbar row also gone now
+   (see .dt-table-wrap.sub-grid above), this card should hug the line items tightly
+   instead of leaving a visible gap above the table, per explicit user instruction. */
+.sr-detail-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 18px rgba(20,30,60,.08);overflow:hidden;padding:4px 8px 8px;}
+.muted-cell{color:var(--muted);font-style:italic;}
+/* Sub-grid (the expanded detail table itself): light-blue header with dense,
+   easy-to-scan line items. Amount GST context is intentionally demoted into a
+   small light subtitle so it does not make the header row tall. */
+/* Per explicit user instruction, the sub-grid no longer gets its OWN toolbar row at
+   all (see toolbarHtml in renderGrid() — subGrid always skips it now) — that whole
+   row was the main source of top white space above an already-compact card. The
+   "Columns ▾" control instead floats as a small overlay pinned to the table box's
+   own top-right corner (position:relative on .dt-table-wrap.sub-grid below), so it
+   costs zero extra vertical space instead of a full row. */
+.dt-table-wrap.sub-grid{position:relative;border-radius:9px;box-shadow:none;}
+.dt-colmenu-wrap.sub-grid-overlay{position:absolute;top:5px;right:6px;z-index:6;}
+.dt-colmenu-wrap.sub-grid-overlay .btn{background:var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.dt-table-wrap.sub-grid table.dt thead th{background:var(--accent-tint);border-right:1px solid var(--line);}
+/* Header row height + label size trimmed further (was min-height:30px, two lines of
+   text/subtitle) so the header takes up as little vertical space as possible above
+   the actual line items — per explicit user instruction ("sub table has lot of
+   white space...on top due to column stuff...isko kam kar do"). The Amount
+   With-GST/W-o-GST subtitle stays but tightened; the resize-handle/search-ic in the
+   far-right-most header (where the floating Columns ▾ overlay sits) gets a little
+   right padding so the overlay button doesn't visually collide with them. */
+.dt-table-wrap.sub-grid table.dt thead th .th-inner{padding:3px 8px;gap:0;min-height:24px;justify-content:center;}
+.dt-table-wrap.sub-grid table.dt thead th .th-label{color:var(--accent-dark);font-size:9px;font-weight:700;line-height:1.1;letter-spacing:.03em;}
+.dt-table-wrap.sub-grid table.dt thead th .th-sub{display:block;margin-top:0;color:#7894C8;font-size:7.5px;font-weight:700;line-height:1;letter-spacing:0;text-transform:none;}
+.dt-table-wrap.sub-grid table.dt thead th .th-total{display:block;margin-top:0;color:#94A4C6;font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;line-height:1;letter-spacing:0;text-transform:none;}
+.dt-table-wrap.sub-grid table.dt thead th:last-child .th-row{padding-right:26px;}
+.dt-table-wrap.sub-grid table.dt thead th .sort-ic{color:var(--accent-dark);}
+.dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready{color:#6E93E8;}
+.dt-table-wrap.sub-grid table.dt thead th .sort-ic.sort-ready:hover{color:var(--accent-dark);}
+.dt-table-wrap.sub-grid table.dt thead th .search-ic{color:var(--accent-dark);opacity:.7;}
+.dt-table-wrap.sub-grid table.dt thead th .search-ic:hover{opacity:1;}
+.dt-table-wrap.sub-grid table.dt tbody td{font-size:calc(12px * var(--data-scale));line-height:1.25;padding:6px 10px;}
+.dt-table-wrap.sub-grid table.dt tbody td.nowrap{white-space:nowrap;word-break:normal;overflow:hidden;text-overflow:ellipsis;}
+.dt-table-wrap.sub-grid table.dt tbody tr:nth-child(even){background:var(--accent-tint2);}
+.dt-pagination.sub-grid{padding:7px 10px;font-size:10.5px;}
 .code-pill{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:11px;color:var(--accent-dark);background:var(--accent-tint);border-radius:5px;padding:3px 8px;display:inline-block;}
 .pill-danger{color:var(--danger);background:var(--danger-tint);}
 .pill-success{color:var(--success);background:var(--success-tint);}
 .empty-state{padding:60px 20px;text-align:center;color:var(--muted);}
 .empty-state .big{font-family:'Space Grotesk',sans-serif;font-size:15px;color:var(--ink-secondary);margin-bottom:6px;font-weight:600;}
-.dt-pagination{display:flex;align-items:center;gap:16px;flex-wrap:wrap;flex:none;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px;font-size:12px;color:var(--muted);font-weight:500;}
+/* margin-top:auto is the standard flexbox "sticky footer" trick: inside a flex
+   COLUMN parent (.content-zoom, or a page-section like .recv-dashboard-table that
+   is itself display:flex;flex-direction:column), this pushes the pagination bar
+   — and only the pagination bar — down to consume every bit of extra vertical
+   space above it, so it always sits flush against the bottom of the visible
+   screen/section on ANY screen size (a 14" laptop or a 30" monitor), instead of
+   floating right below a short table with a visible empty gap underneath it. If
+   the page's content is tall enough to need scrolling, this has no visible effect
+   (there's no extra space left to absorb) and the pagination simply appears right
+   after the table as before. Per explicit user instruction ("pagenations always
+   at the bottom no matter what the screen size is, screen karta hua nahi hona
+   chahiye"). */
+.dt-pagination{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:none;margin-top:auto;background:var(--surface);border-top:1px solid var(--line);padding:7px 14px;font-size:11.5px;color:var(--muted);font-weight:500;}
 .dt-pagination .pp{display:flex;align-items:center;gap:8px;}
-.dt-pagination select{padding:5px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;}
-.dt-pagination .nav{display:flex;align-items:center;gap:4px;margin-left:auto;}
-.dt-pagination .nav button{border:1.5px solid var(--line);background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:600;color:var(--ink-secondary);font-size:12px;transition:all .12s;}
+.dt-pagination .pp label{white-space:nowrap;}
+.dt-pagination select{padding:5px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;color:var(--ink);}
+.dt-pagination .page-range{white-space:nowrap;}
+.dt-pagination .nav{display:flex;flex:none;align-items:center;gap:4px;margin-left:auto;padding:0;overflow:visible;}
+.dt-pagination .nav button{border:1.5px solid var(--line);background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:600;color:var(--ink-secondary);font-size:12px;transition:all .12s;display:inline-flex;align-items:center;justify-content:center;line-height:1;}
+/* BUG FIX: the Prev/Next glyphs (‹ ›, U+2039/U+203A "single angle quotation marks")
+   are NOT reliably included in every font's character set the way the First/Last
+   glyphs (« », U+00AB/U+00BB "double angle quotation marks" — much more common
+   punctuation) are — on some systems/fonts they silently render as a blank/invisible
+   box, making the Previous/Next buttons look like they don't exist at all even
+   though they're present and clickable, per explicit user report ("there is no
+   button to go to previous page"). Replaced with small inline SVG chevrons (same
+   approach already used for every other icon in this app — see NAV_ICONS in
+   Common.html) so they render identically and reliably in every browser, matching
+   First/Last's already-reliable plain-text glyphs which are left as-is. */
+.dt-pagination .nav button svg{width:11px;height:11px;display:block;}
 .dt-pagination .nav button:disabled{opacity:.35;cursor:default;}
 .dt-pagination .nav button:not(:disabled):hover{border-color:var(--accent);color:var(--accent-dark);background:var(--accent-tint2);}
 .dt-pagination .pageinfo{font-weight:600;color:var(--ink-secondary);white-space:nowrap;}
+/* Compact professional footer for Receipt List: page size and range stay left;
+   navigation owns the far-right corner. Fixed control dimensions prevent the
+   footer from wasting vertical space at any content zoom. */
+.receipt-pagination{min-height:36px;padding:3px 10px;gap:14px;border-top:1px solid var(--line);}
+.receipt-pagination select{height:28px;padding:2px 24px 2px 8px;font-size:11px;}
+.receipt-pagination .nav{gap:3px;}
+.receipt-pagination .nav button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-radius:6px;font-size:13px;line-height:1;}
+.receipt-pagination .pageinfo{min-width:58px;text-align:center;font-size:11px;}
 
 /* ---------- MOBILE CARD LIST (alt view of a grid on small screens) ---------- */
 .mcard-list{display:none;flex-direction:column;gap:10px;}
@@ -221,75 +1318,371 @@ table.dt tbody td.num{font-family:'JetBrains Mono',monospace;text-align:right;}
 .party-row.active{background:var(--accent-tint);border-left:3px solid var(--accent);}
 .party-row .pn{font-size:12.5px;font-weight:600;color:var(--ink);}
 .party-row .pg{font-size:10px;color:var(--muted);margin-top:2px;}
-.party-row .pb{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;margin-top:4px;}
+/* Balance sits inline on the SAME line as Group/Phone (joined by a " · " dot
+   separator) instead of its own third line, per explicit user instruction
+   ("current asset ke saath balance aa jaye phone ke baad mein aa jaye ek single
+   line mein"). */
+.party-row .pb-inline{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;}
 .ledger-detail{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;}
 .ledger-wrap{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
-.ledger-toolbar{padding:10px 16px;border-bottom:1px solid var(--line-light);display:flex;align-items:center;gap:10px;flex:none;}
+.ledger-toolbar{padding:10px 16px;border-bottom:1px solid var(--line-light);display:flex;align-items:flex-start;gap:10px;flex:none;}
 .ledger-toolbar .spacer{flex:1;}
-.ledger-scroll{flex:1;overflow:auto;padding:0;}
-.ledger-print-area{padding:22px 26px;}
-.ledger-co-head{text-align:center;margin-bottom:14px;}
-.ledger-co-head .co-name{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;}
-.ledger-co-head .co-sub{font-size:11px;color:var(--muted);margin-top:2px;}
-.ledger-title-bar{text-align:center;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;padding:8px 0;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);margin-bottom:14px;}
-.ledger-party-info{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:11.5px;margin-bottom:16px;}
-.ledger-party-info .lbl{color:var(--muted);font-weight:600;}
-table.ledger-table{width:100%;border-collapse:collapse;font-size:11.5px;}
-table.ledger-table thead th{background:#0F141B;color:#D6CFC0;padding:7px 9px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+.ledger-toolbar-info{min-width:0;}
+.ledger-toolbar-info .co-name{font-weight:700;font-size:13px;color:var(--ink);}
+.ledger-toolbar-info .co-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.ledger-toolbar-info .co-meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:4px;font-size:10px;color:var(--ink-secondary);}
+.ledger-toolbar-info .co-meta b{color:var(--muted);font-weight:700;}
+.ledger-scroll{flex:1;overflow:auto;padding:0;position:relative;}
+/* Sticky header + sticky footer (closing balance row) — the table header stays
+   pinned at the top and the closing balance row stays pinned at the bottom while
+   the data rows scroll between them, per explicit user instruction ("header scroll
+   mein na gaye ho...closing wala bhi fix rahe...uske under data upar niche ho"). */
+table.ledger-table{width:100%;border-collapse:separate;border-spacing:0;}
+/* Same Appearance-accent header color as every other grid — was a hardcoded blue,
+   per explicit user instruction ("jitne bhi tab hai sabke header same color ke
+   kardo"). */
+table.ledger-table thead th{position:sticky;top:0;z-index:2;background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
 table.ledger-table thead th.num{text-align:right;}
-table.ledger-table tbody td{padding:6px 9px;border-bottom:1px solid var(--line-light);}
+table.ledger-table tfoot td{position:sticky;bottom:0;z-index:2;background:var(--accent-tint);font-weight:700;color:var(--ink);padding:8px 10px;border-top:2px solid var(--accent);font-size:11.5px;}
+table.ledger-table tfoot td.num{text-align:right;font-family:'JetBrains Mono',monospace;}
+table.ledger-table tbody td{padding:7px 10px;border-bottom:1px solid var(--line-light);font-size:calc(11.5px * var(--data-scale));}
 table.ledger-table tbody td.num{text-align:right;font-family:'JetBrains Mono',monospace;}
-table.ledger-table tbody tr.opening-row{background:var(--accent-tint2);font-weight:700;}
-table.ledger-table tbody tr.closing-row{background:var(--accent-tint2);font-weight:700;border-top:2px solid var(--ink);}
-table.ledger-table tbody tr:nth-child(even):not(.opening-row):not(.closing-row){background:#FAFAF7;}
+table.ledger-table tbody tr.opening-row{background:var(--accent-tint2);font-weight:600;}
+table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
+/* NOTE: this used to have a SECOND, duplicate `table.ledger-table{...}` rule block
+   right here (with border-collapse:collapse, a plain non-sticky thead/tbody, and
+   dead classes .ledger-co-head/.ledger-title-bar/.ledger-party-info that no longer
+   exist anywhere in Ledger.html's markup). Being LATER in the file, that dead block
+   was silently overriding the real, correct rules above it — border-collapse:
+   collapse in particular breaks position:sticky on <thead>/<tfoot> entirely, which
+   is exactly why the header/footer kept scrolling with the rows instead of staying
+   frozen. Removed here, per explicit user instruction ("party ledger me pdf table
+   me header and footer should freeze...currently when i am scrolling they are
+   also gets scrolled. freeze it."). */
 .ledger-empty{padding:70px 20px;text-align:center;color:var(--muted);}
+/* Print-only company/party header row — sits inside <thead> (see Ledger.html) so it
+   repeats on every printed page automatically; hidden entirely on screen since the
+   on-screen .ledger-toolbar-info above already shows the same info there. */
+.ledger-print-header-row{display:none;}
+.ledger-print-header{padding:2px 0 10px;}
+.ledger-print-co-name{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:800;color:var(--ink);}
+.ledger-print-co-sub{font-size:11px;color:var(--ink-secondary);margin-top:2px;}
+.ledger-print-co-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;font-size:10.5px;color:var(--ink-secondary);}
+.ledger-print-co-meta span b{font-weight:700;}
 
+/* ---------- SALES DASHBOARD — SPOTLIGHT + HEALTH PANELS ---------- */
+/* "Spotlight" cards headline a NAME (Highest Paying Client / Most Selling Product /
+   Best Month / Top State) rather than a number, with the amount and a share bar
+   underneath — per explicit user request for a Sales Dashboard that "looks really
+   insightful and presentable at the same time" and surfaces exactly these. */
+.sd-spot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+.sd-spot{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 15px;box-shadow:0 1px 3px rgba(0,0,0,.03);display:flex;flex-direction:column;gap:6px;min-width:0;}
+.sd-spot-link{cursor:pointer;transition:box-shadow .15s,transform .1s;}
+.sd-spot-link:hover{box-shadow:0 6px 18px rgba(0,0,0,.07);transform:translateY(-1px);}
+.sd-spot-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.sd-spot-label{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.sd-spot .card-icon{width:30px;height:30px;border-radius:8px;}
+.sd-spot .card-icon svg{width:15px;height:15px;}
+.sd-spot-name{font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sd-spot-meta{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--ink-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sd-spot-meta span{font-family:'Inter',system-ui,sans-serif;font-weight:600;color:var(--muted);font-size:10.5px;}
+.sd-spot-bar{height:5px;border-radius:3px;background:var(--line-light);overflow:hidden;}
+.sd-spot-fill{height:100%;border-radius:3px;}
+.sd-spot-fill.c-blue{background:var(--blue);}.sd-spot-fill.c-green{background:var(--green);}
+.sd-spot-fill.c-orange{background:var(--orange);}.sd-spot-fill.c-purple{background:var(--purple);}
+.sd-spot-sub{font-size:10px;color:var(--muted);font-weight:600;}
+/* "Sales Health & Mix" — concentration risk / repeat-client rate / revenue realised /
+   GST share, each as a labelled progress bar so a business owner can read the health
+   of the sales book at a glance instead of reading raw numbers. */
+.sd-health{display:flex;flex-direction:column;gap:13px;}
+.sd-health-row{display:flex;flex-direction:column;gap:4px;}
+.sd-health-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.sd-health-label{font-size:11px;font-weight:700;color:var(--ink-secondary);}
+.sd-health-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;}
+.sd-health-val.ok{color:var(--success);}.sd-health-val.warn{color:var(--orange);}
+.sd-health-val.danger{color:var(--danger);}.sd-health-val.info{color:var(--accent-dark);}
+.sd-health-track{height:6px;border-radius:4px;background:var(--line-light);overflow:hidden;}
+.sd-health-fill{height:100%;border-radius:4px;}
+.sd-health-fill.ok{background:var(--success);}.sd-health-fill.warn{background:var(--orange);}
+.sd-health-fill.danger{background:var(--danger);}.sd-health-fill.info{background:var(--accent);}
+.sd-health-note{font-size:9.5px;color:var(--muted);font-weight:600;}
+@media (max-width:1200px){.sd-spot-grid{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:700px){.sd-spot-grid{grid-template-columns:1fr;}}
+
+/* ---------- PROFIT & LOSS STATEMENT (redesigned) ---------- */
+/* A proper 3-column statement (label / % of Sales / Amount) instead of the old
+   plain single-column kv-grid, with a distinct Gross Profit subtotal band, a
+   section header for Operating Expenses, and a bold bordered Net Profit total —
+   per explicit user request ("what do u suggest should be there in profit and
+   loss section...can be make the layout more presentable"). */
+.pl-statement{display:flex;flex-direction:column;}
+.pl-head-row{display:grid;grid-template-columns:1fr 90px 140px;gap:10px;padding:0 4px 8px;font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:right;border-bottom:1px solid var(--line);}
+.pl-head-row span:first-child{text-align:left;}
+.pl-row{display:grid;grid-template-columns:1fr 90px 140px;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line-light);font-size:12.5px;}
+.pl-row:last-child{border-bottom:0;}
+.pl-label{color:var(--ink-secondary);font-weight:600;}
+.pl-pct{text-align:right;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;}
+.pl-val{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);}
+.pl-row-section{padding:10px 4px 6px;font-size:10px;font-weight:800;color:var(--accent-dark);text-transform:uppercase;letter-spacing:.06em;}
+.pl-row-subtotal{background:var(--accent-tint2);border-radius:8px;margin:4px 0;padding:9px 8px;}
+.pl-row-subtotal .pl-label,.pl-row-subtotal .pl-val{font-weight:800;color:var(--ink);}
+.pl-row-total{border-top:2px solid var(--ink);border-bottom:0;margin-top:6px;padding-top:12px;}
+.pl-row-total .pl-label{font-weight:800;color:var(--ink);font-size:13.5px;}
+.pl-row-total .pl-val{font-size:15px;font-weight:800;}
+@media (max-width:700px){
+  .pl-head-row,.pl-row{grid-template-columns:1fr 70px 110px;font-size:11px;}
+}
+
+/* ---------- PLACEHOLDER / SIMPLE PAGES ---------- */
+.simple-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;}
+.kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;}
+.kv-grid .kv-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-light);font-size:12.5px;}
+.kv-grid .kv-row .k{color:var(--muted);font-weight:600;}
+.kv-grid .kv-row .v{font-weight:700;color:var(--ink);font-family:'JetBrains Mono',monospace;}
+.alert-item{display:flex;align-items:flex-start;gap:12px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;margin-bottom:9px;background:var(--surface);}
+.alert-item .a-ic{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;}
+.alert-item .a-body{flex:1;}
+.alert-item .a-title{font-weight:700;font-size:12.5px;color:var(--ink);}
+.alert-item .a-desc{font-size:11.5px;color:var(--ink-secondary);margin-top:2px;}
+.alert-item .a-time{font-size:10px;color:var(--muted);margin-top:4px;}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line-light);}
+.settings-row:last-child{border-bottom:0;}
+.settings-row .s-label{font-weight:600;font-size:12.5px;color:var(--ink);}
+.settings-row .s-desc{font-size:11px;color:var(--muted);margin-top:2px;}
+.toggle{width:38px;height:22px;border-radius:12px;background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s;}
+.toggle.on{background:var(--accent);}
+.toggle .knob{width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle.on .knob{left:18px;}
+
+/* ---------- MODAL POPUP (Follow Up List's "Mark/Edit Follow Up" popup) ---------- */
+.modal-overlay{position:fixed;inset:0;background:rgba(10,14,26,.5);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal-card{background:var(--surface);border-radius:12px;box-shadow:0 30px 70px -20px rgba(0,0,0,.4);width:380px;max-width:100%;overflow:hidden;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line-light);}
+.modal-head h3{font-size:13.5px;font-weight:700;color:var(--ink);}
+.modal-x{cursor:pointer;color:var(--muted);font-weight:700;font-size:14px;padding:2px 4px;}
+.modal-x:hover{color:var(--ink);}
+.modal-body{padding:16px 18px;}
+.modal-body .field{margin-bottom:14px;}
+.modal-body .field:last-child{margin-bottom:0;}
+.modal-body textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;background:#FAFBFD;color:var(--ink);font-family:inherit;font-size:12.5px;resize:vertical;}
+.modal-body textarea:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-tint);}
+.modal-body input[type="date"]{width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;background:#FAFBFD;color:var(--ink);font-size:12.5px;}
+.modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line-light);}
+.modal-foot .btn{padding:8px 16px;font-size:12px;}
+/* Follow-up Notes column cell (Date + Remarks stacked tight) — a normal column, so
+   it's hideable via the existing Columns ▾ menu without any extra work, per
+   explicit user instruction ("with option that i can hide it"). */
+.followup-note-cell{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.followup-note-date{font-size:10px;font-weight:700;color:var(--accent-dark);font-family:'JetBrains Mono',monospace;}
+.followup-note-remarks{font-size:11px;color:var(--ink-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.followup-note-ts{font-size:9px;color:var(--muted);font-style:italic;}
+/* Previous follow-ups list shown INSIDE the Mark/Edit Follow Up popup — per
+   explicit user instruction ("SAVE ALL PREVIOUS FOLLOW UP REMARKS ALSO AND CAN SEE
+   ALSO WHILE FOLLOW UP"). Scrollable so a party with many past entries doesn't blow
+   up the modal's height. */
+.followup-history-section{margin-top:4px;}
+.followup-history-section label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;}
+.followup-history-list{max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px;}
+.followup-history-empty{font-size:11.5px;color:var(--muted);font-style:italic;padding:10px 0;}
+.followup-history-item{background:var(--bg);border:1px solid var(--line-light);border-radius:8px;padding:8px 10px;}
+.followup-history-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px;}
+.followup-history-date{font-size:11px;font-weight:700;color:var(--ink);font-family:'JetBrains Mono',monospace;}
+.followup-history-latest{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;background:var(--accent-tint);color:var(--accent-dark);padding:2px 6px;border-radius:8px;}
+.followup-history-ts{font-size:9.5px;color:var(--muted);margin-left:auto;}
+.followup-history-remarks{font-size:11.5px;color:var(--ink-secondary);line-height:1.4;}
+.followup-history-promised{font-size:10.5px;font-weight:700;color:var(--success);margin-top:3px;}
+
+/* Print/PDF view — .ledger-print-area was a wrapper div that no longer exists in
+   Ledger.html's current markup (the ledger detail's own header/company info now
+   lives inline in .ledger-toolbar-info, and the table sits directly in
+   .ledger-scroll) — updated to the CURRENT class names so "Print / Download PDF"
+   actually shows the statement. `.shell` itself must stay display:block (it can't
+   be display:none AND have a visibility:visible descendant show through — display:
+   none removes an element and everything inside it from the render tree entirely,
+   which is a separate, stronger hide than visibility) — only the sidebar/topbar/
+   toolbar CONTROLS are display:none'd individually below. */
 @media print{
   body *{visibility:hidden;}
-  .ledger-print-area,.ledger-print-area *{visibility:visible;}
-  .ledger-print-area{position:absolute;left:0;top:0;width:100%;padding:0;}
-  .shell,.topbar,.dt-pagination,.ledger-toolbar,.ledger-party-list{display:none !important;}
+  .ledger-scroll,.ledger-scroll *{visibility:visible;}
+  .ledger-scroll{position:absolute;left:0;top:0;width:100%;padding:0;overflow:visible;max-height:none;}
+  /* .ledger-toolbar-info (screen-only party name/company header) is now visibility:
+     hidden along with the rest of the page chrome — it lived OUTSIDE .ledger-scroll,
+     so it was never actually part of what got printed (this was the root cause of
+     "PRINT MEIN PARTY NAME NAHI AA RHA HAI" — the toolbar it lived in sits above
+     .ledger-scroll, which position:absolute here effectively covers/replaces).
+     The .ledger-print-header-row inside <thead> below (see Ledger.html) is the
+     replacement — company name + address + Group/Contact, positioned INSIDE the
+     table's own <thead> instead, so it participates in print pagination directly. */
+  table.ledger-table thead th,table.ledger-table tfoot td{position:static;}
+  /* Standard CSS table print behavior: a <thead> repeats automatically at the top
+     of every printed page a table spans — this is what carries the company/party
+     name onto page 2, 3, etc, per explicit user instruction ("agle page pe jo data
+     aaye usmein bhi top header and comp name likha aaye"). display:table-header-group
+     makes that behavior explicit or Chrome can otherwise skip repeating it. */
+  table.ledger-table thead{display:table-header-group;}
+  .ledger-print-header-row{display:table-row;}
+  .ledger-print-header-row td{border:none;padding:0 10px 12px;background:var(--surface);}
+  .sidebar,.topbar,.dt-pagination,.ledger-party-list,.fbar,.bottom-nav,.ledger-toolbar,.ledger-toolbar *{display:none !important;}
 }
 
 /* =============================================================
-   RESPONSIVE — MOBILE (<= 860px)
+   RESPONSIVE — MOBILE (<= 980px)
    ============================================================= */
-@media (max-width:860px){
+@media (max-width:980px){
   .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:60;transform:translateX(-100%);box-shadow:0 0 40px rgba(0,0,0,.3);}
   .sidebar.open{transform:translateX(0);}
   .sidebar-close{display:block;}
   .sidebar-overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55;}
   .hamburger{display:inline-flex;}
-  .topbar-welcome{display:none;}
-  .content{padding:10px 10px 70px;}
+  .topbar-welcome span,.tb-search{display:none;}
+  .content{padding:6px 8px 70px;overflow:auto;}
 
-  .dash-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
-  .card{padding:12px 14px;}
-  .card-value{font-size:17px;}
-  .dash-row{grid-template-columns:1fr;}
+  .fbar{gap:8px;padding:10px 12px;}
+  .fbar-group{min-width:0;flex:1 1 44%;}
+  .fy-only-bar{align-items:center;flex-wrap:wrap;}
+  .fy-inline-label{flex:none;}.fy-multi{flex:1 1 180px;min-width:0;}.fy-multi-btn{min-width:0}.fy-menu{min-width:100%;max-width:calc(100vw - 44px)}.fy-selection-note{width:100%;}
+  .fbar-presets{overflow-x:auto;flex:1 1 100%;}
+  .fbar .spacer{display:none;}
+  .fbar-btn-filters{flex:1 1 100%;justify-content:center;}
+
+  .dash-grid,.kpi-strip{grid-template-columns:repeat(2,1fr);gap:8px;}
+  .card{padding:11px 12px;}
+  .card-value{font-size:15px;}
+  .dash-row,.dash-row3,.dash-row4{grid-template-columns:1fr;}
   .age-buckets{grid-template-columns:repeat(2,1fr);}
+  .qa-grid{grid-template-columns:repeat(3,1fr);}
+  .donut-panel-body{flex-direction:column;}
+  .recv-dashboard-table{height:auto;margin-bottom:10px;padding:10px;}
 
   .dt-table-wrap{display:none;}
   .mcard-list{display:flex;}
   .dt-pagination{padding:8px 10px;justify-content:space-between;}
   .dt-pagination .pp{display:none;}
+  /* Receipt keeps the same bottom-anchored navigation on narrow screens. Its cards
+     become the sole scroll region while the desktop table viewport is hidden. */
+  .receipt-grid-shell{overflow:hidden;}
+  .receipt-grid-table-wrap{display:flex;order:3;flex:none;border-radius:0;}
+  .receipt-grid-table-wrap>.dt-scroll{display:none;}
+  .receipt-mcard-list{order:2;flex:1;min-height:0;overflow:auto;padding-bottom:6px;}
+  .receipt-pagination{width:100%;padding:4px 8px;gap:8px;}
+  .receipt-pagination .pp{display:flex;}
+  .receipt-pagination .pp label{display:none;}
+  .receipt-pagination .page-range{font-size:10px;}
+  .receipt-pagination .nav{margin-left:auto;}
 
   .ledger-shell{flex-direction:column;}
   .ledger-party-list{width:100%;max-height:220px;}
   .ledger-party-info{grid-template-columns:1fr;}
   .ledger-print-area{padding:14px 12px;}
   table.ledger-table{font-size:10.5px;}
+  .kv-grid{grid-template-columns:1fr;}
 
   .bottom-nav{display:flex;}
   .main{padding-bottom:56px;}
 }
 
 .bottom-nav{display:none;position:fixed;left:0;right:0;bottom:0;height:56px;background:var(--sidebar);border-top:1px solid var(--sidebar-line);align-items:center;justify-content:space-around;z-index:40;}
-.bottom-nav .bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;color:#8E887D;font-size:9px;font-weight:600;cursor:pointer;flex:1;padding:4px 0;}
+.bottom-nav .bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--sidebar-sub);font-size:9px;font-weight:600;cursor:pointer;flex:1;padding:4px 0;}
 .bottom-nav .bn-item.active{color:var(--accent);}
 .bottom-nav .bn-item svg{width:18px;height:18px;}
 
-@media (min-width:861px){
+@media (min-width:981px){
   .bottom-nav{display:none !important;}
+  /* Desktop-only hover-collapsible sidebar: rests as a narrow icon rail (each item
+     shows its icon PLUS a small label underneath, stacked — per explicit user
+     instruction "jub side bar chota hai to icon dikhe uske niche chote mein
+     content"), and expands to full width the instant the cursor moves over it (no
+     click needed) — collapsing back again the moment the cursor leaves — per
+     explicit user instruction ("left bar sab chota ho to...jaise hi curson side bar
+     pe jaye to expank ho jaye"). Scoped to desktop only so the existing mobile
+     off-canvas open/close behavior (.sidebar.open / transform) is completely
+     unaffected.
+     Driven by the .sidebar-expanded CLASS (toggled via JS — see S.sidebarHovered
+     and the mouseover/mouseout listeners in Common.html), NOT a plain CSS :hover
+     pseudo-class. A plain :hover was tried first but broke the instant you clicked
+     any nav item: render() replaces the WHOLE .sidebar DOM node on every click, and
+     browsers never re-apply :hover to a brand-new element without an actual
+     mousemove — so the sidebar would immediately snap back to collapsed right after
+     a click, hiding whatever submenu had just been opened, per explicit user
+     report ("clicked, it shows no option...i have to go back"). The JS-tracked
+     class survives that DOM replacement because render() re-applies it explicitly
+     every time from S.sidebarHovered.
+     BUG FIX: the label text used to be a bare text node directly inside .nav-item
+     (never wrapped in its own <span>), so the old hide-on-collapse selector
+     (`.nav-item span:not(.n-ic)`) could only ever match the OTHER spans
+     (.nav-chevron/.nav-badge) — it never actually matched/hid the label itself. The
+     full label text stayed visible and had to squeeze into the narrow 64px rail,
+     wrapping/overlapping into the illegible mess seen in the reported screenshot.
+     Fixed by wrapping the label in <span class="n-lbl"> (see renderShell() in
+     Common.html) so it can be targeted precisely and reflowed into a small caption
+     under the icon instead. */
+  .sidebar{width:64px;}
+  .sidebar.sidebar-expanded{width:236px;}
+  .sidebar:not(.sidebar-expanded) .brand{padding:14px 4px;justify-content:center;}
+  .sidebar:not(.sidebar-expanded) .brand-inner{gap:0;flex-direction:column;}
+  .sidebar:not(.sidebar-expanded) .brand-text{display:none;}
+  .sidebar:not(.sidebar-expanded) .nav{padding:8px 4px;}
+  .sidebar:not(.sidebar-expanded) .nav-group-label{display:none;}
+  /* Stack icon above label, both centered — a small icon rail with a caption under
+     each icon, instead of hiding the label entirely. */
+  .sidebar:not(.sidebar-expanded) .nav-item{flex-direction:column;justify-content:center;padding:7px 2px;gap:3px;border-radius:8px;text-align:center;}
+  .sidebar:not(.sidebar-expanded) .nav-item .n-lbl{display:block;font-size:7.5px;font-weight:600;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58px;letter-spacing:0;}
+  .sidebar:not(.sidebar-expanded) .nav-item .nav-badge{position:absolute;top:2px;right:6px;margin-left:0;}
+  .sidebar:not(.sidebar-expanded) .nav-item .nav-chevron{display:none;}
+  .sidebar:not(.sidebar-expanded) .nav-item.active::before{display:none;} /* the left accent bar has no room on a centered icon rail */
+  .sidebar:not(.sidebar-expanded) .nav-children{display:none;}
+  .sidebar:not(.sidebar-expanded) .sidebar-foot{display:none;}
+  /* Expanding pushes .main over via the flex layout (same width-transition
+     mechanism as before); a slightly elevated shadow while hovered makes that
+     motion read as an intentional "flyout" rather than a layout glitch. */
+  .sidebar.sidebar-expanded{box-shadow:6px 0 24px rgba(0,0,0,.18);z-index:65;}
+}
+
+/* ============ APPEARANCE SETTINGS MODAL ============ */
+.appearance-trigger{position:relative;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-secondary);flex:none;transition:all .12s;}
+.appearance-trigger:hover{background:var(--accent-tint2);color:var(--accent-dark);border-color:var(--accent);}
+.appearance-trigger svg{width:16px;height:16px;}
+.sidebar-appearance-btn{width:100%;justify-content:center;margin-top:6px;padding:8px;font-size:11.5px;gap:6px;}
+.appearance-overlay{position:fixed;inset:0;background:rgba(10,14,26,.55);z-index:150;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);animation:toast-in .18s cubic-bezier(.2,.8,.4,1);}
+.appearance-modal{background:var(--surface);border-radius:16px;box-shadow:0 40px 90px -20px rgba(0,0,0,.45);width:640px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+.appearance-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line-light);flex:none;}
+.appearance-head h3{font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.appearance-head .sub{font-size:10.5px;color:var(--muted);margin-top:2px;font-weight:500;}
+.appearance-body{padding:20px 22px;overflow-y:auto;flex:1;min-height:0;}
+.appearance-section-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;}
+/* Display mode: 3 segmented tiles with icon + label + subtext */
+.dm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px;}
+.dm-tile{border:1.5px solid var(--line);border-radius:12px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;text-align:center;background:var(--surface);transition:all .14s;position:relative;}
+.dm-tile:hover{border-color:var(--accent);background:var(--accent-tint2);}
+.dm-tile.active{border-color:var(--accent);background:var(--accent-tint);box-shadow:0 0 0 3px var(--color-primary-glow);}
+.dm-tile .dm-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent-tint2);color:var(--accent-dark);}
+.dm-tile.active .dm-ic{background:var(--accent);color:#fff;}
+.dm-tile svg{width:17px;height:17px;}
+.dm-tile .dm-label{font-size:12px;font-weight:700;color:var(--ink);}
+.dm-tile .dm-sub{font-size:9px;color:var(--muted);line-height:1.3;}
+.dm-tile .dm-check{position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;background:var(--accent);color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:900;}
+/* Color scheme grid: Surprise Me card first, then 37 palette swatch cards */
+.cs-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;}
+.cs-card{border:1.5px solid var(--line);border-radius:11px;padding:9px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;background:var(--surface);transition:all .14s;position:relative;}
+.cs-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.08);}
+.cs-card.active{border-color:var(--accent);box-shadow:0 0 0 3px var(--color-primary-glow);}
+.cs-swatch{width:30px;height:30px;border-radius:50%;flex:none;box-shadow:inset 0 -3px 6px rgba(0,0,0,.18),0 2px 5px rgba(0,0,0,.12);}
+.cs-swatch.surprise{background:conic-gradient(from 180deg,#7C3AED,#2563EB,#059669,#F59E0B,#DC2626,#EC4899,#7C3AED);}
+.cs-name{font-size:8.7px;font-weight:700;color:var(--ink-secondary);text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.cs-card.active .cs-name{color:var(--accent-dark);}
+.cs-check{position:absolute;top:4px;right:4px;width:15px;height:15px;border-radius:50%;background:var(--accent);color:#fff;font-size:8.5px;display:flex;align-items:center;justify-content:center;font-weight:900;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+/* Live preview strip */
+.ap-preview{margin-top:22px;padding:16px;border:1.5px dashed var(--line);border-radius:12px;background:var(--bg);}
+.ap-preview-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.ap-preview-btn{background:linear-gradient(135deg,var(--color-primary),var(--color-primary-hover));color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:12px;cursor:pointer;box-shadow:0 2px 8px var(--color-primary-glow);}
+.ap-preview-badge{background:var(--accent-tint);color:var(--accent-dark);font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;}
+.ap-preview-link{color:var(--accent-dark);font-size:12.5px;font-weight:700;text-decoration:none;border-bottom:2px solid var(--accent);padding-bottom:2px;cursor:pointer;}
+.appearance-foot{padding:13px 22px;border-top:1px solid var(--line-light);display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;background:var(--bg);}
+.appearance-foot .ap-current{font-size:10.5px;color:var(--muted);font-weight:600;}
+.appearance-foot .ap-current b{color:var(--ink-secondary);}
+@media (max-width:600px){
+  .appearance-modal{max-height:94vh;}
+  .cs-grid{grid-template-columns:repeat(4,1fr);}
+  .dm-grid{grid-template-columns:1fr;}
 }
 </style>

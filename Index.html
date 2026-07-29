@@ -3,17 +3,61 @@
 <head>
 <meta charset="UTF-8">
 <base target="_top">
-<title>Tally Dashboard</title>
+<title>Finance 360° — Tally Integrated</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <?!= include('CSS') ?>
+<script>
+/* FOUC prevention: read the SAME localStorage keys the Appearance system in
+   Appearance.html reads/writes, and apply html.dark + data-theme BEFORE the body
+   (and therefore any themed element) ever paints. Without this, every page load
+   would flash the default light/blue theme for a moment before the app's own JS
+   ran and corrected it. "Surprise Me" is resolved ONCE here (not re-rolled again in
+   Appearance.html) and stashed on window.__resolvedColorScheme so both places agree
+   on the exact same color for this page load. */
+(function(){
+  try{
+    var mode=localStorage.getItem('app_display_mode')||(localStorage.getItem('tally_dark_mode')==='true'?'dark':'light');
+    var scheme=localStorage.getItem('app_color_scheme')||'cobalt-blue';
+    var isDark=mode==='dark'||(mode==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if(isDark)document.documentElement.classList.add('dark');
+    var resolvedScheme=scheme;
+    if(scheme==='surprise'){
+      var keys=['violet-night','cobalt-blue','emerald-dark','rose-quartz','amber-forge','crimson-edge','slate-frost','lime-surge','indigo-wave','sunset-orange','orange','sunset','gold-luxe','ruby','berry-punch','pink','fuchsia-bloom','plum','midnight-navy','sky-wave','cyan-pulse','teal-tide','mint-surge','chartreuse','forest','jade','seafoam','azure','periwinkle','lavender','orchid','flamingo','grapefruit','wine','copper','tangerine','honey'];
+      resolvedScheme=keys[Math.floor(Math.random()*keys.length)];
+      window.__resolvedColorScheme=resolvedScheme;
+    }
+    document.documentElement.setAttribute('data-theme',resolvedScheme);
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 <div id="app"></div>
+<!--
+  LOAD ORDER MATTERS HERE:
+  Common.html defines registerPage()/PAGE_RENDERERS and must load BEFORE any page
+  module (Dashboard/Receivables/Payables/Finance/Misc) that calls registerPage(...)
+  at the top level of its own <script> block. Similarly, Charts.html defines
+  CHART_DEFS and must load before page modules that assign CHART_DEFS['key']=... at
+  their top level. Common.html's own loadAll() call at the end of its script only
+  starts an async server call, so it's safe for it to run first — every later
+  <script> tag below still executes synchronously (registering pages/charts) well
+  before that server call resolves.
+-->
+<?!= include('Common') ?>
+<?!= include('Filters') ?>
+<?!= include('DateRange') ?>
+<?!= include('Appearance') ?>
+<?!= include('Charts') ?>
 <?!= include('Grids') ?>
 <?!= include('Dashboard') ?>
-<?!= include('Overdue') ?>
+<?!= include('Receivables') ?>
+<?!= include('Payables') ?>
+<?!= include('Finance') ?>
+<?!= include('ReportsExtra') ?>
+<?!= include('Misc') ?>
+<?!= include('Map') ?>
 <?!= include('Ledger') ?>
-<?!= include('Common') ?>
 </body>
 </html>

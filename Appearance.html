@@ -1,0 +1,227 @@
+<script>
+/* ============================= APPEARANCE & DYNAMIC COLOR SCHEME SYSTEM =============================
+ * Display Mode (Light/Dark/System) + 37 curated accent color schemes + "Surprise Me"
+ * (re-randomizes on every visit/login) + live preview. Custom vanilla-CSS project
+ * (no Tailwind/Bootstrap/component-library detected) — every color scheme sets ONLY
+ * 9 CSS variables (--color-primary/-hover/-light/-soft/-glow, plus 4 dark-mode
+ * variants — see [data-theme] blocks in CSS.html), and --accent/--accent-dark/
+ * --accent-tint/--accent-tint2 (already used by every button/link/badge/table-header
+ * across the whole app) are DERIVED from those tokens — so switching either the
+ * display mode or the color scheme recolors the entire app instantly with zero
+ * per-component changes.
+ *
+ * FOUC prevention: Index.html's <head> has a small inline script (runs before the
+ * stylesheet is even parsed) that reads the SAME localStorage keys used below and
+ * applies html.dark + data-theme immediately, so there is never a flash of the
+ * default light/blue theme before this script loads. That inline script also picks
+ * the "Surprise Me" random scheme once for THIS page load and stashes it on
+ * window.__resolvedColorScheme so this file re-uses that exact same pick instead of
+ * re-rolling a second time and visibly flickering to a different color.
+ */
+const APPEARANCE_MODE_KEY='app_display_mode';
+const APPEARANCE_SCHEME_KEY='app_color_scheme';
+
+const COLOR_SCHEMES=[
+  {key:'violet-night',name:'Violet Night',c1:'#7C3AED',c2:'#9333EA'},
+  {key:'cobalt-blue',name:'Cobalt Blue',c1:'#2563EB',c2:'#3B82F6'},
+  {key:'emerald-dark',name:'Emerald Dark',c1:'#059669',c2:'#10B981'},
+  {key:'rose-quartz',name:'Rose Quartz',c1:'#F43F5E',c2:'#FB7185'},
+  {key:'amber-forge',name:'Amber Forge',c1:'#F59E0B',c2:'#D97706'},
+  {key:'crimson-edge',name:'Crimson Edge',c1:'#DC2626',c2:'#EF4444'},
+  {key:'slate-frost',name:'Slate Frost',c1:'#64748B',c2:'#475569'},
+  {key:'lime-surge',name:'Lime Surge',c1:'#84CC16',c2:'#65A30D'},
+  {key:'indigo-wave',name:'Indigo Wave',c1:'#6366F1',c2:'#4F46E5'},
+  {key:'sunset-orange',name:'Sunset Orange',c1:'#EA580C',c2:'#F97316'},
+  {key:'orange',name:'Orange',c1:'#FF6B00',c2:'#FF8533'},
+  {key:'sunset',name:'Sunset',c1:'#FDBA74',c2:'#FB923C'},
+  {key:'gold-luxe',name:'Gold Luxe',c1:'#EAB308',c2:'#CA8A04'},
+  {key:'ruby',name:'Ruby',c1:'#E11D48',c2:'#BE123C'},
+  {key:'berry-punch',name:'Berry Punch',c1:'#D946EF',c2:'#C026D3'},
+  {key:'pink',name:'Pink',c1:'#EC4899',c2:'#DB2777'},
+  {key:'fuchsia-bloom',name:'Fuchsia Bloom',c1:'#A855F7',c2:'#9333EA'},
+  {key:'plum',name:'Plum',c1:'#8B5CF6',c2:'#7C3AED'},
+  {key:'midnight-navy',name:'Midnight Navy',c1:'#1E3A8A',c2:'#1E40AF'},
+  {key:'sky-wave',name:'Sky Wave',c1:'#0EA5E9',c2:'#0284C7'},
+  {key:'cyan-pulse',name:'Cyan Pulse',c1:'#06B6D4',c2:'#0891B2'},
+  {key:'teal-tide',name:'Teal Tide',c1:'#14B8A6',c2:'#0D9488'},
+  {key:'mint-surge',name:'Mint Surge',c1:'#10B981',c2:'#059669'},
+  {key:'chartreuse',name:'Chartreuse',c1:'#A3E635',c2:'#84CC16'},
+  {key:'forest',name:'Forest',c1:'#15803D',c2:'#166534'},
+  {key:'jade',name:'Jade',c1:'#047857',c2:'#065F46'},
+  {key:'seafoam',name:'Seafoam',c1:'#2DD4BF',c2:'#14B8A6'},
+  {key:'azure',name:'Azure',c1:'#38BDF8',c2:'#0284C7'},
+  {key:'periwinkle',name:'Periwinkle',c1:'#818CF8',c2:'#4F46E5'},
+  {key:'lavender',name:'Lavender',c1:'#C084FC',c2:'#A855F7'},
+  {key:'orchid',name:'Orchid',c1:'#E879F9',c2:'#D946EF'},
+  {key:'flamingo',name:'Flamingo',c1:'#FB7185',c2:'#F43F5E'},
+  {key:'grapefruit',name:'Grapefruit',c1:'#FF6B6B',c2:'#EE5253'},
+  {key:'wine',name:'Wine',c1:'#9F1239',c2:'#881337'},
+  {key:'copper',name:'Copper',c1:'#B45309',c2:'#92400E'},
+  {key:'tangerine',name:'Tangerine',c1:'#F97316',c2:'#EA580C'},
+  {key:'honey',name:'Honey',c1:'#FACC15',c2:'#EAB308'}
+];
+const COLOR_SCHEME_KEYS=COLOR_SCHEMES.map(s=>s.key);
+
+function resolveSystemPrefersDark_(){
+  try{return window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;}catch(e){return false;}
+}
+function resolveDisplayModeToDark_(mode){
+  if(mode==='dark')return true;
+  if(mode==='system')return resolveSystemPrefersDark_();
+  return false;
+}
+function rollSurpriseScheme_(){
+  return COLOR_SCHEME_KEYS[Math.floor(Math.random()*COLOR_SCHEME_KEYS.length)];
+}
+// Applies BOTH the display mode (html.dark) and the resolved color scheme
+// (data-theme), updates S, and persists — the single entry point every UI action
+// below goes through, so state/DOM/localStorage never drift out of sync.
+function applyAppearance_(mode,schemeChoice,opts){
+  opts=opts||{};
+  S.displayMode=mode;
+  S.colorScheme=schemeChoice;
+  const isDark=resolveDisplayModeToDark_(mode);
+  S.darkMode=isDark;
+  document.documentElement.classList.toggle('dark',isDark);
+  let resolvedScheme=schemeChoice;
+  if(schemeChoice==='surprise'){
+    // A fresh reroll only happens on explicit user action (clicking the Surprise Me
+    // card) or on first-ever load — NOT on every re-render — otherwise every click
+    // elsewhere in the app would keep changing the color out from under the user.
+    resolvedScheme=opts.reroll||!S._resolvedSurpriseScheme?rollSurpriseScheme_():S._resolvedSurpriseScheme;
+    S._resolvedSurpriseScheme=resolvedScheme;
+  }
+  document.documentElement.setAttribute('data-theme',resolvedScheme);
+  try{
+    localStorage.setItem(APPEARANCE_MODE_KEY,mode);
+    localStorage.setItem(APPEARANCE_SCHEME_KEY,schemeChoice);
+  }catch(e){}
+}
+// Called once during app init (after Common.html's S object exists) to sync S with
+// whatever the FOUC-prevention inline script in Index.html's <head> already applied
+// to the DOM, so the modal opens showing the CURRENTLY active choice instead of a
+// stale default.
+function initAppearance_(){
+  let mode='light',scheme='cobalt-blue';
+  try{
+    mode=localStorage.getItem(APPEARANCE_MODE_KEY)||(S.darkMode?'dark':'light');
+    scheme=localStorage.getItem(APPEARANCE_SCHEME_KEY)||'cobalt-blue';
+  }catch(e){}
+  if(scheme!=='surprise'&&COLOR_SCHEME_KEYS.indexOf(scheme)===-1)scheme='cobalt-blue';
+  S._resolvedSurpriseScheme=(typeof window!=='undefined'&&window.__resolvedColorScheme)||null;
+  applyAppearance_(mode,scheme,{reroll:false});
+  // Live system-preference switching: if the user has "System" selected and their
+  // OS theme changes while the app is open (e.g. auto night mode kicking in), follow
+  // it immediately without needing a manual toggle.
+  try{
+    const mq=window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange=()=>{ if(S.displayMode==='system')applyAppearance_('system',S.colorScheme,{reroll:false}); };
+    if(mq.addEventListener)mq.addEventListener('change',onChange);
+    else if(mq.addListener)mq.addListener(onChange);
+  }catch(e){}
+}
+
+/* ============================= MODAL (singleton, body-appended) =============================
+ * Appended directly to <body> (same pattern as DateRange.html's #drPopupRoot) so it
+ * always renders above the app shell and is completely unaffected by render()'s
+ * full replacement of #app's innerHTML on every page navigation. */
+let apModalEl=null;
+function ensureApModalEl_(){
+  if(apModalEl)return apModalEl;
+  apModalEl=document.createElement('div');
+  apModalEl.id='appearanceModalRoot';
+  document.body.appendChild(apModalEl);
+  return apModalEl;
+}
+const DISPLAY_MODE_TILES=[
+  {key:'light',label:'Light',sub:'Clean and bright — ideal for daylight',icon:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'},
+  {key:'dark',label:'Dark',sub:'Easy on the eyes — night & low light',icon:'<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>'},
+  {key:'system',label:'System',sub:'Automatically syncs with your OS',icon:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'}
+];
+function renderApModalContent_(){
+  const mode=S.displayMode||'light';
+  const scheme=S.colorScheme||'cobalt-blue';
+  const dmHtml=DISPLAY_MODE_TILES.map(t=>`<div class="dm-tile${mode===t.key?' active':''}" data-action="ap-select-mode" data-mode="${t.key}">
+      ${mode===t.key?'<span class="dm-check">✓</span>':''}
+      <span class="dm-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg></span>
+      <span class="dm-label">${esc(t.label)}</span><span class="dm-sub">${esc(t.sub)}</span>
+    </div>`).join('');
+  const surpriseActive=scheme==='surprise';
+  const surpriseCard=`<div class="cs-card${surpriseActive?' active':''}" data-action="ap-select-scheme" data-scheme="surprise" title="A new colour every visit / login">
+      ${surpriseActive?'<span class="cs-check">✓</span>':''}
+      <span class="cs-swatch surprise"></span><span class="cs-name">Surprise Me</span>
+    </div>`;
+  const schemeCards=COLOR_SCHEMES.map(s=>{
+    const active=scheme===s.key;
+    return `<div class="cs-card${active?' active':''}" data-action="ap-select-scheme" data-scheme="${s.key}" title="${esc(s.name)}">
+      ${active?'<span class="cs-check">✓</span>':''}
+      <span class="cs-swatch" style="background:linear-gradient(135deg,${s.c1},${s.c2});"></span>
+      <span class="cs-name">${esc(s.name)}</span>
+    </div>`;
+  }).join('');
+  const currentSchemeName=surpriseActive?'Surprise Me':((COLOR_SCHEMES.find(s=>s.key===scheme)||{}).name||'Cobalt Blue');
+  return `<div class="appearance-overlay" data-action="ap-overlay">
+    <div class="appearance-modal">
+      <div class="appearance-head">
+        <div><h3>Appearance</h3><div class="sub">Personalize the display mode and accent color for this app</div></div>
+        <span class="modal-x" data-action="ap-close">✕</span>
+      </div>
+      <div class="appearance-body">
+        <div class="appearance-section-label">Display Mode</div>
+        <div class="dm-grid">${dmHtml}</div>
+        <div class="appearance-section-label">Color Scheme</div>
+        <div class="cs-grid">${surpriseCard}${schemeCards}</div>
+        <div class="ap-preview">
+          <div class="appearance-section-label" style="margin-bottom:10px;">Live Preview</div>
+          <div class="ap-preview-row">
+            <button type="button" class="ap-preview-btn">Primary Button</button>
+            <span class="ap-preview-badge">Active Badge</span>
+            <a href="javascript:void(0)" class="ap-preview-link">Active Link</a>
+          </div>
+        </div>
+      </div>
+      <div class="appearance-foot">
+        <span class="ap-current">Mode: <b>${esc(DISPLAY_MODE_TILES.find(t=>t.key===mode).label)}</b> &nbsp;·&nbsp; Color: <b>${esc(currentSchemeName)}</b></span>
+        <button type="button" class="btn btn-primary" data-action="ap-close">Done</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderApModal_(){
+  const el=ensureApModalEl_();
+  el.innerHTML=S.appearanceOpen?renderApModalContent_():'';
+}
+function openAppearanceModal_(){ S.appearanceOpen=true; renderApModal_(); }
+function closeAppearanceModal_(){ S.appearanceOpen=false; renderApModal_(); }
+
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='open-appearance'){openAppearanceModal_();return;}
+    if(a==='ap-close'){closeAppearanceModal_();return;}
+    if(a==='ap-select-mode'){
+      const mode=el.getAttribute('data-mode');
+      applyAppearance_(mode,S.colorScheme,{reroll:false});
+      renderApModal_();
+      return;
+    }
+    if(a==='ap-select-scheme'){
+      const scheme=el.getAttribute('data-scheme');
+      applyAppearance_(S.displayMode,scheme,{reroll:scheme==='surprise'});
+      renderApModal_();
+      return;
+    }
+    if(a==='ap-overlay'&&e.target===el){closeAppearanceModal_();return;}
+  }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&S.appearanceOpen)closeAppearanceModal_();
+});
+
+// Run immediately — S (from Common.html, which loads before this file per
+// Index.html's load-order comment) already exists, and the DOM already has
+// whatever html.dark/data-theme the FOUC-prevention <head> script applied, so this
+// just syncs S's in-memory state to match without causing any visible flash.
+initAppearance_();
+</script>

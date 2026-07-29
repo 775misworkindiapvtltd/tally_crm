@@ -1,0 +1,35 @@
+<script>
+/* ============================= PAYABLES MODULE =============================
+ * Ageing Summary and Vendor List are shared with Receivables.html via
+ * renderAgeing('pay') / renderPartyList('pay') — registered there. Only the
+ * Payables Dashboard is defined here.
+ */
+function renderPayDashboard(){
+  const totalPay=outstandingPayable();
+  const overdue=dataForFY('payables').filter(r=>Number(r.overdueDays)>0);
+  const current=dataForFY('payables').filter(r=>Number(r.overdueDays)<=0);
+  const age=ageingBuckets(dataForFY('payables'),'closingBalance');
+  const topVendors=topN(dataForFY('payables'),'partyName','closingBalance',8);
+  const maxTop=Math.max(1,...topVendors.map(x=>x.value));
+  const fyLabel=selectedFYLabel();
+
+  return `
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Total Outstanding</span><div class="card-icon c-red">${NAV_ICONS.out}</div></div><div class="card-value">${fmtINR(totalPay)}</div><div class="card-sub">${dataForFY('payables').length} open bills — ${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Overdue Bills</span><div class="card-icon c-orange">${NAV_ICONS.ageing}</div></div><div class="card-value">${overdue.length}</div><div class="card-sub">${fmtINR(sumBy(overdue,'closingBalance'))} at risk</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Current Bills</span><div class="card-icon c-green">${NAV_ICONS.customer}</div></div><div class="card-value">${current.length}</div><div class="card-sub">${fmtINR(sumBy(current,'closingBalance'))} not yet due</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Avg Overdue Days</span><div class="card-icon c-blue">${NAV_ICONS.clock}</div></div><div class="card-value">${overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0}</div><div class="card-sub">days past due (overdue bills only)</div></div>
+    </div>
+    <div class="dash-row">
+      <div class="panel">
+        <div class="panel-title">Top Vendors by Payable — ${esc(fyLabel)} <a data-action="goto" data-page="vendorList">View All</a></div>
+        <div class="panel-body"><div class="bar-chart">${topVendors.map(c=>`<div class="bar-item"><div class="b-label" title="${esc(c.label)}">${esc(c.label)}</div><div class="bar-track"><div class="bar-fill pay" style="width:${Math.max(4,c.value/maxTop*100)}%;"></div></div><div class="b-val">${fmtINR(c.value)}</div></div>`).join('')||`<div class="empty-state"><div class="big">No data</div></div>`}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Ageing Snapshot — ${esc(fyLabel)}</div>
+        <div class="panel-body"><div class="age-buckets">${Object.keys(age).map(k=>`<div class="age-bucket ${k==='90+'?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(age[k])}</div></div>`).join('')}</div></div>
+      </div>
+    </div>`;
+}
+registerPage('payDashboard',renderPayDashboard);
+</script>

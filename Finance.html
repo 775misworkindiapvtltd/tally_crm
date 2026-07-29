@@ -1,0 +1,1230 @@
+<script>
+/* ============================= FINANCE MODULE ============================= */
+
+/* ============================= SALES DASHBOARD =============================
+ * Rebuilt per explicit user request ("update my sales dashboard page in best
+ * prfesional way...currently it does not have any insights, use data from sales
+ * report page. I need prductu wise sales summary, year filters, number of clients,
+ * higest paying clint, most seling product....jo bhi best , and required hai for
+ * any business").
+ *
+ * ROOT CAUSE of "no insights": every headline number on the old version came from
+ * periodMetrics().sales / voucherSales_(), which read the BALANCE sheet's sales
+ * VOUCHERS (dataForFY('balanceVouchers') filtered on voucherType ~ /sale/i). That
+ * dataset is empty in this spreadsheet — which is why the page (and the Reports
+ * page's Sales card) rendered ₹0 / "0 vouchers" while the Sales Report page itself
+ * showed plenty of data. The Sales Report reads the SALES sheet instead
+ * (dataForFY('sales') raw lines + buildSalesReport() invoice rollup), and the main
+ * Dashboard's own Total Sales KPI already uses totalSalesFromSalesSheet() for the
+ * same reason. Everything below is therefore computed ONLY from the SALES sheet, so
+ * every figure reconciles exactly with what Sales Report shows.
+ *
+ * Product dimension: the SALES sheet carries BOTH a per-line "Description"
+ * (mapped from DESCRIPTION/ITEM NAME/PRODUCT headers — see mapSalesRows_ in
+ * Code.gs) and a "Category" column. Which one represents "product" differs per
+ * sheet, so the Product Summary exposes a Product/Category toggle rather than
+ * hard-coding one — the Most Selling Product KPI and the mix donut both follow
+ * whichever is selected, so the whole page stays internally consistent.
+ */
+const SALES_DASH_PRODUCT_META={
+  description:{label:'Product / Service',plural:'Products'},
+  category:{label:'Category',plural:'Categories'}
+};
+function salesDashProductDim_(){
+  const d=S.salesDashProductDim;
+  return SALES_DASH_PRODUCT_META[d]?d:'description';
+}
+
+// Product (or Category) wise sales summary — one row per distinct product, with
+// invoice/client counts, revenue, share of total and average ticket. Invoices and
+// clients are counted as DISTINCT sets (not raw line counts) because one invoice can
+// carry several lines of the same product, and the same client can buy it repeatedly.
+function buildSalesProductSummary_(dim){
+  const map={};
+  dataForFY('sales').forEach(r=>{
+    const name=String((dim==='category'?r.category:r.description)||'').trim()||'Unspecified';
+    if(!map[name])map[name]={product:name,amount:0,lines:0,invoiceSet:new Set(),clientSet:new Set()};
+    const m=map[name];
+    m.amount+=Number(r.amount)||0;
+    m.lines++;
+    const inv=String(r.invoiceNo||'').trim().toLowerCase();if(inv)m.invoiceSet.add(inv);
+    const cl=String(r.invoiceTo||'').trim().toLowerCase();if(cl)m.clientSet.add(cl);
+  });
+  const all=Object.keys(map).map(k=>map[k]);
+  const total=all.reduce((s,m)=>s+m.amount,0);
+  return all.map(m=>{
+    const invCount=m.invoiceSet.size||m.lines;
+    return {product:m.product,invoices:invCount,clients:m.clientSet.size,
+      amount:Math.round(m.amount*100)/100,
+      avgPerInvoice:invCount?Math.round(m.amount/invCount*100)/100:0,
+      sharePct:total?Math.round(m.amount/total*1000)/10:0};
+  }).sort((a,b)=>b.amount-a.amount);
+}
+
+// Client-wise revenue summary — drives both the "Highest Paying Client" KPI and the
+// Top Clients table. lastSale is stored as a real ISO date STRING (not a display
+// string) so the grid's shared calendar date-range filter/sort can read it directly,
+// the same way followUpList's planDate had to be materialized (see Grids.html).
+function buildSalesTopClients_(){
+  const map={};
+  dataForFY('sales').forEach(r=>{
+    const name=String(r.invoiceTo||'').trim();if(!name)return;
+    const key=name.toLowerCase();
+    if(!map[key])map[key]={client:name,state:'',amount:0,lines:0,invoiceSet:new Set(),productSet:new Set(),lastTs:null};
+    const m=map[key];
+    m.amount+=Number(r.amount)||0;
+    m.lines++;
+    if(!m.state&&r.state)m.state=String(r.state).trim();
+    const inv=String(r.invoiceNo||'').trim().toLowerCase();if(inv)m.invoiceSet.add(inv);
+    const prod=String(r.description||r.category||'').trim().toLowerCase();if(prod)m.productSet.add(prod);
+    const t=parseDT(r.date);if(t!==null&&(m.lastTs===null||t>m.lastTs))m.lastTs=t;
+  });
+  const all=Object.keys(map).map(k=>map[k]);
+  const total=all.reduce((s,m)=>s+m.amount,0);
+  return all.map(m=>{
+    const invCount=m.invoiceSet.size||m.lines;
+    return {client:m.client,state:m.state||'',invoices:invCount,products:m.productSet.size,
+      amount:Math.round(m.amount*100)/100,
+      avgInvoice:invCount?Math.round(m.amount/invCount*100)/100:0,
+      sharePct:total?Math.round(m.amount/total*1000)/10:0,
+      lastSale:m.lastTs===null?'':toISO(new Date(m.lastTs))};
+  }).sort((a,b)=>b.amount-a.amount);
+}
+
+// New vs Repeat clients for the selected period. Uses each client's COMPLETE
+// (unfiltered) S.salesRows history to find every financial year they ever bought in:
+// a client billed in the selected FY(s) who ALSO bought outside them is "repeat";
+// one whose whole history sits inside the selection is "new". With no FY filter
+// applied, "repeat" instead means they bought across more than one financial year.
+function salesDashNewRepeat_(){
+  const selected=new Set(selectedFinancialYears());
+  const history={};
+  (S.salesRows||[]).forEach(r=>{
+    const name=String(r.invoiceTo||'').trim();if(!name)return;
+    const fy=financialYearKey(r.date);if(!fy)return;
+    const k=name.toLowerCase();
+    if(!history[k])history[k]=new Set();
+    history[k].add(fy);
+  });
+  const inPeriod=new Set();
+  dataForFY('sales').forEach(r=>{const n=String(r.invoiceTo||'').trim();if(n)inPeriod.add(n.toLowerCase());});
+  let fresh=0,repeat=0;
+  inPeriod.forEach(k=>{
+    const fys=history[k]||new Set();
+    const isRepeat=selected.size?Array.from(fys).some(f=>!selected.has(f)):fys.size>1;
+    if(isRepeat)repeat++;else fresh++;
+  });
+  return {fresh,repeat,total:inPeriod.size};
+}
+
+// Both dashboard tables run on the SAME generic grid engine every other table in the
+// app uses (renderGrid), so per-column search/sort/hide-unhide/resize/pagination and
+// the Reset Filters button all come for free — data is handed over via S._sales*
+// exactly like the main Dashboard's own mini-report grids do.
+const SALES_PRODUCT_SUMMARY_COLS=[
+  {key:'product',label:'Product / Service',width:320},
+  {key:'invoices',label:'Invoices',width:100,num:true,filterType:'number-range'},
+  {key:'clients',label:'Clients',width:95,num:true,filterType:'number-range'},
+  {key:'amount',label:'Sales Amount',width:150,num:true,currency:true,filterType:'number-range',heatmap:true},
+  {key:'sharePct',label:'% of Sales',width:110,num:true,filterType:'number-range',render:r=>esc(r.sharePct.toFixed(1)+'%')},
+  {key:'avgPerInvoice',label:'Avg / Invoice',width:140,num:true,currency:true,filterType:'number-range'}
+];
+const SALES_TOP_CLIENTS_COLS=[
+  {key:'client',label:'Client',width:280},
+  {key:'state',label:'State',width:120},
+  {key:'invoices',label:'Invoices',width:100,num:true,filterType:'number-range'},
+  {key:'products',label:'Products',width:100,num:true,filterType:'number-range'},
+  {key:'amount',label:'Sales Amount',width:150,num:true,currency:true,filterType:'number-range',heatmap:true},
+  {key:'sharePct',label:'% of Sales',width:110,num:true,filterType:'number-range',render:r=>esc(r.sharePct.toFixed(1)+'%')},
+  {key:'avgInvoice',label:'Avg / Invoice',width:140,num:true,currency:true,filterType:'number-range'},
+  {key:'lastSale',label:'Last Sale',width:120,date:true,render:r=>r.lastSale?esc(fmtDDMMMYYYY(fromISO(r.lastSale))):muted_('—')}
+];
+GRID_DEFS.salesProductSummary={cols:SALES_PRODUCT_SUMMARY_COLS,data:()=>S._salesProductRows||[],showSortArrows:true};
+GRID_DEFS.salesTopClients={cols:SALES_TOP_CLIENTS_COLS,data:()=>S._salesTopClientRows||[],showSortArrows:true};
+
+function renderSalesDashboard(){
+  const rawLines=dataForFY('sales');
+  const invoices=buildSalesReport();
+  const fyLabel=selectedFYLabel();
+  const dim=salesDashProductDim_();
+  const dimMeta=SALES_DASH_PRODUCT_META[dim];
+
+  const totalSales=sumBy(rawLines,'amount');
+  const clientRows=buildSalesTopClients_();
+  const productRows=buildSalesProductSummary_(dim);
+  const topClient=clientRows[0]||null;
+  const topProduct=productRows[0]||null;
+  const byState=topN(rawLines,'state','amount',6).filter(s=>s.label&&s.label!=='Unknown');
+  const maxState=Math.max(1,...byState.map(x=>x.value));
+  const topState=byState[0]||null;
+
+  // Month-wise series (also feeds the trend chart via CHART_DEFS below).
+  const monthly=selectedFYMonths().map(m=>({label:m.label,value:sumBy(rowsInCustomRange(rawLines,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount')}));
+  const activeMonths=monthly.filter(m=>m.value>0);
+  const bestMonth=activeMonths.slice().sort((a,b)=>b.value-a.value)[0]||null;
+  const avgPerMonth=activeMonths.length?totalSales/activeMonths.length:0;
+
+  // Unpaid = sum of the RECEIVABLES pending amount linked to each invoice by Bill Ref
+  // No (already computed per invoice by buildSalesReport()). Invoices with no matching
+  // receivable row count as fully realised.
+  const unpaid=invoices.reduce((s,inv)=>s+(Number(inv.recvPendingAmount)||0),0);
+  const realisedPct=totalSales?((totalSales-unpaid)/totalSales*100):0;
+  const gstAmt=sumBy(rawLines.filter(r=>String(r.gstNo||'').trim()),'amount');
+  const gstPct=totalSales?(gstAmt/totalSales*100):0;
+  const top5Amt=clientRows.slice(0,5).reduce((s,c)=>s+c.amount,0);
+  const top5Pct=totalSales?(top5Amt/totalSales*100):0;
+  const nr=salesDashNewRepeat_();
+  const repeatPct=nr.total?(nr.repeat/nr.total*100):0;
+
+  S._salesProductRows=productRows;
+  S._salesTopClientRows=clientRows;
+  SALES_PRODUCT_SUMMARY_COLS[0].label=dimMeta.label;
+
+  if(!rawLines.length){
+    return `${renderFilterBar()}
+      <div class="panel"><div class="panel-body"><div class="empty-state">
+        <div class="big">No sales data for ${esc(fyLabel)}</div>
+        Financial Year filter badal ke dekho — ya "Sync with Tally" dabao.
+      </div></div></div>`;
+  }
+
+  const kpi=(label,value,sub,icon,tone,page)=>`<div class="card"${page?` data-action="goto" data-page="${page}"`:''}>
+      <div class="card-top"><span class="card-label">${esc(label)}</span><div class="card-icon ${tone}">${NAV_ICONS[icon]}</div></div>
+      <div class="card-value">${value}</div><div class="card-sub">${sub}</div>
+    </div>`;
+  // Spotlight card: a NAME is the headline (not a number), with its amount + a share
+  // bar underneath — this is what makes "highest paying client"/"most selling
+  // product" instantly readable instead of just another number tile.
+  const spot=(label,name,meta,pct,sub,icon,tone,page)=>`<div class="sd-spot${page?' sd-spot-link':''}"${page?` data-action="goto" data-page="${page}"`:''}>
+      <div class="sd-spot-head"><span class="sd-spot-label">${esc(label)}</span><div class="card-icon ${tone}">${NAV_ICONS[icon]}</div></div>
+      <div class="sd-spot-name" title="${esc(name)}">${esc(name)}</div>
+      <div class="sd-spot-meta">${meta}</div>
+      <div class="sd-spot-bar"><div class="sd-spot-fill ${tone}" style="width:${Math.max(2,Math.min(100,pct)).toFixed(1)}%;"></div></div>
+      <div class="sd-spot-sub">${esc(sub)}</div>
+    </div>`;
+  const health=(label,valueText,pct,note,tone)=>`<div class="sd-health-row">
+      <div class="sd-health-top"><span class="sd-health-label">${esc(label)}</span><span class="sd-health-val ${tone}">${esc(valueText)}</span></div>
+      <div class="sd-health-track"><div class="sd-health-fill ${tone}" style="width:${Math.max(1,Math.min(100,pct)).toFixed(1)}%;"></div></div>
+      <div class="sd-health-note">${esc(note)}</div>
+    </div>`;
+
+  return `
+    ${renderFilterBar()}
+
+    <div class="kpi-strip" style="grid-template-columns:repeat(6,1fr);">
+      ${kpi('Total Sales',fmtINR(totalSales),esc(fyLabel),'sales','c-green','salesReport')}
+      ${kpi('Total Invoices',invoices.length,`${rawLines.length} line items`,'reports','c-blue','salesReport')}
+      ${kpi('Avg Invoice Value',fmtINR(invoices.length?totalSales/invoices.length:0),'per invoice','collection','c-purple','salesReport')}
+      ${kpi('Total Clients',clientRows.length,`${nr.fresh} new · ${nr.repeat} repeat`,'customer','c-teal','customerList')}
+      ${kpi(dimMeta.plural+' Sold',productRows.length,`distinct ${esc(dimMeta.label.toLowerCase())}`,'wallet','c-indigo')}
+      ${kpi('Unpaid from Sales',fmtINR(unpaid),`${realisedPct.toFixed(1)}% realised`,'in','c-red','ageingRecv')}
+    </div>
+
+    <div class="sd-spot-grid">
+      ${topClient?spot('Highest Paying Client',topClient.client,`${fmtINR(topClient.amount)} <span>· ${topClient.invoices} invoice${topClient.invoices===1?'':'s'}</span>`,topClient.sharePct,topClient.sharePct.toFixed(1)+'% of total sales','customer','c-blue','customerList'):''}
+      ${topProduct?spot('Most Selling '+dimMeta.label,topProduct.product,`${fmtINR(topProduct.amount)} <span>· ${topProduct.clients} client${topProduct.clients===1?'':'s'}</span>`,topProduct.sharePct,topProduct.sharePct.toFixed(1)+'% of total sales','sales','c-green','salesReport'):''}
+      ${bestMonth?spot('Best Month',bestMonth.label,`${fmtINR(bestMonth.value)} <span>· avg ${fmtINRCompact(avgPerMonth)}/mo</span>`,totalSales?bestMonth.value/totalSales*100:0,`across ${activeMonths.length} active month${activeMonths.length===1?'':'s'}`,'ageing','c-orange'):''}
+      ${topState?spot('Top State',topState.label,`${fmtINR(topState.value)} <span>· ${byState.length} state${byState.length===1?'':'s'}</span>`,totalSales?topState.value/totalSales*100:0,(totalSales?(topState.value/totalSales*100).toFixed(1):'0.0')+'% of total sales','map','c-purple','stateSalesReport'):''}
+    </div>
+
+    <div class="dash-row3" style="grid-template-columns:1.5fr 1fr 1fr;">
+      <div class="panel">
+        <div class="panel-title">Monthly Sales Trend <span style="font-weight:500;color:var(--muted);font-size:11px;">— ${esc(fyLabel)}</span></div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesOnly" data-chart-fallback></canvas></div></div>
+        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Sales Mix by ${esc(dimMeta.label)}</div>
+        <div class="panel-body donut-panel-body">
+          <div class="chart-wrap donut"><canvas id="chSalesDashMix" data-chart-fallback></canvas></div>
+          <div class="donut-legend">
+            ${productRows.slice(0,6).map((c,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="dl-label" title="${esc(c.product)}">${esc(c.product)}</span><span class="dl-val">${fmtINRCompact(c.amount)}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="panel-foot"><span>Top 6 of ${productRows.length}</span><span>${(productRows.slice(0,6).reduce((s,c)=>s+c.sharePct,0)).toFixed(1)}%</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Sales Health &amp; Mix</div>
+        <div class="panel-body">
+          <div class="sd-health">
+            ${health('Top 5 Client Concentration',top5Pct.toFixed(1)+'%',top5Pct,`Top 5 of ${clientRows.length} clients = ${fmtINRCompact(top5Amt)}`,top5Pct>60?'danger':top5Pct>40?'warn':'ok')}
+            ${health('Repeat Clients',repeatPct.toFixed(1)+'%',repeatPct,`${nr.repeat} repeat · ${nr.fresh} new of ${nr.total}`,repeatPct>50?'ok':'warn')}
+            ${health('Revenue Realised',realisedPct.toFixed(1)+'%',realisedPct,`${fmtINRCompact(unpaid)} still unpaid`,realisedPct>80?'ok':realisedPct>60?'warn':'danger')}
+            ${health('GST-Registered Sales',gstPct.toFixed(1)+'%',gstPct,`${fmtINRCompact(gstAmt)} billed to GST clients`,'info')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span>${esc(dimMeta.label)} wise Sales Summary <span style="font-weight:500;color:var(--muted);font-size:11px;">— ${esc(fyLabel)}</span></span>
+        <span class="pt-actions">
+          <span class="view-toggle sales-report-view-toggle" style="margin:0;">
+            <button class="${dim==='description'?'active':''}" data-action="sales-dash-product-dim" data-dim="description">Product</button>
+            <button class="${dim==='category'?'active':''}" data-action="sales-dash-product-dim" data-dim="category">Category</button>
+          </span>
+        </span>
+      </div>
+      <div class="panel-body" style="padding:0;">${renderGrid('salesProductSummary')}</div>
+    </div>
+
+    <div class="dash-row" style="grid-template-columns:1.6fr 1fr;">
+      <div class="panel">
+        <div class="panel-title">Top Clients by Revenue <a data-action="goto" data-page="customerList">View Customer List</a></div>
+        <div class="panel-body" style="padding:0;">${renderGrid('salesTopClients')}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Sales by State <a data-action="goto" data-page="stateSalesReport">View All</a></div>
+        <div class="panel-body">${byState.length?byState.map((c,i)=>`<div class="mini-cat-row"><span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span><div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxState*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div><span class="mc-amt">${fmtINRCompact(c.value)}</span><span class="mc-pct">${totalSales?(c.value/totalSales*100).toFixed(1):'0.0'}%</span></div>`).join(''):`<div class="empty-state"><div class="big">No state data on the SALES sheet</div></div>`}</div>
+      </div>
+    </div>
+
+    <div class="compare-note" style="margin-top:10px;">Every figure on this page is computed from the SALES sheet for ${esc(fyLabel)} — the exact same source the Sales Report page uses, so totals reconcile line-for-line. "Unpaid from Sales" links each invoice to its RECEIVABLES row by Bill Ref No; invoices with no matching receivable row are treated as fully realised. Use the Product/Category toggle if your sheet records the product name in the Category column instead of Description.</div>`;
+}
+registerPage('salesDashboard',renderSalesDashboard);
+
+// Expandable master/detail Sales Report: one MASTER row per unique Invoice No +
+// party (from the SALES sheet, see buildSalesReport() in Grids.html), each expandable
+// via the ▸/▾ toggle into its own individually filterable/sortable sub-table of raw
+// SALES lines (Date/Description/Category/Amount, incl. and excl. GST) — see
+// renderSalesReportDetail_() in Grids.html and the `expandable` support added to
+// renderGrid() in Common.html. Master rows also surface the linked RECEIVABLES
+// Pending Amount/Overdue Days for that invoice when one exists. Plain renderGrid()
+// call — same as customerList/vendorList — so hide/unhide columns, resize,
+// per-column filter, and sort all come for free from the generic (non-compact) grid
+// engine, on BOTH the master table and every expanded sub-table.
+// Top toggle button ("Sales"/"Duration") — per explicit user instruction, this now
+// lives INSIDE each view's own toolbar row (see toolbarExtra on the salesReport
+// GRID_DEF in Grids.html, and inside the bespoke pivot toolbar below) so it renders
+// on the SAME single line as the row-count/Refresh/Columns controls, instead of a
+// separate row above them. Internal state value stays 'category' for the pivot view
+// (only the visible button label changed to "Duration" per explicit request).
+function renderSalesReportViewToggle_(){
+  const view=S.salesReportView||'sales';
+  return `<div class="view-toggle sales-report-view-toggle">
+      <button class="${view==='sales'?'active':''}" data-action="sales-report-view" data-view="sales">Sales</button>
+      <button class="${view==='category'?'active':''}" data-action="sales-report-view" data-view="category">Duration</button>
+    </div>`;
+}
+function renderSalesReport(){
+  const view=S.salesReportView||'sales';
+  return view==='category'?renderSalesCategoryPivot():renderGrid('salesReport');
+}
+registerPage('salesReport',renderSalesReport);
+
+// Duration pivot (label changed from "Category" per explicit user instruction):
+// MODE toggle (Monthly/Yearly/Custom Range, all on ONE row) at the top, then a table
+// with Total pinned LEFT of a % Amt column (each row's share of the grand total,
+// per explicit request "INKE BEENCH MEIN % AMT KA COL ADD KARNA THA" — placed
+// between Total and the dimension column), then the dimension column itself
+// (Category/Party Name/State — selected via the dropdown, per explicit user request
+// "CATEGORY MEIN DROPDOWN AAYE CATEGORY/PARTY NAME/STATE AND AMT USKE ACCORDING
+// CHANGE HO"), followed by one column per month/FY/custom-range period. A Total row
+// is pinned to the header. Every row/column is sortable/resizable — resizing ANY
+// single month/year column resizes ALL of them together (existing behaviour,
+// unchanged); Total/%/Dimension keep independent widths. Month column labels are
+// short 2-digit years ("Apr 23") and Yearly columns show the full Apr-to-Mar span
+// ("2023 (Apr 2023 To Mar 2024)") since a Tally financial year is never Jan-Dec —
+// both per explicit user instruction, handled in salesCategoryPeriods_() (Grids.html).
+function renderSalesCategoryPivot(){
+  const mode=S.salesCategoryMode||'month';
+  const dimension=S.salesDimension||'category';
+  const dimMeta=SALES_DIMENSION_META[dimension]||SALES_DIMENSION_META.category;
+
+  // Cross-filter: the "other" dimension's multi-select dropdown. If dimension is
+  // 'partyName', show a Category filter above; if 'category', show Party Name; etc.
+  // Per explicit user instruction ("agar niche party name selected hai to upar ek
+  // or dropdown aa jaye category ka, aise hi agar niche category selected hai to
+  // upar party name ka dropdown aa jaye...dono dropdown multiselect wale chahiye
+  // AND type bhi kar sake").
+  const crossDim=dimension==='partyName'?'category':dimension==='category'?'partyName':'category';
+  const crossMeta=SALES_DIMENSION_META[crossDim]||SALES_DIMENSION_META.category;
+  const crossFilter=S.salesCrossFilter||[];
+  const {periods,rows}=buildSalesDimensionPivot_(mode,dimension,crossFilter.length?crossDim:null,crossFilter);
+  const sortKey=S.salesCategorySort||'total',sortDir=S.salesCategorySortDir===1?1:-1;
+  const sorted=rows.slice().sort((a,b)=>{
+    if(sortKey==='dim'){
+      const x=a.dimVal.toLowerCase(),y=b.dimVal.toLowerCase();
+      if(x<y)return -1*sortDir;if(x>y)return 1*sortDir;return 0;
+    }
+    if(sortKey==='pct'){ return (a.total-b.total)*sortDir; }
+    const x=sortKey==='total'?a.total:(a.periods[sortKey]||0);
+    const y=sortKey==='total'?b.total:(b.periods[sortKey]||0);
+    return (x-y)*sortDir;
+  });
+  const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+  const periodGrandTotals={};periods.forEach(p=>{periodGrandTotals[p.key]=rows.reduce((s,r)=>s+(r.periods[p.key]||0),0);});
+  const pctOf=t=>grandTotal?((t/grandTotal)*100).toFixed(1)+'%':'0.0%';
+
+  // Per explicit user instruction: Monthly/Yearly/Custom Range must all render on
+  // ONE row together with the row-count/Refresh/Sales-Duration toggle beneath it —
+  // NOT split into separate stacked rows above/below each other.
+  // FY multi-select — available for ALL modes (Monthly, Yearly, Custom Range), not
+  // just Custom Range, per explicit user instruction ("custom range not working with
+  // monthly pls see vo dono ke liye same hai"). Lets the user pick which financial
+  // years' data to display regardless of the time-bucketing mode.
+  const customFYs=S.salesCategoryCustomFYs||[];
+  const allFYs=availableFinancialYears();
+  const customFYLabel=customFYs.length?customFYs.map(k=>{const f=financialYearFromKey(k);return f?`${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)}`:k;}).join(', '):'Select Financial Year(s)';
+  const fyPickerBtn=`<div class="fy-multi sales-cat-range-multi">
+      <button type="button" class="fy-multi-btn" data-action="sales-cat-range-open">${esc(customFYLabel)} <span>▾</span></button>
+      ${S.salesCategoryRangeOpen?`<div class="fy-menu sales-cat-range-menu">
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="sales-cat-fy-all" ${customFYs.length===allFYs.length?'checked':''}> <span>Select All</span></label></div>
+        ${allFYs.map(f=>`<div class="fy-option"><label><input type="checkbox" data-action="sales-cat-fy-toggle" data-key="${esc(f.key)}" ${customFYs.includes(f.key)?'checked':''}> <span>${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)} (Apr ${f.start.getFullYear()} – Mar ${f.end.getFullYear()})</span></label></div>`).join('')}
+      </div>`:''}
+    </div>`;
+  const modeBar=`<div class="view-toggle sales-cat-mode-toggle">
+      <button class="${mode==='month'?'active':''}" data-action="sales-cat-mode" data-mode="month">Monthly</button>
+      <button class="${mode==='year'?'active':''}" data-action="sales-cat-mode" data-mode="year">Yearly</button>
+      <button class="${mode==='custom'?'active':''}" data-action="sales-cat-mode" data-mode="custom">Custom Range</button>
+    </div>
+    ${fyPickerBtn}`;
+
+  const totW=S.salesCategoryTotalWidth||130,pctW=S.salesCategoryPctWidth||90,catW=S.salesCategoryCatWidth||210,colW=S.salesCategoryColWidth||110;
+  // Left-freeze positions computed from actual column widths (user can resize them,
+  // so these can't be hardcoded CSS values) — per explicit user instruction ("ye
+  // right scroll mein hide na ho freeze ho jaye").
+  const snoW=52,leftTotal=snoW,leftPct=snoW+totW,leftCat=snoW+totW+pctW;
+  const sortArrow=k=>sortKey===k?(sortDir===1?'▲':'▼'):'↕';
+  // S.No — every other table/grid in the app (Sales Report itself, Customer List,
+  // Receivables, etc.) has this as its leftmost column, so it's added here too for
+  // the same consistent numbering convention, ahead of Total/%/Dimension.
+  const snoTh=`<th class="scp-th scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"><div class="scp-th-inner" style="justify-content:center;cursor:default;">S.No</div></th>`;
+  const totalTh=`<th class="scp-th scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;" data-action="sales-cat-sort" data-col="total">
+      <div class="scp-th-inner"><span>Total</span><span class="scp-sort-ic">${sortArrow('total')}</span></div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="total"></div>
+    </th>`;
+  const pctTh=`<th class="scp-th scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;" data-action="sales-cat-sort" data-col="pct">
+      <div class="scp-th-inner"><span>% Amt</span><span class="scp-sort-ic">${sortArrow('pct')}</span></div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="pct"></div>
+    </th>`;
+  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">
+      <div class="scp-th-inner scp-dim-inner">
+        <select class="scp-dim-select" data-action="sales-dimension-select" title="Group rows by">
+          ${Object.keys(SALES_DIMENSION_META).map(k=>`<option value="${k}" ${dimension===k?'selected':''}>${esc(SALES_DIMENSION_META[k].label)}</option>`).join('')}
+        </select>
+        <span class="scp-sort-ic" data-action="sales-cat-sort" data-col="dim" title="Sort">${sortArrow('dim')}</span>
+      </div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="category"></div>
+    </th>`;
+  const periodTh=periods.map(p=>`<th class="scp-th scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;" data-action="sales-cat-sort" data-col="${esc(p.key)}">
+      <div class="scp-th-inner"><span title="${esc(p.label)}">${esc(p.label)}</span><span class="scp-sort-ic">${sortArrow(p.key)}</span></div>
+      <div class="scp-resize" data-action="sales-cat-resize" data-target="period"></div>
+    </th>`).join('');
+
+  const totalsRow=`<tr class="scp-totals-row">
+      <td class="scp-tot scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"></td>
+      <td class="scp-tot scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;">${fmtNum(grandTotal)}</td>
+      <td class="scp-tot scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">100.0%</td>
+      <td class="scp-tot scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">TOTAL</td>
+      ${periods.map(p=>`<td class="scp-tot scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${fmtNum(periodGrandTotals[p.key]||0)}</td>`).join('')}
+    </tr>`;
+
+  // Heatmap: compute max per period AND for the Total column, then shade each cell.
+  // Uses a professional multi-tone gradient: light mint → teal → deep blue for
+  // period cells; warm gold → deep indigo for the Total column — so the two read
+  // as distinct data dimensions at a glance while both clearly communicate
+  // magnitude via saturation/darkness.
+  const maxTotal=Math.max(1,...sorted.map(r=>r.total));
+  const periodMaxes={};periods.forEach(p=>{periodMaxes[p.key]=Math.max(1,...sorted.map(r=>r.periods[p.key]||0));});
+  function heatPeriod_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal);
+    // Gradient: #F0FDF4 (mint) → #10B981 (emerald) → #064E3B (deep green)
+    let r,g,b;
+    if(t<=0.5){const s=t*2;r=Math.round(240+(16-240)*s);g=Math.round(253+(185-253)*s);b=Math.round(244+(129-244)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(16+(6-16)*s);g=Math.round(185+(78-185)*s);b=Math.round(129+(59-129)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.55?'#fff':'#064E3B'};font-weight:700;`;
+  }
+  function heatTotal_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal);
+    // Gradient: #EFF6FF (ice blue) → #2563EB (vivid blue) → #1E3A5F (navy)
+    let r,g,b;
+    if(t<=0.5){const s=t*2;r=Math.round(239+(37-239)*s);g=Math.round(246+(99-246)*s);b=Math.round(255+(235-255)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(37+(30-37)*s);g=Math.round(99+(58-99)*s);b=Math.round(235+(95-235)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.45?'#fff':'#1E3A5F'};font-weight:700;`;
+  }
+
+  // Pagination for Duration pivot
+  const totalRows=sorted.length;
+  const pageSize=S.salesCategoryPageSize||50;
+  const totalPages=Math.max(1,Math.ceil(totalRows/pageSize));
+  if(S.salesCategoryPage>totalPages)S.salesCategoryPage=totalPages;
+  const curPage=S.salesCategoryPage||1;
+  const pageStart=(curPage-1)*pageSize;
+  const pageEnd=Math.min(pageStart+pageSize,totalRows);
+  const paged=sorted.slice(pageStart,pageEnd);
+
+  const body=paged.length?paged.map((r,idx)=>`<tr>
+      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${pageStart+idx+1}</td>
+      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatTotal_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
+      <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
+      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
+      ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatPeriod_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
+    </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No sales lines for the selected financial year(s)</div></div></td></tr>`;
+
+  const salesPaginationHtml=`<div class="dt-pagination">
+      <div class="pp"><label>Rows per page</label><select data-action="sales-cat-pagesize">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="page-range">${totalRows===0?'0':`${pageStart+1}\u2013${pageEnd}`} of ${totalRows}</div>
+      <div class="nav" aria-label="Pagination">
+        <button data-action="sales-cat-pagefirst" title="First page" ${curPage<=1?'disabled':''}>«</button>
+        <button data-action="sales-cat-pageprev" title="Previous page" ${curPage<=1?'disabled':''}>‹</button>
+        <span class="pageinfo">${curPage} / ${totalPages}</span>
+        <button data-action="sales-cat-pagenext" title="Next page" ${curPage>=totalPages?'disabled':''}>›</button>
+        <button data-action="sales-cat-pagelast" title="Last page" ${curPage>=totalPages?'disabled':''}>»</button>
+      </div>
+    </div>`;
+
+  // Layout (per explicit user instruction — positions numbered per screenshot):
+  // Row 1 (left): Sales / Duration toggle + Monthly / Yearly / Custom Range
+  // Row 1 (right): "15 Categories" count + ⟳ Refresh + Columns ▾
+  // This swaps positions 1↔2 from the previous layout and keeps 3 directly after
+  // the Sales/Duration toggle (all on one thin row, left to right).
+  // Cross-filter dropdown — searchable multi-select for the "other" dimension.
+  const crossAllValues=salesDimensionValues_(crossDim);
+  const crossSearch=(S.salesCrossFilterSearch||'').toLowerCase();
+  const crossFiltered=crossSearch?crossAllValues.filter(v=>v.toLowerCase().includes(crossSearch)):crossAllValues;
+  const crossLabel=crossFilter.length?`${crossMeta.label}: ${crossFilter.length} selected`:`Filter by ${crossMeta.label}`;
+  const crossDropdown=`<div class="fy-multi sales-cross-filter-multi">
+      <button type="button" class="fy-multi-btn" data-action="sales-cross-open">${esc(crossLabel)} <span>▾</span></button>
+      ${S.salesCrossFilterOpen?`<div class="fy-menu sales-cross-menu">
+        <input type="text" class="cross-filter-search" placeholder="Type to search ${crossMeta.label}…" data-action="sales-cross-search" value="${esc(S.salesCrossFilterSearch||'')}">
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="sales-cross-all" ${crossFilter.length===crossAllValues.length?'checked':''}> <span>Select All (${crossAllValues.length})</span></label></div>
+        <div class="cross-filter-options">${crossFiltered.map(v=>`<div class="fy-option"><label><input type="checkbox" data-action="sales-cross-toggle" data-val="${esc(v)}" ${crossFilter.includes(v)?'checked':''}> <span>${esc(v)}</span></label></div>`).join('')}</div>
+        ${crossFilter.length?`<div class="cross-filter-clear"><button class="btn btn-ghost" data-action="sales-cross-clear" style="padding:4px 10px;font-size:10px;width:100%;">Clear All</button></div>`:''} 
+      </div>`:''}
+    </div>`;
+
+  // Reset Filters — clears the cross-filter (Category/Party Name/State) and the
+  // pivot's own Custom FY selection, back to the unfiltered default. Per explicit
+  // user instruction ("JHA JHA FILTER HAI ADD RESET FILTER PLS") — every filter
+  // control in the app should have a one-click reset, and this Duration pivot's
+  // cross-filter + FY picker live outside the generic renderGrid() toolbar (it's a
+  // bespoke table), so it needs its own explicit reset action here.
+  const salesCatFiltersActive=!!(crossFilter.length||customFYs.length);
+  const salesResetFiltersBtn=`<button class="btn btn-ghost" data-action="sales-cat-reset-filters" ${salesCatFiltersActive?'':'disabled'} title="Clear the cross-filter and custom financial year selection">↺ Reset Filters</button>`;
+  const catToolbar=`<div class="dt-toolbar sales-cat-toolbar">
+      ${renderSalesReportViewToggle_()}
+      ${modeBar}
+      ${crossDropdown}
+      <div class="report-switcher-right">
+        <span class="count">${rows.length} ${esc(dimMeta.plural)}</span>
+        ${salesResetFiltersBtn}
+        <button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
+      </div>
+    </div>`;
+
+  return `${catToolbar}
+    <div class="dt-table-wrap sales-cat-wrap">
+      <div class="dt-scroll">
+        <table class="dt scp-table">
+          <thead>
+            ${totalsRow}
+            <tr>${snoTh}${totalTh}${pctTh}${catTh}${periodTh}</tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+      ${salesPaginationHtml}
+    </div>`;
+}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='sales-report-view'){S.salesReportView=el.getAttribute('data-view');render();return;}
+    // Sales Dashboard's Product/Category toggle — switches which SALES column the
+    // Product Summary table, the Most Selling Product KPI and the mix donut all
+    // group by. Persisted so the choice survives a reload, same as salesDimension.
+    if(a==='sales-dash-product-dim'){
+      const d=el.getAttribute('data-dim');
+      if(SALES_DASH_PRODUCT_META[d]){
+        S.salesDashProductDim=d;
+        tableState('salesProductSummary').page=1;
+        try{localStorage.setItem('tally_sales_dash_product_dim',d);}catch(ignore){}
+        render();
+      }
+      return;
+    }
+    if(a==='sales-cat-mode'){S.salesCategoryMode=el.getAttribute('data-mode');S.salesCategoryPage=1;render();return;}
+    if(a==='sales-cat-range-open'){S.salesCategoryRangeOpen=!S.salesCategoryRangeOpen;render();return;}
+    if(a==='sales-cat-fy-all'){
+      const allKeys=availableFinancialYears().map(f=>f.key);
+      S.salesCategoryCustomFYs=S.salesCategoryCustomFYs.length===allKeys.length?[]:allKeys.slice();
+      render();return;
+    }
+    if(a==='sales-cat-fy-toggle'){
+      const key=el.getAttribute('data-key');
+      const idx=S.salesCategoryCustomFYs.indexOf(key);
+      if(idx===-1)S.salesCategoryCustomFYs.push(key);else S.salesCategoryCustomFYs.splice(idx,1);
+      render();return;
+    }
+    // Cross-filter dropdown handlers
+    if(a==='sales-cross-open'){S.salesCrossFilterOpen=!S.salesCrossFilterOpen;S.salesCrossFilterSearch='';render();return;}
+    if(a==='sales-cross-all'){
+      const crossDim=(S.salesDimension||'category')==='partyName'?'category':'partyName';
+      const allVals=salesDimensionValues_(crossDim);
+      S.salesCrossFilter=S.salesCrossFilter.length===allVals.length?[]:allVals.slice();
+      render();return;
+    }
+    if(a==='sales-cross-toggle'){
+      const val=el.getAttribute('data-val');
+      const idx=S.salesCrossFilter.indexOf(val);
+      if(idx===-1)S.salesCrossFilter.push(val);else S.salesCrossFilter.splice(idx,1);
+      render();return;
+    }
+    if(a==='sales-cross-clear'){S.salesCrossFilter=[];render();return;}
+    if(a==='sales-cat-reset-filters'){S.salesCrossFilter=[];S.salesCategoryCustomFYs=[];S.salesCategoryPage=1;render();return;}
+    if(a==='sales-cat-sort'){
+      // Skip sort if a column resize just completed — the mouseup event from the
+      // resize handle bubbles up as a click on the parent <th> which also has
+      // data-action="sales-cat-sort", and triggering a sort here would re-render
+      // the table and appear to "undo" the resize the user just did.
+      if(salesCatResizedRecently)return;
+      const col=el.getAttribute('data-col');
+      if(S.salesCategorySort===col)S.salesCategorySortDir*=-1;else{S.salesCategorySort=col;S.salesCategorySortDir=col==='dim'?1:-1;}
+      S.salesCategoryPage=1;render();return;
+    }
+    // Pagination actions for sales Duration pivot
+    if(a==='sales-cat-pagefirst'){S.salesCategoryPage=1;render();return;}
+    if(a==='sales-cat-pageprev'){S.salesCategoryPage=Math.max(1,S.salesCategoryPage-1);render();return;}
+    if(a==='sales-cat-pagenext'){S.salesCategoryPage++;render();return;}
+    if(a==='sales-cat-pagelast'){S.salesCategoryPage=999999;render();return;}
+  }
+  // Click-away close for the Custom Range popover and Cross-filter dropdown.
+  if(S.salesCategoryRangeOpen&&!e.target.closest('.sales-cat-range-multi')){S.salesCategoryRangeOpen=false;render();}
+  if(S.salesCrossFilterOpen&&!e.target.closest('.sales-cross-filter-multi')){S.salesCrossFilterOpen=false;S.salesCrossFilterSearch='';render();}
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.getAttribute('data-action')==='sales-cat-pagesize'){
+    S.salesCategoryPageSize=parseInt(el.value,10);S.salesCategoryPage=1;render();return;
+  }
+  if(el.getAttribute('data-action')==='sales-dimension-select'){
+    const v=el.value;
+    if(SALES_DIMENSION_META[v]){
+      S.salesDimension=v;
+      S.salesCrossFilter=[];S.salesCrossFilterOpen=false;S.salesCrossFilterSearch='';
+      try{localStorage.setItem('tally_sales_dimension',v);}catch(ignore){}
+      render();
+    }
+  }
+});
+document.addEventListener('input',e=>{
+  const el=e.target,a=el.getAttribute('data-action');
+  // Cross-filter search — debounced live-filter. Uses the same refocus pattern as
+  // ledger-search (save cursor pos → render → find the new input → focus + restore
+  // cursor) so typing stays fluid instead of losing focus after every keystroke,
+  // per explicit user instruction ("ek keyword type karte hi dusra type nahi hota
+  // hai fr se click karo to fr ek type hota hai").
+  if(a==='sales-cross-search'){
+    S.salesCrossFilterSearch=el.value;
+    clearTimeout(S._crossSearchTimer);
+    S._crossSearchTimer=setTimeout(()=>{
+      const pos=el.selectionStart;
+      render();
+      const ag=document.querySelector('input[data-action="sales-cross-search"]');
+      if(ag){ag.focus();ag.setSelectionRange(pos,pos);}
+    },200);
+    return;
+  }
+  // (Old sales-cat-custom-from/to handlers removed — Custom Range now uses FY
+  // multi-select checkboxes instead of date inputs, per explicit user instruction.)
+});
+// Column-group resize: dragging ANY month/year column resizes ALL of them together
+// (per explicit user instruction), while Total/%/Dimension keep independent widths —
+// same mousedown/mousemove/mouseup pattern as the generic grid's per-column resize
+// in Common.html, just writing into S.salesCategory*Width instead of a per-key map.
+let salesCatResizeCtx=null;
+let salesCatResizedRecently=false;
+document.addEventListener('mousedown',e=>{
+  const el=e.target.closest('[data-action="sales-cat-resize"]');if(!el)return;
+  const target=el.getAttribute('data-target');const th=el.closest('th');
+  salesCatResizeCtx={target,startX:e.clientX,startW:th.getBoundingClientRect().width};
+  e.preventDefault();
+  e.stopPropagation(); // prevent the sort click on parent <th> from firing
+});
+document.addEventListener('mousemove',e=>{
+  if(!salesCatResizeCtx)return;
+  const nw=Math.max(70,Math.round(salesCatResizeCtx.startW+(e.clientX-salesCatResizeCtx.startX)));
+  const target=salesCatResizeCtx.target;
+  if(target==='period'){
+    // All period columns resize together
+    document.querySelectorAll('.scp-table .scp-period').forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+  } else {
+    // Individual frozen column — resize only THAT column class
+    const selector=target==='total'?'.scp-total':target==='pct'?'.scp-pct':'.scp-cat';
+    document.querySelectorAll('.scp-table '+selector).forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+    // Recompute left positions for all frozen columns after the resized one
+    const snoW=52;
+    const totEl=document.querySelector('.scp-table th.scp-total');
+    const pctEl=document.querySelector('.scp-table th.scp-pct');
+    const catEl=document.querySelector('.scp-table th.scp-cat');
+    const curTotW=totEl?totEl.getBoundingClientRect().width:(S.salesCategoryTotalWidth||130);
+    const curPctW=pctEl?pctEl.getBoundingClientRect().width:(S.salesCategoryPctWidth||90);
+    const leftTotal=snoW,leftPct=snoW+curTotW,leftCat=snoW+curTotW+curPctW;
+    document.querySelectorAll('.scp-table .scp-total').forEach(cell=>{cell.style.left=leftTotal+'px';});
+    document.querySelectorAll('.scp-table .scp-pct').forEach(cell=>{cell.style.left=leftPct+'px';});
+    document.querySelectorAll('.scp-table .scp-cat').forEach(cell=>{cell.style.left=leftCat+'px';});
+  }
+});
+document.addEventListener('mouseup',()=>{
+  if(!salesCatResizeCtx)return;
+  const targetClass=salesCatResizeCtx.target==='total'?'scp-total':salesCatResizeCtx.target==='pct'?'scp-pct':salesCatResizeCtx.target==='category'?'scp-cat':'scp-period';
+  const el=document.querySelector('.scp-table th.'+targetClass);
+  const nw=el?el.getBoundingClientRect().width:null;
+  if(nw){
+    if(salesCatResizeCtx.target==='total')S.salesCategoryTotalWidth=Math.round(nw);
+    else if(salesCatResizeCtx.target==='pct')S.salesCategoryPctWidth=Math.round(nw);
+    else if(salesCatResizeCtx.target==='category')S.salesCategoryCatWidth=Math.round(nw);
+    else S.salesCategoryColWidth=Math.round(nw);
+    persistPivotColWidths_();
+  }
+  salesCatResizeCtx=null;
+  // Flag that a resize just completed — the click event that follows mouseup on the
+  // parent <th> must NOT trigger a sort toggle (it would re-render and appear to
+  // "reset" the resize). The flag clears after one tick.
+  salesCatResizedRecently=true;
+  setTimeout(()=>{salesCatResizedRecently=false;},0);
+  render();
+});
+CHART_DEFS['salesDashboard']=function(){
+  // Reads the SALES sheet (dataForFY('sales') / 'amount'), NOT voucherSales_()/'debit'
+  // off the Balance sheet as this used to — that voucher dataset is empty in this
+  // spreadsheet, so the trend line was permanently flat at zero. Same source as the
+  // Sales Report page and as the KPIs in renderSalesDashboard() above, so the chart
+  // and the numbers around it always agree.
+  const months=selectedFYMonths();
+  const rawLines=dataForFY('sales');
+  const salesSeries=months.map(m=>sumBy(rowsInCustomRange(rawLines,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  drawComboChart('chSalesOnly',months.map(m=>m.label),[{label:'Sales',data:salesSeries,color:'#2E6BF2'}]);
+  // Sales mix donut — follows whichever product dimension the summary table below is
+  // currently showing, so the donut, its legend and the table never disagree.
+  const mix=(S._salesProductRows||[]).slice(0,6);
+  if(mix.length)drawDonutChart('chSalesDashMix',mix.map(c=>c.product),mix.map(c=>c.amount),CHART_PALETTE);
+};
+
+function renderExpensesDashboard(){
+  const expRows=dataForFY('expense');
+  const total=sumBy(expRows,'amount');
+  const totalBase=total||1;
+  const byCategory=topN(expRows,'subGroup','amount',8);
+  const bySubCategory=topN(expRows,'group','amount',8);
+  const maxCat=Math.max(1,...byCategory.map(x=>x.value));
+  const fyLabel=selectedFYLabel();
+
+  return `
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Total Expenses</span><div class="card-icon c-red">${NAV_ICONS.wallet}</div></div><div class="card-value">${fmtINR(total)}</div><div class="card-sub">${expRows.length} voucher lines — ${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Categories</span><div class="card-icon c-orange">${NAV_ICONS.reports}</div></div><div class="card-value">${new Set(expRows.map(r=>r.group)).size}</div><div class="card-sub">distinct expense groups</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Largest Category</span><div class="card-icon c-purple">${NAV_ICONS.pl}</div></div><div class="card-value" style="font-size:14px;">${esc(byCategory[0]?byCategory[0].label:'—')}</div><div class="card-sub">${byCategory[0]?fmtINR(byCategory[0].value):''}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Avg per Voucher</span><div class="card-icon c-blue">${NAV_ICONS.collection}</div></div><div class="card-value">${fmtINR(expRows.length?total/expRows.length:0)}</div><div class="card-sub">${esc(fyLabel)}</div></div>
+    </div>
+    <div class="dash-row">
+      <div class="panel">
+        <div class="panel-title">Expense by Category — ${esc(fyLabel)}</div>
+        <div class="panel-body">${byCategory.map((c,i)=>`
+          <div class="mini-cat-row"><span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span><div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div><span class="mc-amt">${fmtINR(c.value)}</span><span class="mc-pct">${(c.value/totalBase*100).toFixed(1)}%</span></div>`).join('')||`<div class="empty-state"><div class="big">No expenses for the selected financial years</div></div>`}
+          <div class="mini-total-row"><span>Total</span><span>${fmtINR(total)}</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Expense by Sub-Category — ${esc(fyLabel)}</div>
+        <div class="panel-body" style="padding:0;">${(()=>{S.expenseSubCategoryRows=bySubCategory.map(c=>Object.assign({},c,{pct:(c.value/total*100).toFixed(1)+'%'}));return renderGrid('expenseSubCategory');})()}</div>
+      </div>
+    </div>`;
+}
+registerPage('expensesDashboard',renderExpensesDashboard);
+
+function renderCashFlow(){
+  const cur=periodMetrics();
+  const receiptRows=dataForFY('receipt');
+  const paymentRows=dataForFY('payment');
+  const cashPos=cashInHandBank();
+  const fyLabel=selectedFYLabel();
+
+  return `
+    <div class="dash-grid">
+      <div class="card"><div class="card-top"><span class="card-label">Receipt Transactions</span><div class="card-icon c-blue">${NAV_ICONS.cashflow}</div></div><div class="card-value">${receiptRows.length}</div><div class="card-sub">${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Cash In</span><div class="card-icon c-green">${NAV_ICONS['arrow-down']}</div></div><div class="card-value">${fmtINR(cur.collections)}</div><div class="card-sub">receipts — ${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Cash Out</span><div class="card-icon c-red">${NAV_ICONS['arrow-up']}</div></div><div class="card-value">${fmtINR(cur.payments)}</div><div class="card-sub">payments — ${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Net Cash Flow</span><div class="card-icon c-purple">${NAV_ICONS.cashflow}</div></div><div class="card-value">${fmtINR(cashPos)}</div><div class="card-sub">${receiptRows.length+paymentRows.length} entries — ${esc(fyLabel)}</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Cash In vs Cash Out — ${esc(fyLabel)}</div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="chCashFlow6m" data-chart-fallback></canvas></div></div>
+    </div>
+    <div class="compare-note" style="margin-top:10px;">Cash flow is derived from Receipt/Payment bank ledger legs for the selected financial years (no dedicated Cash/Bank book sheet) — treat as indicative and reconcile against Tally directly for statutory reporting.</div>`;
+}
+registerPage('cashFlow',renderCashFlow);
+CHART_DEFS['cashFlow']=function(){
+  const months=selectedFYMonths();
+  const receiptRows=dataForFY('receipt');
+  const paymentRows=dataForFY('payment');
+  const inflow=months.map(m=>sumBy(rowsInCustomRange(receiptRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'debitLedgerAmount'));
+  const outflow=months.map(m=>sumBy(rowsInCustomRange(paymentRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'creditLedgerAmount'));
+  drawComboChart('chCashFlow6m',months.map(m=>m.label),[{label:'Cash In',data:inflow,color:'#16A34A'},{label:'Cash Out',data:outflow,color:'#E23A3A'}]);
+};
+
+// Redesigned per explicit user request ("what do u suggest should be there in
+// profit and loss section, whats else can we include, can be make the layout more
+// presentable"): 4 KPI cards up top (Gross Profit/margin, Total Operating Expenses,
+// Net Profit, Net Margin), then a proper two-column layout — the statement itself
+// (left, wider) with a "% of Sales" column next to every line so cost drivers are
+// obvious at a glance, section headers, and a visually distinct Gross Profit
+// subtotal band + a bold bordered Net Profit total row — alongside a "Top Expense
+// Categories" mini bar-chart panel (right) reusing the same .mini-cat-row look the
+// Expenses Dashboard already uses, for a quick visual read without needing to scan
+// every line of the statement.
+function renderProfitLoss(){
+  const cur=periodMetrics();
+  const grossProfit=cur.sales-cur.purchase;
+  const netProfit=grossProfit-cur.expense;
+  const expByCategory=topN(dataForFY('expense'),'subGroup','amount',20);
+  const fyLabel=selectedFYLabel();
+  const grossMarginPct=cur.sales?(grossProfit/cur.sales*100):0;
+  const netMarginPct=cur.sales?(netProfit/cur.sales*100):0;
+  const pctOfSales_=v=>cur.sales?((v/cur.sales)*100).toFixed(1)+'%':'—';
+  const maxExpCat=Math.max(1,...expByCategory.map(c=>c.value),1);
+
+  const plRow=(label,value,opts={})=>{
+    const cls=['pl-row'];
+    if(opts.subtotal)cls.push('pl-row-subtotal');
+    if(opts.total)cls.push('pl-row-total');
+    const valColor=opts.total?(value>=0?'var(--success)':'var(--danger)'):'';
+    return `<div class="${cls.join(' ')}">
+      <span class="pl-label">${esc(label)}</span>
+      <span class="pl-pct">${opts.noPct?'':pctOfSales_(value)}</span>
+      <span class="pl-val"${valColor?` style="color:${valColor};"`:''}>${fmtINR(value)}</span>
+    </div>`;
+  };
+  const plSection=label=>`<div class="pl-row-section"><span>${esc(label)}</span></div>`;
+
+  return `
+    <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="card"><div class="card-top"><span class="card-label">Gross Profit</span><div class="card-icon c-green">${NAV_ICONS.sales}</div></div><div class="card-value">${fmtINR(grossProfit)}</div><div class="card-sub">${grossMarginPct.toFixed(1)}% gross margin</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Total Operating Expenses</span><div class="card-icon c-red">${NAV_ICONS.wallet}</div></div><div class="card-value">${fmtINR(cur.expense)}</div><div class="card-sub">${pctOfSales_(cur.expense)} of Sales · ${expByCategory.length} categories</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Net Profit</span><div class="card-icon ${netProfit>=0?'c-green':'c-red'}">${NAV_ICONS.pl}</div></div><div class="card-value" style="color:${netProfit>=0?'var(--success)':'var(--danger)'};">${fmtINR(netProfit)}</div><div class="card-sub">${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Net Margin</span><div class="card-icon c-purple">${NAV_ICONS.collection}</div></div><div class="card-value" style="color:${netMarginPct>=0?'var(--success)':'var(--danger)'};">${netMarginPct.toFixed(1)}%</div><div class="card-sub">Net Profit ÷ Sales</div></div>
+    </div>
+    <div class="dash-row">
+      <div class="panel">
+        <div class="panel-title">Profit &amp; Loss Statement <span style="font-weight:500;color:var(--muted);font-size:11px;">— ${esc(fyLabel)}</span></div>
+        <div class="panel-body" style="padding:4px 16px 14px;">
+          <div class="pl-statement">
+            <div class="pl-head-row"><span></span><span>% of Sales</span><span>Amount</span></div>
+            ${plRow('Sales',cur.sales,{noPct:true})}
+            ${plRow('Less: Purchases',cur.purchase)}
+            ${plRow('Gross Profit',grossProfit,{subtotal:true})}
+            ${plSection('Operating Expenses')}
+            ${expByCategory.length?expByCategory.map(c=>plRow('Less: '+c.label,c.value)).join(''):`<div class="pl-row"><span class="pl-label" style="font-style:italic;color:var(--muted);">No expense lines for the selected financial year(s)</span><span class="pl-pct"></span><span class="pl-val"></span></div>`}
+            ${plRow('Net Profit',netProfit,{total:true})}
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Top Expense Categories</div>
+        <div class="panel-body">${expByCategory.slice(0,8).map((c,i)=>`<div class="mini-cat-row"><span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span><div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxExpCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div><span class="mc-amt">${fmtINR(c.value)}</span><span class="mc-pct">${pctOfSales_(c.value)}</span></div>`).join('')||`<div class="empty-state"><div class="big">No expenses for the selected financial years</div></div>`}</div>
+      </div>
+    </div>
+    <div class="compare-note" style="margin-top:10px;">Operating expenses are grouped by Sub Group from the EXPENSE sheet for the selected financial year(s). "% of Sales" shows each line as a share of Sales so the biggest cost drivers are easy to spot at a glance. This is an indicative P&amp;L (no Other Income/Depreciation/Tax provisions are tracked in the sheet) — for statutory reporting, use Tally directly.</div>`;
+}
+registerPage('profitLoss',renderProfitLoss);
+
+function renderBalanceSheet(){
+  const totalRecv=outstandingReceivable();
+  const totalPay=outstandingPayable();
+  const cashPos=cashInHandBank();
+  const totalAssets=totalRecv+Math.max(0,cashPos);
+  const totalLiabilities=totalPay+Math.max(0,-cashPos);
+  const equity=totalAssets-totalLiabilities;
+  const fyLabel=selectedFYLabel();
+  return `
+    <div class="dash-row" style="grid-template-columns:1fr 1fr;">
+      <div class="simple-panel">
+        <h3 style="margin-bottom:14px;font-size:14px;">Assets — ${esc(fyLabel)}</h3>
+        <div class="kv-grid" style="grid-template-columns:1fr;">
+          <div class="kv-row"><span class="k">Cash &amp; Bank</span><span class="v">${fmtINR(Math.max(0,cashPos))}</span></div>
+          <div class="kv-row"><span class="k">Sundry Debtors (Receivables)</span><span class="v">${fmtINR(totalRecv)}</span></div>
+          <div class="kv-row" style="font-weight:700;border-top:2px solid var(--ink);"><span class="k">Total Assets</span><span class="v">${fmtINR(totalAssets)}</span></div>
+        </div>
+      </div>
+      <div class="simple-panel">
+        <h3 style="margin-bottom:14px;font-size:14px;">Liabilities &amp; Equity — ${esc(fyLabel)}</h3>
+        <div class="kv-grid" style="grid-template-columns:1fr;">
+          <div class="kv-row"><span class="k">Sundry Creditors (Payables)</span><span class="v">${fmtINR(totalPay)}</span></div>
+          <div class="kv-row"><span class="k">Bank Overdraft</span><span class="v">${fmtINR(Math.max(0,-cashPos))}</span></div>
+          <div class="kv-row" style="font-weight:700;"><span class="k">Total Liabilities</span><span class="v">${fmtINR(totalLiabilities)}</span></div>
+          <div class="kv-row" style="font-weight:700;border-top:2px solid var(--ink);"><span class="k">Capital / Equity (Balancing figure)</span><span class="v">${fmtINR(equity)}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="compare-note" style="margin-top:10px;">Indicative selected-FY view only — built from Receivables/Payables/derived cash flow, not a full trial balance. For statutory Balance Sheet, use Tally directly.</div>`;
+}
+registerPage('balanceSheet',renderBalanceSheet);
+
+// Reports page — two large, professional, obviously-clickable panels (Sales
+// Report, Expense Report), per explicit user instruction ("i just want to see
+// sales report,, exense report section , clickable kpi cards" — then, on the plain
+// .card version, "this does not looks prefessional , neither it looks thery are
+// clickble....make it look professional"). Restyled using the exact same
+// .ageing-panel / .ageing-panel-actions look already built for the Ageing Summary
+// landing page (colored left accent bar, a clear primary "Open Report" action
+// button with an icon) so both hub-style landing pages in the app read
+// consistently, instead of a plain hover-only .card that gave no visual cue it
+// was clickable. Sidebar-side, "Reports" now also cascades into Sales Report/
+// Expense Report exactly like "Ageing Summary" cascades into Receivables/Payables
+// (see NAV_PARENTS in Common.html), per explicit user instruction ("ye teeni
+// button left side wale bar me cascade ho jaaye jaiseke ageing report pe click
+// karne pe dikta hai"). The previous "All Reports"/"More Reports" grid of 30 tiles
+// is NOT deleted — every one of those pages still exists and is still reachable
+// from its own spot in the sidebar (Receivables/Payables groups) exactly as
+// before; this page/cascade is scoped to just these two reports "for now" — more
+// can be appended to `cards` below AND to NAV_PARENTS.reports.children in
+// Common.html later, per explicit user note ("baaki baad me aur koi report ho
+// jaaye to vo bhi baadme add kar denge").
+function renderReports(){
+  // Sales figures read the SALES sheet (same source as the Sales Report page itself),
+  // NOT periodMetrics().sales/voucherSales_() off the Balance sheet as this used to —
+  // that voucher dataset is empty in this spreadsheet, which is why this card
+  // displayed "₹0 · 0 vouchers" while the Sales Report page clearly had data.
+  const rawSalesLines=dataForFY('sales');
+  const salesTotal=sumBy(rawSalesLines,'amount');
+  const salesInvoiceCount=new Set(rawSalesLines.map(r=>String(r.invoiceNo||'').trim().toLowerCase()).filter(Boolean)).size;
+  const expRows=dataForFY('expense');
+  const expTotal=sumBy(expRows,'amount');
+  const fyLabel=selectedFYLabel();
+  const cards=[
+    {key:'salesReport',label:'Sales Report',icon:'sales',tone:'recv',
+      value:fmtINR(salesTotal),sub:`${salesInvoiceCount} invoices`},
+    {key:'expense',label:'Expense Report',icon:'wallet',tone:'pay',
+      value:fmtINR(expTotal),sub:`${expRows.length} voucher lines`},
+  ];
+  return `<div class="ageing-panels-grid">
+    ${cards.map(c=>`<div class="ageing-panel ageing-panel-${c.tone}">
+      <div class="ageing-panel-head" data-action="goto" data-page="${c.key}" style="cursor:pointer;">
+        <div class="ageing-panel-icon ${c.tone}">${NAV_ICONS[c.icon]}</div>
+        <div class="ageing-panel-head-text">
+          <div class="ageing-panel-title">${esc(c.label)}</div>
+          <div class="ageing-panel-sub">${esc(c.sub)} — ${esc(fyLabel)}</div>
+        </div>
+        <div class="ageing-panel-total">${c.value}</div>
+      </div>
+      <div class="ageing-panel-actions">
+        <button class="ageing-action-btn primary" data-action="goto" data-page="${c.key}"><span class="aa-ic">${NAV_ICONS.reports}</span>Open ${esc(c.label)}</button>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+registerPage('reports',renderReports);
+
+// ============================= EXPENSE REPORT — LIST/REPORT PIVOT =============================
+function renderExpenseReportViewToggle_(){
+  const view=S.expenseReportView||'list';
+  return `<div class="view-toggle expense-report-view-toggle">
+      <button class="${view==='list'?'active':''}" data-action="expense-report-view" data-view="list">List</button>
+      <button class="${view==='report'?'active':''}" data-action="expense-report-view" data-view="report">Report</button>
+    </div>`;
+}
+function renderExpenseReport(){
+  const view=S.expenseReportView||'list';
+  if(view==='report') return renderExpenseCategoryPivot();
+  return renderGrid('expense');
+}
+registerPage('expense',renderExpenseReport);
+
+function renderExpenseCategoryPivot(){
+  const mode=S.expenseCategoryMode||'month';
+  const dimension=S.expenseDimension||'group';
+  const dimMeta=EXPENSE_DIMENSION_META[dimension]||EXPENSE_DIMENSION_META.group;
+  const crossDim=dimension==='group'?'subGroup':'group';
+  const crossMeta=EXPENSE_DIMENSION_META[crossDim]||EXPENSE_DIMENSION_META.group;
+  const crossFilter=S.expenseCrossFilter||[];
+  const {periods,rows}=buildExpenseDimensionPivot_(mode,dimension,crossFilter.length?crossDim:null,crossFilter);
+  const sortKey=S.expenseCategorySort||'total',sortDir=S.expenseCategorySortDir===1?1:-1;
+  const sorted=rows.slice().sort((a,b)=>{
+    if(sortKey==='dim'){
+      const x=a.dimVal.toLowerCase(),y=b.dimVal.toLowerCase();
+      if(x<y)return -1*sortDir;if(x>y)return 1*sortDir;return 0;
+    }
+    if(sortKey==='pct'){ return (a.total-b.total)*sortDir; }
+    const x=sortKey==='total'?a.total:(a.periods[sortKey]||0);
+    const y=sortKey==='total'?b.total:(b.periods[sortKey]||0);
+    return (x-y)*sortDir;
+  });
+  const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+  const periodGrandTotals={};periods.forEach(p=>{periodGrandTotals[p.key]=rows.reduce((s,r)=>s+(r.periods[p.key]||0),0);});
+  const pctOf=t=>grandTotal?((t/grandTotal)*100).toFixed(1)+'%':'0.0%';
+
+  const customFYs=S.expenseCategoryCustomFYs||[];
+  const allFYs=availableFinancialYears();
+  const customFYLabel=customFYs.length?customFYs.map(k=>{const f=financialYearFromKey(k);return f?`${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)}`:k;}).join(', '):'Select Financial Year(s)';
+  const fyPickerBtn=`<div class="fy-multi expense-cat-range-multi">
+      <button type="button" class="fy-multi-btn" data-action="expense-cat-range-open">${esc(customFYLabel)} <span>▾</span></button>
+      ${S.expenseCategoryRangeOpen?`<div class="fy-menu expense-cat-range-menu">
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="expense-cat-fy-all" ${customFYs.length===allFYs.length?'checked':''}> <span>Select All</span></label></div>
+        ${allFYs.map(f=>`<div class="fy-option"><label><input type="checkbox" data-action="expense-cat-fy-toggle" data-key="${esc(f.key)}" ${customFYs.includes(f.key)?'checked':''}> <span>${f.start.getFullYear()}-${String(f.end.getFullYear()).slice(-2)} (Apr ${f.start.getFullYear()} – Mar ${f.end.getFullYear()})</span></label></div>`).join('')}
+      </div>`:''}
+    </div>`;
+  const modeBar=`<div class="view-toggle expense-cat-mode-toggle">
+      <button class="${mode==='month'?'active':''}" data-action="expense-cat-mode" data-mode="month">Monthly</button>
+      <button class="${mode==='year'?'active':''}" data-action="expense-cat-mode" data-mode="year">Yearly</button>
+      <button class="${mode==='custom'?'active':''}" data-action="expense-cat-mode" data-mode="custom">Custom Range</button>
+    </div>
+    ${fyPickerBtn}`;
+
+  const totW=S.expenseCategoryTotalWidth||130,pctW=S.expenseCategoryPctWidth||90,catW=S.expenseCategoryCatWidth||210,colW=S.expenseCategoryColWidth||110;
+  const snoW=52,leftTotal=snoW,leftPct=snoW+totW,leftCat=snoW+totW+pctW;
+  const sortArrow=k=>sortKey===k?(sortDir===1?'▲':'▼'):'↕';
+  const snoTh=`<th class="scp-th scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"><div class="scp-th-inner" style="justify-content:center;cursor:default;">S.No</div></th>`;
+  const totalTh=`<th class="scp-th scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;" data-action="expense-cat-sort" data-col="total">
+      <div class="scp-th-inner"><span>Total</span><span class="scp-sort-ic">${sortArrow('total')}</span></div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="total"></div>
+    </th>`;
+  const pctTh=`<th class="scp-th scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;" data-action="expense-cat-sort" data-col="pct">
+      <div class="scp-th-inner"><span>% Amt</span><span class="scp-sort-ic">${sortArrow('pct')}</span></div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="pct"></div>
+    </th>`;
+  const catTh=`<th class="scp-th scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">
+      <div class="scp-th-inner scp-dim-inner">
+        <select class="scp-dim-select" data-action="expense-dimension-select" title="Group rows by">
+          ${Object.keys(EXPENSE_DIMENSION_META).map(k=>`<option value="${k}" ${dimension===k?'selected':''}>${esc(EXPENSE_DIMENSION_META[k].label)}</option>`).join('')}
+        </select>
+        <span class="scp-sort-ic" data-action="expense-cat-sort" data-col="dim" title="Sort">${sortArrow('dim')}</span>
+      </div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="category"></div>
+    </th>`;
+  const periodTh=periods.map(p=>`<th class="scp-th scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;" data-action="expense-cat-sort" data-col="${esc(p.key)}">
+      <div class="scp-th-inner"><span title="${esc(p.label)}">${esc(p.label)}</span><span class="scp-sort-ic">${sortArrow(p.key)}</span></div>
+      <div class="scp-resize" data-action="expense-cat-resize" data-target="period"></div>
+    </th>`).join('');
+
+  const totalsRow=`<tr class="scp-totals-row">
+      <td class="scp-tot scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;"></td>
+      <td class="scp-tot scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;">${fmtNum(grandTotal)}</td>
+      <td class="scp-tot scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">100.0%</td>
+      <td class="scp-tot scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">TOTAL</td>
+      ${periods.map(p=>`<td class="scp-tot scp-period" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;">${fmtNum(periodGrandTotals[p.key]||0)}</td>`).join('')}
+    </tr>`;
+
+  const maxTotal=Math.max(1,...sorted.map(r=>r.total));
+  const periodMaxes={};periods.forEach(p=>{periodMaxes[p.key]=Math.max(1,...sorted.map(r=>r.periods[p.key]||0));});
+  function heatPeriodExp_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal);
+    let r,g,b;
+    if(t<=0.5){const s=t*2;r=Math.round(240+(16-240)*s);g=Math.round(253+(185-253)*s);b=Math.round(244+(129-244)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(16+(6-16)*s);g=Math.round(185+(78-185)*s);b=Math.round(129+(59-129)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.55?'#fff':'#064E3B'};font-weight:700;`;
+  }
+  function heatTotalExp_(val,maxVal){
+    if(!val||!maxVal)return '';
+    const t=Math.min(1,val/maxVal);
+    let r,g,b;
+    if(t<=0.5){const s=t*2;r=Math.round(239+(37-239)*s);g=Math.round(246+(99-246)*s);b=Math.round(255+(235-255)*s);}
+    else{const s=(t-0.5)*2;r=Math.round(37+(30-37)*s);g=Math.round(99+(58-99)*s);b=Math.round(235+(95-235)*s);}
+    return `background:rgb(${r},${g},${b});color:${t>0.45?'#fff':'#1E3A5F'};font-weight:700;`;
+  }
+
+  // Pagination for Expense Duration pivot
+  const expTotalRows=sorted.length;
+  const expPageSize=S.expenseCategoryPageSize||50;
+  const expTotalPages=Math.max(1,Math.ceil(expTotalRows/expPageSize));
+  if(S.expenseCategoryPage>expTotalPages)S.expenseCategoryPage=expTotalPages;
+  const expCurPage=S.expenseCategoryPage||1;
+  const expPageStart=(expCurPage-1)*expPageSize;
+  const expPageEnd=Math.min(expPageStart+expPageSize,expTotalRows);
+  const expPaged=sorted.slice(expPageStart,expPageEnd);
+
+  const body=expPaged.length?expPaged.map((r,idx)=>`<tr>
+      <td class="scp-cell scp-sno" style="width:${snoW}px;min-width:${snoW}px;max-width:${snoW}px;left:0;text-align:center;color:var(--muted);font-family:'JetBrains Mono',monospace;">${expPageStart+idx+1}</td>
+      <td class="scp-cell scp-total" style="width:${totW}px;min-width:${totW}px;max-width:${totW}px;left:${leftTotal}px;${heatTotalExp_(r.total,maxTotal)}">${fmtNum(r.total)}</td>
+      <td class="scp-cell scp-pct" style="width:${pctW}px;min-width:${pctW}px;max-width:${pctW}px;left:${leftPct}px;">${pctOf(r.total)}</td>
+      <td class="scp-cell scp-cat" style="width:${catW}px;min-width:${catW}px;max-width:${catW}px;left:${leftCat}px;">${esc(r.dimVal)}</td>
+      ${periods.map(p=>{const v=r.periods[p.key]||0;return `<td class="scp-cell scp-period${!v?' scp-zero':''}" style="width:${colW}px;min-width:${colW}px;max-width:${colW}px;${v?heatPeriodExp_(v,periodMaxes[p.key]):''}">${v?fmtNum(v):'—'}</td>`;}).join('')}
+    </tr>`).join(''):`<tr><td colspan="${periods.length+4}"><div class="empty-state"><div class="big">No expense lines for the selected financial year(s)</div></div></td></tr>`;
+
+  const expPaginationHtml=`<div class="dt-pagination">
+      <div class="pp"><label>Rows per page</label><select data-action="expense-cat-pagesize">${PAGE_SIZE_OPTIONS.map(n=>`<option value="${n}" ${expPageSize===n?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="page-range">${expTotalRows===0?'0':`${expPageStart+1}\u2013${expPageEnd}`} of ${expTotalRows}</div>
+      <div class="nav" aria-label="Pagination">
+        <button data-action="expense-cat-pagefirst" title="First page" ${expCurPage<=1?'disabled':''}>«</button>
+        <button data-action="expense-cat-pageprev" title="Previous page" ${expCurPage<=1?'disabled':''}>‹</button>
+        <span class="pageinfo">${expCurPage} / ${expTotalPages}</span>
+        <button data-action="expense-cat-pagenext" title="Next page" ${expCurPage>=expTotalPages?'disabled':''}>›</button>
+        <button data-action="expense-cat-pagelast" title="Last page" ${expCurPage>=expTotalPages?'disabled':''}>»</button>
+      </div>
+    </div>`;
+
+  const crossAllValues=expenseDimensionValues_(crossDim);
+  const crossSearch=(S.expenseCrossFilterSearch||'').toLowerCase();
+  const crossFiltered=crossSearch?crossAllValues.filter(v=>v.toLowerCase().includes(crossSearch)):crossAllValues;
+  const crossLabel=crossFilter.length?`${crossMeta.label}: ${crossFilter.length} selected`:`Filter by ${crossMeta.label}`;
+  const crossDropdown=`<div class="fy-multi expense-cross-filter-multi">
+      <button type="button" class="fy-multi-btn" data-action="expense-cross-open">${esc(crossLabel)} <span>▾</span></button>
+      ${S.expenseCrossFilterOpen?`<div class="fy-menu expense-cross-menu">
+        <input type="text" class="cross-filter-search" placeholder="Type to search ${crossMeta.label}…" data-action="expense-cross-search" value="${esc(S.expenseCrossFilterSearch||'')}">
+        <div class="fy-option fy-all"><label><input type="checkbox" data-action="expense-cross-all" ${crossFilter.length===crossAllValues.length?'checked':''}> <span>Select All (${crossAllValues.length})</span></label></div>
+        <div class="cross-filter-options">${crossFiltered.map(v=>`<div class="fy-option"><label><input type="checkbox" data-action="expense-cross-toggle" data-val="${esc(v)}" ${crossFilter.includes(v)?'checked':''}> <span>${esc(v)}</span></label></div>`).join('')}</div>
+        ${crossFilter.length?`<div class="cross-filter-clear"><button class="btn btn-ghost" data-action="expense-cross-clear" style="padding:4px 10px;font-size:10px;width:100%;">Clear All</button></div>`:''} 
+      </div>`:''}
+    </div>`;
+
+  // Reset Filters — same reasoning as the Sales Duration pivot above ("JHA JHA
+  // FILTER HAI ADD RESET FILTER PLS"): clears the cross-filter (Group/Sub Group)
+  // and the Custom FY selection for THIS (Expense) pivot.
+  const expenseCatFiltersActive=!!(crossFilter.length||customFYs.length);
+  const expenseResetFiltersBtn=`<button class="btn btn-ghost" data-action="expense-cat-reset-filters" ${expenseCatFiltersActive?'':'disabled'} title="Clear the cross-filter and custom financial year selection">↺ Reset Filters</button>`;
+  const catToolbar=`<div class="dt-toolbar expense-cat-toolbar">
+      ${renderExpenseReportViewToggle_()}
+      ${modeBar}
+      ${crossDropdown}
+      <div class="report-switcher-right">
+        <span class="count">${rows.length} ${esc(dimMeta.plural)}</span>
+        ${expenseResetFiltersBtn}
+        <button class="btn btn-ghost" data-action="refreshpage" style="padding:5px 12px;font-size:11.5px;">${S.syncing?'⟳ Refreshing…':'⟳ Refresh'}</button>
+      </div>
+    </div>`;
+
+  return `${catToolbar}
+    <div class="dt-table-wrap expense-cat-wrap">
+      <div class="dt-scroll">
+        <table class="dt scp-table">
+          <thead>
+            ${totalsRow}
+            <tr>${snoTh}${totalTh}${pctTh}${catTh}${periodTh}</tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+      ${expPaginationHtml}
+    </div>`;
+}
+// Event handlers for expense report
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='expense-report-view'){S.expenseReportView=el.getAttribute('data-view');render();return;}
+    if(a==='expense-cat-mode'){S.expenseCategoryMode=el.getAttribute('data-mode');S.expenseCategoryPage=1;render();return;}
+    if(a==='expense-cat-range-open'){S.expenseCategoryRangeOpen=!S.expenseCategoryRangeOpen;render();return;}
+    if(a==='expense-cat-fy-all'){
+      const allKeys=availableFinancialYears().map(f=>f.key);
+      S.expenseCategoryCustomFYs=S.expenseCategoryCustomFYs.length===allKeys.length?[]:allKeys.slice();
+      render();return;
+    }
+    if(a==='expense-cat-fy-toggle'){
+      const key=el.getAttribute('data-key');
+      const idx=S.expenseCategoryCustomFYs.indexOf(key);
+      if(idx===-1)S.expenseCategoryCustomFYs.push(key);else S.expenseCategoryCustomFYs.splice(idx,1);
+      render();return;
+    }
+    if(a==='expense-cross-open'){S.expenseCrossFilterOpen=!S.expenseCrossFilterOpen;S.expenseCrossFilterSearch='';render();return;}
+    if(a==='expense-cross-all'){
+      const crossDim=(S.expenseDimension||'group')==='group'?'subGroup':'group';
+      const allVals=expenseDimensionValues_(crossDim);
+      S.expenseCrossFilter=S.expenseCrossFilter.length===allVals.length?[]:allVals.slice();
+      render();return;
+    }
+    if(a==='expense-cross-toggle'){
+      const val=el.getAttribute('data-val');
+      const idx=S.expenseCrossFilter.indexOf(val);
+      if(idx===-1)S.expenseCrossFilter.push(val);else S.expenseCrossFilter.splice(idx,1);
+      render();return;
+    }
+    if(a==='expense-cross-clear'){S.expenseCrossFilter=[];render();return;}
+    if(a==='expense-cat-reset-filters'){S.expenseCrossFilter=[];S.expenseCategoryCustomFYs=[];S.expenseCategoryPage=1;render();return;}
+    if(a==='expense-cat-sort'){
+      if(expenseCatResizedRecently)return;
+      const col=el.getAttribute('data-col');
+      if(S.expenseCategorySort===col)S.expenseCategorySortDir*=-1;else{S.expenseCategorySort=col;S.expenseCategorySortDir=col==='dim'?1:-1;}
+      S.expenseCategoryPage=1;render();return;
+    }
+    // Pagination actions for expense Duration pivot
+    if(a==='expense-cat-pagefirst'){S.expenseCategoryPage=1;render();return;}
+    if(a==='expense-cat-pageprev'){S.expenseCategoryPage=Math.max(1,S.expenseCategoryPage-1);render();return;}
+    if(a==='expense-cat-pagenext'){S.expenseCategoryPage++;render();return;}
+    if(a==='expense-cat-pagelast'){S.expenseCategoryPage=999999;render();return;}
+  }
+  if(S.expenseCategoryRangeOpen&&!e.target.closest('.expense-cat-range-multi')){S.expenseCategoryRangeOpen=false;render();}
+  if(S.expenseCrossFilterOpen&&!e.target.closest('.expense-cross-filter-multi')){S.expenseCrossFilterOpen=false;S.expenseCrossFilterSearch='';render();}
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.getAttribute('data-action')==='expense-cat-pagesize'){
+    S.expenseCategoryPageSize=parseInt(el.value,10);S.expenseCategoryPage=1;render();return;
+  }
+  if(el.getAttribute('data-action')==='expense-dimension-select'){
+    const v=el.value;
+    if(EXPENSE_DIMENSION_META[v]){
+      S.expenseDimension=v;
+      S.expenseCrossFilter=[];S.expenseCrossFilterOpen=false;S.expenseCrossFilterSearch='';
+      render();
+    }
+  }
+});
+document.addEventListener('input',e=>{
+  const el=e.target,a=el.getAttribute('data-action');
+  if(a==='expense-cross-search'){
+    S.expenseCrossFilterSearch=el.value;
+    clearTimeout(S._expenseCrossSearchTimer);
+    S._expenseCrossSearchTimer=setTimeout(()=>{
+      const pos=el.selectionStart;
+      render();
+      const ag=document.querySelector('input[data-action="expense-cross-search"]');
+      if(ag){ag.focus();ag.setSelectionRange(pos,pos);}
+    },200);
+    return;
+  }
+});
+// Column resize for expense pivot
+let expenseCatResizeCtx=null;
+let expenseCatResizedRecently=false;
+document.addEventListener('mousedown',e=>{
+  const el=e.target.closest('[data-action="expense-cat-resize"]');if(!el)return;
+  const target=el.getAttribute('data-target');const th=el.closest('th');
+  expenseCatResizeCtx={target,startX:e.clientX,startW:th.getBoundingClientRect().width};
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('mousemove',e=>{
+  if(!expenseCatResizeCtx)return;
+  const nw=Math.max(70,Math.round(expenseCatResizeCtx.startW+(e.clientX-expenseCatResizeCtx.startX)));
+  const target=expenseCatResizeCtx.target;
+  if(target==='period'){
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-period').forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+  } else {
+    const selector=target==='total'?'.scp-total':target==='pct'?'.scp-pct':'.scp-cat';
+    document.querySelectorAll('.expense-cat-wrap .scp-table '+selector).forEach(cell=>{cell.style.width=nw+'px';cell.style.minWidth=nw+'px';cell.style.maxWidth=nw+'px';});
+    const snoW=52;
+    const totEl=document.querySelector('.expense-cat-wrap .scp-table th.scp-total');
+    const pctEl=document.querySelector('.expense-cat-wrap .scp-table th.scp-pct');
+    const catEl=document.querySelector('.expense-cat-wrap .scp-table th.scp-cat');
+    const curTotW=totEl?totEl.getBoundingClientRect().width:(S.expenseCategoryTotalWidth||130);
+    const curPctW=pctEl?pctEl.getBoundingClientRect().width:(S.expenseCategoryPctWidth||90);
+    const leftTotal=snoW,leftPct=snoW+curTotW,leftCat=snoW+curTotW+curPctW;
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-total').forEach(cell=>{cell.style.left=leftTotal+'px';});
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-pct').forEach(cell=>{cell.style.left=leftPct+'px';});
+    document.querySelectorAll('.expense-cat-wrap .scp-table .scp-cat').forEach(cell=>{cell.style.left=leftCat+'px';});
+  }
+});
+document.addEventListener('mouseup',()=>{
+  if(!expenseCatResizeCtx)return;
+  const targetClass=expenseCatResizeCtx.target==='total'?'scp-total':expenseCatResizeCtx.target==='pct'?'scp-pct':expenseCatResizeCtx.target==='category'?'scp-cat':'scp-period';
+  const el=document.querySelector('.expense-cat-wrap .scp-table th.'+targetClass);
+  const nw=el?el.getBoundingClientRect().width:null;
+  if(nw){
+    if(expenseCatResizeCtx.target==='total')S.expenseCategoryTotalWidth=Math.round(nw);
+    else if(expenseCatResizeCtx.target==='pct')S.expenseCategoryPctWidth=Math.round(nw);
+    else if(expenseCatResizeCtx.target==='category')S.expenseCategoryCatWidth=Math.round(nw);
+    else S.expenseCategoryColWidth=Math.round(nw);
+    persistPivotColWidths_();
+  }
+  expenseCatResizeCtx=null;
+  expenseCatResizedRecently=true;
+  setTimeout(()=>{expenseCatResizedRecently=false;},0);
+  render();
+});
+</script>

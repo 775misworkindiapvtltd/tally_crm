@@ -1,0 +1,108 @@
+<script>
+/* ============================= CHART HELPERS (Chart.js) =============================
+ * Since render() rebuilds the entire #app innerHTML on every state change, any live
+ * Chart.js instances attached to old canvases become orphaned. We keep a registry of
+ * instances keyed by canvas id and destroy+recreate them every time renderCharts() runs
+ * (called from a small setTimeout right after render() sets innerHTML, so the canvases exist).
+ */
+const CHART_REGISTRY={};
+let chartJsLoadPromise=null;
+
+function ensureChartJs(){
+  if(typeof Chart!=='undefined') return Promise.resolve();
+  if(chartJsLoadPromise) return chartJsLoadPromise;
+  chartJsLoadPromise=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
+    s.onload=()=>resolve();
+    s.onerror=()=>reject(new Error('Chart.js failed to load (no internet access?)'));
+    document.head.appendChild(s);
+  });
+  return chartJsLoadPromise;
+}
+
+function destroyChart(id){
+  if(CHART_REGISTRY[id]){ CHART_REGISTRY[id].destroy(); delete CHART_REGISTRY[id]; }
+}
+
+const CHART_PALETTE=['#2E6BF2','#16A34A','#F08A1D','#E23A3A','#7C5CFC','#0DA1A0','#4C5FE0','#B4862B'];
+
+function drawComboChart(canvasId,labels,barSets,lineSet){
+  const el=document.getElementById(canvasId); if(!el) return;
+  destroyChart(canvasId);
+  const isDark=document.documentElement.classList.contains('dark');
+  const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';
+  const tickColor=isDark?'#A6AEC4':'#8992AA';
+  const datasets=barSets.map((s,i)=>({
+    type:'bar', label:s.label, data:s.data, backgroundColor:s.color||CHART_PALETTE[i], borderRadius:4, maxBarThickness:26, order:2
+  }));
+  if(lineSet){
+    datasets.push({type:'line',label:lineSet.label,data:lineSet.data,borderColor:lineSet.color||'#7C5CFC',backgroundColor:'transparent',
+      borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:lineSet.color||'#7C5CFC',yAxisID:'y1',order:1});
+  }
+  CHART_REGISTRY[canvasId]=new Chart(el.getContext('2d'),{
+    data:{labels:labels,datasets:datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:9,boxHeight:9,font:{size:10.5},color:tickColor}},
+        tooltip:{callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(ctx.parsed.y)}}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:tickColor,font:{size:10.5}}},
+        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}},
+        y1:lineSet?{position:'right',grid:{display:false},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}}:undefined
+      }
+    }
+  });
+}
+
+// Plain multi-line chart (no bars) — used by "Sales vs Expenses Trend" so both series
+// are the same chart type (Sales = blue line, Expenses = red line) instead of a
+// bar+line combo.
+function drawLineChart(canvasId,labels,lineSets){
+  const el=document.getElementById(canvasId); if(!el) return;
+  destroyChart(canvasId);
+  const isDark=document.documentElement.classList.contains('dark');
+  const gridColor=isDark?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';
+  const tickColor=isDark?'#A6AEC4':'#8992AA';
+  const datasets=lineSets.map(s=>({
+    type:'line', label:s.label, data:s.data, borderColor:s.color, backgroundColor:'transparent',
+    borderWidth:2.5, tension:.35, pointRadius:3, pointBackgroundColor:s.color
+  }));
+  CHART_REGISTRY[canvasId]=new Chart(el.getContext('2d'),{
+    data:{labels:labels,datasets:datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:9,boxHeight:9,font:{size:10.5},color:tickColor}},
+        tooltip:{callbacks:{label:(ctx)=>ctx.dataset.label+': '+fmtINR(ctx.parsed.y)}}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:tickColor,font:{size:10.5}}},
+        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{size:10},callback:v=>(v/100000).toFixed(1)+'L'}}
+      }
+    }
+  });
+}
+
+function drawDonutChart(canvasId,labels,data,colors){
+  const el=document.getElementById(canvasId); if(!el) return;
+  destroyChart(canvasId);
+  CHART_REGISTRY[canvasId]=new Chart(el.getContext('2d'),{
+    type:'doughnut',
+    data:{labels:labels,datasets:[{data:data,backgroundColor:colors||CHART_PALETTE,borderWidth:0,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>ctx.label+': '+fmtINR(ctx.parsed)}}}}
+  });
+}
+
+// Called after every render() — scans data-chart attributes and (re)draws matching charts.
+// Each page module registers its chart definitions in CHART_DEFS[pageKey] = () => { ...draw calls... }
+const CHART_DEFS={};
+function paintCharts(){
+  if(!S.page || !CHART_DEFS[S.page]) return;
+  ensureChartJs().then(()=>{ if(CHART_DEFS[S.page]) CHART_DEFS[S.page](); }).catch(err=>{
+    document.querySelectorAll('canvas[data-chart-fallback]').forEach(c=>{
+      c.insertAdjacentHTML('afterend',`<div class="empty-state" style="padding:20px;"><div class="big">Chart unavailable</div>${esc(err.message)}</div>`);
+    });
+  });
+}
+</script>

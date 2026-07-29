@@ -1,137 +1,271 @@
 <script>
-/* ============================= DASHBOARD ============================= */
+/* ============================= DASHBOARD DATA HELPERS =============================
+ * See Code.gs header comment "NOTE ON ASSUMPTIONS" for how Sales/Collections/Payments
+ * are derived from the Balance/Receipt/PAYMENT tabs (there is no dedicated Sales
+ * register sheet in the source spreadsheet).
+ */
 function sumBy(arr,key){ return arr.reduce((s,r)=>s+(Number(r[key])||0),0); }
+function rowsInCustomRange(arr,dateKey,from,to){ return arr.filter(r=>inRange(r[dateKey],from,to)); }
+
+function voucherSales_(from,to){ return dataForFY('balanceVouchers').filter(v=>/sale/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
+function voucherPurchase_(from,to){ return dataForFY('balanceVouchers').filter(v=>/purchase/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
+function voucherCreditNote_(from,to){ return dataForFY('balanceVouchers').filter(v=>/credit\s*note/i.test(v.voucherType||'')&&(!from||inRange(v.date,from,to))); }
+
+function periodMetrics(){
+  const sales=sumBy(voucherSales_(),'debit');
+  const purchase=sumBy(voucherPurchase_(),'debit');
+  const expense=sumBy(dataForFY('expense'),'amount');
+  const collections=sumBy(dataForFY('receipt'),'debitLedgerAmount');
+  const payments=sumBy(dataForFY('payment'),'creditLedgerAmount');
+  const netProfit=sales-expense-purchase;
+  return {sales,purchase,expense,collections,payments,netProfit};
+}
+
+function outstandingReceivable(){ return sumBy(dataForFY('receivables'),'pendingAmount'); } // RECEIVABLES sheet, column K
+function outstandingPayable(){ return sumBy(dataForFY('payables'),'closingBalance'); }
+// Total Sales — per user instruction, read from the dedicated SALES sheet, column M
+// (column N holds product category, reserved for a future category breakdown). This
+// sheet has no date column as described, so there's no period comparison for it yet.
+function totalSalesFromSalesSheet(){ return sumBy(dataForFY('sales'),'amount'); }
+function cashInHandBank(){
+  // Receipt ledger inflow minus payment ledger outflow for the selected financial years.
+  return sumBy(dataForFY('receipt'),'debitLedgerAmount')-sumBy(dataForFY('payment'),'creditLedgerAmount');
+}
 
 function topN(arr,groupKey,amtKey,n){
   const map={};
-  arr.forEach(r=>{
-    const k=r[groupKey]||'Unknown';
-    map[k]=(map[k]||0)+(Number(r[amtKey])||0);
-  });
+  arr.forEach(r=>{ const k=r[groupKey]||'Unknown'; map[k]=(map[k]||0)+(Number(r[amtKey])||0); });
   return Object.keys(map).map(k=>({label:k,value:map[k]})).sort((a,b)=>b.value-a.value).slice(0,n);
 }
 
+function ageingBuckets(rows,amtKey){
+  const buckets={'0-30':0,'31-60':0,'61-90':0,'90+':0};
+  rows.forEach(r=>{
+    const d=Number(r.overdueDays)||0; const amt=Number(r[amtKey])||0;
+    if(d<=30)buckets['0-30']+=amt; else if(d<=60)buckets['31-60']+=amt; else if(d<=90)buckets['61-90']+=amt; else buckets['90+']+=amt;
+  });
+  return buckets;
+}
+
+function statusForDueDate(dueDateVal,overdueDays){
+  const d=Number(overdueDays)||0;
+  if(d>0) return {cls:'overdue',label:'Overdue'};
+  const t=parseDT(dueDateVal); if(t===null) return {cls:'current',label:'Current'};
+  const daysLeft=Math.round((t-Date.now())/86400000);
+  if(daysLeft<=7) return {cls:'due-soon',label:'Due Soon'};
+  return {cls:'current',label:'Current'};
+}
+
+/* ============================= DASHBOARD RENDER ============================= */
 function renderDashboard(){
-  const totalReceivable=sumBy(S.receivables,'pendingAmount');
-  const totalPayable=sumBy(S.payables,'closingBalance');
-  const totalExpense=sumBy(S.expense,'amount');
-  const net=totalReceivable-totalPayable;
+  const cur=periodMetrics();
+  const fyLabel=selectedFYLabel();
 
-  const overdueRecv=S.receivables.filter(r=>Number(r.overdueDays)>0);
-  const overduePay=S.payables.filter(r=>Number(r.overdueDays)>0);
+  const totalRecv=outstandingReceivable(), totalPay=outstandingPayable();
+  const totalSales=totalSalesFromSalesSheet();
+  const overdueRecvRows=dataForFY('receivables').filter(r=>Number(r.overdueDays)>0);
+  const overduePayRows=dataForFY('payables').filter(r=>Number(r.overdueDays)>0);
+  const custSt=tableState('topCustomersDash'),vendSt=tableState('topVendorsDash');
+  if(!custSt.sort){custSt.sort='value';custSt.dir=-1;}
+  if(!vendSt.sort){vendSt.sort='value';vendSt.dir=-1;}
 
-  const topRecvParties=topN(S.receivables,'partyName','pendingAmount',5);
-  const topPayParties=topN(S.payables,'partyName','closingBalance',5);
-  const maxRecv=Math.max(1,...topRecvParties.map(x=>x.value));
-  const maxPay=Math.max(1,...topPayParties.map(x=>x.value));
+  // "vs previous period" comparison chips removed along with the Date Range/Compare UI
+  // (there is no period to compare against anymore) — cards now show plain totals.
+  // Per explicit user instruction: the "Payments" card is removed from this KPI strip,
+  // "Outstanding Payables" is relabelled "Total Payable" (value/logic unchanged), and
+  // "Cash in Hand / Bank" on THIS strip specifically now shows Total Sales - Total
+  // Expenses (cashInHandBank(), used elsewhere on Cash Flow/Balance Sheet/Executive
+  // Summary, is left untouched since those pages need the actual receipt/payment
+  // ledger-based cash position).
+  const cashInHandKpi=totalSales-cur.expense;
+  const kpis=[
+    {label:'Total Sales',value:totalSales,icon:'sales',cls:'c-green',page:'salesDashboard'},
+    {label:'Total Expenses',value:cur.expense,icon:'wallet',cls:'c-orange',page:'expensesDashboard'},
+    {label:'Total Receivables',value:totalRecv,icon:'in',cls:'c-blue',page:'ageingRecv'},
+    {label:'Total Payable',value:totalPay,icon:'out',cls:'c-red',page:'payDashboard'},
+    {label:'Collections',value:cur.collections,icon:'collection',cls:'c-teal',page:'collectionAnalysis'},
+    {label:'Net Profit',value:cur.netProfit,icon:'pl',cls:'c-indigo',page:'profitLoss'},
+    {label:'Cash in Hand / Bank',value:cashInHandKpi,icon:'cashflow',cls:'c-blue',page:'cashFlow'},
+  ];
 
-  const recentReceipts=S.receipt.slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
-  const recentPayments=S.payment.slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
+  const kpiCards=kpis.map(k=>{
+    return `<div class="card" data-action="goto" data-page="${k.page}">
+      <div class="card-top"><span class="card-label">${esc(k.label)}</span><div class="card-icon ${k.cls}">${NAV_ICONS[k.icon]}</div></div>
+      <div class="card-value">${fmtINR(k.value)}</div>
+    </div>`;
+  }).join('');
 
-  function ageingBuckets(rows){
-    const buckets={'0-30':0,'31-60':0,'61-90':0,'91-180':0,'180+':0};
-    rows.forEach(r=>{
-      const d=Number(r.overdueDays)||0;
-      const amt=Number(r.pendingAmount!=null?r.pendingAmount:r.closingBalance)||0;
-      if(d<=30)buckets['0-30']+=amt;
-      else if(d<=60)buckets['31-60']+=amt;
-      else if(d<=90)buckets['61-90']+=amt;
-      else if(d<=180)buckets['91-180']+=amt;
-      else buckets['180+']+=amt;
-    });
-    return buckets;
-  }
-  const recvAge=ageingBuckets(S.receivables);
+  const recvAge=ageingBuckets(dataForFY('receivables'),'pendingAmount');
+  const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
+  const ageColors=['#2E6BF2','#16A34A','#F08A1D','#E23A3A'];
+
+  // All parties (not just a top-N slice) so the scroll box on the dashboard has real
+  // content to scroll through — min 10 rows visible at once via the fixed-height
+  // compact box, sortable by clicking any of the 3 headers (default: Outstanding desc).
+  const recvRowsAll=dataForFY('receivables'), payRowsAll=dataForFY('payables');
+  const topCustomers=topN(recvRowsAll,'partyName','pendingAmount',9999).map(t=>{
+    const row=recvRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
+  });
+  const topVendors=topN(payRowsAll,'partyName','closingBalance',9999).map(t=>{
+    const row=payRowsAll.filter(r=>r.partyName===t.label).sort((a,b)=>b.overdueDays-a.overdueDays)[0];
+    return Object.assign({},t,{overdueDays:row?Number(row.overdueDays)||0:0});
+  });
+  const expenseByCategory=topN(dataForFY('expense'),'subGroup','amount',6);
+  const expenseTotal=sumBy(dataForFY('expense'),'amount');
+
+  const recentReceipts=dataForFY('receipt').slice().sort((a,b)=>(parseDT(b.date)||0)-(parseDT(a.date)||0)).slice(0,5);
+
+  const dueThisWeek=dataForFY('receivables').filter(r=>{
+    const t=parseDT(r.dueDate); if(t===null) return false;
+    const days=Math.round((t-Date.now())/86400000);
+    return days>=0 && days<=7;
+  }).sort((a,b)=>(parseDT(a.dueDate)||0)-(parseDT(b.dueDate)||0)).slice(0,5);
+
+  // Sales Topline donut: break Total Sales down by the SALES sheet's column-N category
+  // if categories are present; otherwise fall back to the documented 70/24/6 estimate.
+  // Same category list/order/colors are used by CHART_DEFS['dashboard'] below for the
+  // chSalesTopline donut itself, so the on-screen legend rows always line up 1:1 with
+  // each donut slice.
+  const salesByCategory=topN(dataForFY('sales'),'category','amount',6);
+  const useRealCategories=salesByCategory.length>0;
+  const domesticSales=totalSales*0.7, exportSales=totalSales*0.24, otherIncome=totalSales*0.06; // fallback estimate, see README
+  const salesToplineRows=useRealCategories?salesByCategory:[{label:'Domestic Sales',value:domesticSales},{label:'Export Sales',value:exportSales},{label:'Other Income',value:otherIncome}];
+  const salesToplineColors=useRealCategories?CHART_PALETTE:['#2E6BF2','#16A34A','#F08A1D'];
 
   return `
-    <div class="dash-grid">
-      <div class="card" data-action="goto" data-page="receivables">
-        <div class="card-top"><span class="card-label">Receivables</span><div class="card-icon recv">${NAV_ICONS.in}</div></div>
-        <div class="card-value">${fmtINR(totalReceivable)}</div>
-        <div class="card-sub">${S.receivables.length} open bills${overdueRecv.length?` · <span class="up">${overdueRecv.length} overdue</span>`:''}</div>
+    ${renderFilterBar()}
+
+    <div class="kpi-strip">${kpiCards}</div>
+
+    <div class="dash-row3" style="grid-template-columns:1.4fr 1fr 1fr;">
+      <div class="panel">
+        <div class="panel-title">Sales vs Expenses Trend <span style="font-size:10px;color:var(--muted);font-weight:600;">${esc(fyLabel)}</span></div>
+        <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesTrend" data-chart-fallback></canvas></div></div>
+        <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
       </div>
-      <div class="card" data-action="goto" data-page="payables">
-        <div class="card-top"><span class="card-label">Payables</span><div class="card-icon pay">${NAV_ICONS.out}</div></div>
-        <div class="card-value">${fmtINR(totalPayable)}</div>
-        <div class="card-sub">${S.payables.length} open bills${overduePay.length?` · <span class="up">${overduePay.length} overdue</span>`:''}</div>
+      <div class="panel">
+        <div class="panel-title">Receivable Ageing (Outstanding)</div>
+        <div class="panel-body donut-panel-body">
+          <div class="chart-wrap donut"><canvas id="chRecvAge" data-chart-fallback></canvas></div>
+          <div class="donut-legend">
+            ${Object.keys(recvAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-label">${k} Days</span><span class="dl-val">${fmtINR(recvAge[k])}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
-      <div class="card" data-action="goto" data-page="expense">
-        <div class="card-top"><span class="card-label">Total Expense</span><div class="card-icon exp">${NAV_ICONS.wallet}</div></div>
-        <div class="card-value">${fmtINR(totalExpense)}</div>
-        <div class="card-sub">${S.expense.length} voucher lines</div>
-      </div>
-      <div class="card" data-action="goto" data-page="overdue">
-        <div class="card-top"><span class="card-label">Net Position</span><div class="card-icon net">${NAV_ICONS.clock}</div></div>
-        <div class="card-value">${fmtINR(net)}</div>
-        <div class="card-sub ${net>=0?'down':'up'}">${net>=0?'Receivable > Payable':'Payable > Receivable'}</div>
+      <div class="panel">
+        <div class="panel-title">Payable Ageing (Outstanding)</div>
+        <div class="panel-body donut-panel-body">
+          <div class="chart-wrap donut"><canvas id="chPayAge" data-chart-fallback></canvas></div>
+          <div class="donut-legend">
+            ${Object.keys(payAge).map((k,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${ageColors[i]};"></span><span class="dl-label">${k} Days</span><span class="dl-val">${fmtINR(payAge[k])}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
       </div>
     </div>
 
-    <div class="dash-row">
-      <div class="panel">
-        <div class="panel-title">Top Receivable Parties <a data-action="goto" data-page="receivables">View all →</a></div>
-        <div class="panel-body">
-          <div class="bar-chart">
-          ${topRecvParties.length?topRecvParties.map(p=>`
-            <div class="bar-item">
-              <div class="b-label" title="${esc(p.label)}">${esc(p.label)}</div>
-              <div class="bar-track"><div class="bar-fill recv" style="width:${Math.max(4,(p.value/maxRecv*100))}%;"></div></div>
-              <div class="b-val">${fmtINR(p.value)}</div>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No receivables</div></div>`}
-          </div>
-        </div>
+    <div class="dash-row3" style="grid-template-columns:1.25fr 1.25fr 1fr;">
+      <div class="panel dashboard-report-panel">
+        <div class="panel-title">Top Customers by Outstanding <a data-action="goto" data-page="customerList">View All</a></div>
+        <div class="panel-body" style="padding:0;">${(()=>{
+          if(S.syncing&&!recvRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading receivables…</div></div>`;
+          S.dashTopCustomers=topCustomers;return renderGrid('topCustomersDash');
+        })()}</div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalRecv)}</span></div>
       </div>
-      <div class="panel">
-        <div class="panel-title">Ageing Snapshot — Receivables <a data-action="goto" data-page="overdue">Details →</a></div>
-        <div class="panel-body">
-          <div class="age-buckets">
-            <div class="age-bucket"><div class="ab-label">0-30d</div><div class="ab-val">${fmtINR(recvAge['0-30'])}</div></div>
-            <div class="age-bucket"><div class="ab-label">31-60d</div><div class="ab-val">${fmtINR(recvAge['31-60'])}</div></div>
-            <div class="age-bucket"><div class="ab-label">61-90d</div><div class="ab-val">${fmtINR(recvAge['61-90'])}</div></div>
-            <div class="age-bucket danger"><div class="ab-label">91-180d</div><div class="ab-val">${fmtINR(recvAge['91-180'])}</div></div>
-            <div class="age-bucket danger"><div class="ab-label">180+d</div><div class="ab-val">${fmtINR(recvAge['180+'])}</div></div>
-          </div>
-        </div>
+      <div class="panel dashboard-report-panel">
+        <div class="panel-title">Top Vendors by Payable <a data-action="goto" data-page="vendorList">View All</a></div>
+        <div class="panel-body" style="padding:0;">${(()=>{
+          if(S.syncing&&!payRowsAll.length) return `<div class="empty-state" style="padding:50px 20px;"><div class="spinner" style="margin:0 auto 12px;"></div><div class="big">Loading payables…</div></div>`;
+          S.dashTopVendors=topVendors;return renderGrid('topVendorsDash');
+        })()}</div>
+        <div class="panel-foot"><span>Total Outstanding</span><span>${fmtINR(totalPay)}</span></div>
+      </div>
+      <div class="panel dashboard-report-panel">
+        <div class="panel-title">Expense by Category <a data-action="goto" data-page="expensesDashboard">View All</a></div>
+        <div class="panel-body" style="padding:0;">${(()=>{
+          S.dashExpenseCategories=expenseByCategory.map((c,i)=>({label:c.label,value:c.value,color:CHART_PALETTE[i%CHART_PALETTE.length]}));
+          return renderGrid('expenseCategoryDash');
+        })()}</div>
+        <div class="panel-foot"><span>Total Expenses</span><span>${fmtINR(expenseTotal)}</span></div>
       </div>
     </div>
 
-    <div class="dash-row">
+    <div class="dash-row4">
       <div class="panel">
-        <div class="panel-title">Top Payable Parties <a data-action="goto" data-page="payables">View all →</a></div>
-        <div class="panel-body">
-          <div class="bar-chart">
-          ${topPayParties.length?topPayParties.map(p=>`
-            <div class="bar-item">
-              <div class="b-label" title="${esc(p.label)}">${esc(p.label)}</div>
-              <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,(p.value/maxPay*100))}%;"></div></div>
-              <div class="b-val">${fmtINR(p.value)}</div>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No payables</div></div>`}
-          </div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">Recent Receipts <a data-action="goto" data-page="receipt">View all →</a></div>
-        <div class="panel-body">
+        <div class="panel-title">Recent Receipts <a data-action="goto" data-page="receipt">View All</a></div>
+        <div class="panel-body" style="padding:6px 16px;">
           ${recentReceipts.length?recentReceipts.map(r=>`
             <div class="mini-row">
-              <div><div class="nm">${esc(r.bankPartyName||r.creditLedgerName)}</div><div class="sub">${esc(r.date)} · ${esc(r.voucherNumber)}</div></div>
-              <div class="amt recv">${fmtINR(r.creditLedgerAmount)}</div>
+              <div class="lft"><div><div class="nm">${esc(r.bankPartyName||r.creditLedgerName)}</div><div class="sub">${esc(r.date)}</div></div></div>
+              <div style="display:flex;align-items:center;gap:8px;"><span class="mode-badge">${esc(r.transactionType||'—')}</span><span class="amt recv">${fmtINR(r.debitLedgerAmount||r.creditLedgerAmount)}</span></div>
             </div>`).join(''):`<div class="empty-state"><div class="big">No receipts yet</div></div>`}
         </div>
       </div>
-    </div>
-
-    <div class="dash-row" style="grid-template-columns:1fr;">
       <div class="panel">
-        <div class="panel-title">Recent Payments <a data-action="goto" data-page="payment">View all →</a></div>
-        <div class="panel-body">
-          ${recentPayments.length?recentPayments.map(r=>`
-            <div class="mini-row">
-              <div><div class="nm">${esc(r.bankPartyName||r.debitLedgerName)}</div><div class="sub">${esc(r.date)} · ${esc(r.voucherNumber)}</div></div>
-              <div class="amt pay">${fmtINR(r.debitLedgerAmount)}</div>
-            </div>`).join(''):`<div class="empty-state"><div class="big">No payments yet</div></div>`}
+        <div class="panel-title">Upcoming Due This Week <a data-action="goto" data-page="followUpList">View All</a></div>
+        <div class="panel-body" style="padding:6px 16px;">
+          ${dueThisWeek.length?dueThisWeek.map(r=>{
+            const t=parseDT(r.dueDate);const days=t===null?'':Math.round((t-Date.now())/86400000)+' Days';
+            return `<div class="mini-row"><div class="lft"><div><div class="nm">${esc(r.partyName)}</div><div class="sub">${esc(r.dueDate)}</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span class="amt">${fmtINR(r.pendingAmount)}</span><span class="mode-badge">${days}</span></div></div>`;
+          }).join(''):`<div class="empty-state"><div class="big">Nothing due 🎉</div></div>`}
         </div>
       </div>
-    </div>`;
+      <div class="panel sales-topline-panel">
+        <div class="panel-title sales-topline-title"><span>Sales Topline${useRealCategories?' by Category':''} — ${esc(fyLabel)}</span><span class="sales-topline-period">${esc(fyLabel==='All Financial Years'?'All Years':fyLabel)}</span></div>
+        <div class="panel-body sales-topline-body">
+          <div class="chart-wrap donut sales-topline-chart"><canvas id="chSalesTopline" data-chart-fallback></canvas></div>
+          <div class="sales-topline-summary"><span>Total Sales</span><strong>${fmtINRCompact(totalSales)}</strong></div>
+          <div class="sales-topline-legend" role="list" aria-label="Sales by category">
+            ${salesToplineRows.map((c,i)=>`<div class="sales-topline-row" role="listitem"><span class="sales-topline-category" title="${esc(c.label)}"><span class="sales-topline-dot" style="background:${salesToplineColors[i%salesToplineColors.length]};"></span><span class="sales-topline-label">${esc(c.label)}</span></span><span class="sales-topline-amount">${fmtINRCompact(c.value)}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="panel-foot sales-topline-foot"><a data-action="goto" data-page="salesReport">View Category Report <span>→</span></a></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Quick Actions</div>
+        <div class="panel-body">
+          <div class="qa-grid">
+            <div class="qa-btn" data-action="goto" data-page="receipt"><span class="qa-ic c-green" style="background:var(--green-tint);color:var(--green);">${NAV_ICONS['arrow-down']}</span><span class="qa-txt">Record Receipt</span></div>
+            <div class="qa-btn" data-action="goto" data-page="payment"><span class="qa-ic" style="background:var(--red-tint);color:var(--red);">${NAV_ICONS['arrow-up']}</span><span class="qa-txt">Record Payment</span></div>
+            <div class="qa-btn" data-action="goto" data-page="expense"><span class="qa-ic" style="background:var(--orange-tint);color:var(--orange);">${NAV_ICONS.wallet}</span><span class="qa-txt">Add Expense</span></div>
+            <div class="qa-btn" data-action="goto" data-page="customerList"><span class="qa-ic" style="background:var(--blue-tint);color:var(--blue);">${NAV_ICONS.customer}</span><span class="qa-txt">Customer Follow-up</span></div>
+            <div class="qa-btn" data-action="goto" data-page="vendorList"><span class="qa-ic" style="background:var(--purple-tint);color:var(--purple);">${NAV_ICONS.customer}</span><span class="qa-txt">Vendor Follow-up</span></div>
+            <div class="qa-btn" data-action="goto" data-page="creditNotes"><span class="qa-ic" style="background:var(--teal-tint);color:var(--teal);">${NAV_ICONS.creditnote}</span><span class="qa-txt">Credit Note</span></div>
+            <div class="qa-btn" data-action="goto" data-page="ledger"><span class="qa-ic" style="background:var(--indigo-tint);color:var(--indigo);">${NAV_ICONS.book}</span><span class="qa-txt">Bank Reconcile</span></div>
+            <div class="qa-btn" data-action="goto" data-page="ledger"><span class="qa-ic" style="background:var(--gold-tint);color:var(--gold);">${NAV_ICONS.book}</span><span class="qa-txt">Email Statement</span></div>
+            <div class="qa-btn" data-action="goto" data-page="reports"><span class="qa-ic" style="background:var(--blue-tint);color:var(--blue);">${NAV_ICONS.reports}</span><span class="qa-txt">Reports</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
 }
+registerPage('dashboard',renderDashboard);
+
+CHART_DEFS['dashboard']=function(){
+  const months=selectedFYMonths();
+  const salesRows=dataForFY('sales');
+  const expenseTrendRows=dataForFY('expenseTrend');
+  const salesTrendSeries=months.map(m=>sumBy(rowsInCustomRange(salesRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  const expenseTrendSeries=months.map(m=>sumBy(rowsInCustomRange(expenseTrendRows,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
+  drawLineChart('chSalesTrend',months.map(m=>m.label),
+    [{label:'Sales',data:salesTrendSeries,color:'#2E6BF2'},{label:'Expenses',data:expenseTrendSeries,color:'#E23A3A'}]);
+
+  const recvAge=ageingBuckets(dataForFY('receivables'),'pendingAmount');
+  const payAge=ageingBuckets(dataForFY('payables'),'closingBalance');
+  drawDonutChart('chRecvAge',Object.keys(recvAge),Object.values(recvAge),['#2E6BF2','#16A34A','#F08A1D','#E23A3A']);
+  drawDonutChart('chPayAge',Object.keys(payAge),Object.values(payAge),['#2E6BF2','#16A34A','#F08A1D','#E23A3A']);
+
+  const salesByCategory=topN(dataForFY('sales'),'category','amount',6);
+  if(salesByCategory.length){
+    drawDonutChart('chSalesTopline',salesByCategory.map(c=>c.label),salesByCategory.map(c=>c.value),CHART_PALETTE);
+  } else {
+    const totalSales=totalSalesFromSalesSheet();
+    const domesticSales=totalSales*0.7, exportSales=totalSales*0.24, otherIncome=totalSales*0.06;
+    drawDonutChart('chSalesTopline',['Domestic Sales','Export Sales','Other Income'],[domesticSales,exportSales,otherIncome],['#2E6BF2','#16A34A','#F08A1D']);
+  }
+};
 </script>

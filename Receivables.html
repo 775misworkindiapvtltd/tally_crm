@@ -1,0 +1,524 @@
+<script>
+/* ============================= RECEIVABLES / AGEING =============================
+ * The standalone "Receivables Dashboard" page was removed per explicit user
+ * instruction — its KPI cards (Total Outstanding/Overdue Bills/Not Yet Due/Avg
+ * Overdue Days) and the flat "Receivables Details" grid table have been moved
+ * into the Receivables Ageing Summary page's "All Data" tab below (see
+ * renderAgeing()). The old Top Customers bar chart and Ageing Snapshot buckets
+ * from that dashboard were explicitly NOT carried over ("top customers and
+ * ageing chart not needed").
+ */
+
+/* ============================= AGEING — PARTY PIVOT ============================= *
+ * One row per party. Party Name sits in the middle. LEFT of it are OVERDUE buckets
+ * (bill's due date has already passed — "paisa aana tha, aaya nahi"), ordered with
+ * the OLDEST overdue amount furthest from the Party Name column (90+ Days far left,
+ * 0-30 Days right next to the name). RIGHT of Party Name are NOT-YET-DUE buckets
+ * ("paisa abhi aana hai" — due date is still in the future), ordered with the
+ * soonest-due amount right next to the name (0-30 Days) and furthest-out amount at
+ * the far right (90+ Days). Total Amount is the last column.
+ *
+ * Example from the user: an invoice cut on 1-Jul with a 10-day credit period whose
+ * payment hasn't come in yet → its due date has passed → it lands in the LEFT
+ * "0-30 Days" bucket. A party that reliably pays within 20 days, billed today →
+ * its due date is still ahead → it lands in the RIGHT "0-30 Days" bucket.
+ */
+function ageingPivotRows(kind){
+  const isRecv=kind==='recv';
+  const rows=dataForFY(isRecv?'receivables':'payables');
+  const amtKey=isRecv?'pendingAmount':'closingBalance';
+  const byParty={};
+  rows.forEach(r=>{
+    const name=r.partyName||'Unknown';
+    if(!byParty[name])byParty[name]={partyName:name,od90:0,od6190:0,od3160:0,od030:0,nd030:0,nd3160:0,nd6190:0,nd90:0,total:0};
+    const p=byParty[name];
+    const amt=Number(r[amtKey])||0;
+    const days=Number(r.overdueDays)||0;
+    p.total+=amt;
+    if(days>0){ // overdue — due date already passed
+      if(days>90)p.od90+=amt; else if(days>60)p.od6190+=amt; else if(days>30)p.od3160+=amt; else p.od030+=amt;
+    } else { // not yet due — due date still ahead
+      const dueIn=-days;
+      if(dueIn>90)p.nd90+=amt; else if(dueIn>60)p.nd6190+=amt; else if(dueIn>30)p.nd3160+=amt; else p.nd030+=amt;
+    }
+  });
+  return Object.values(byParty);
+}
+
+// Column widths trimmed down (was 110px per bucket / 240px name / 150px total,
+// ~1270px total) so the full pivot table — all 10 columns — fits on one screen
+// on a 13"-14" laptop without horizontal scroll. Party Name's own default was
+// widened afterwards (190 -> 260) per explicit user instruction ("party name ka
+// col thoda bada kar do"), and every column here can now be resized by dragging
+// its right edge — see the resize-handle in renderAgeingPivot() below, which
+// reuses the exact same generic drag-resize + persistGridPrefs_() mechanism as
+// every other grid in the app (mousedown/mousemove/mouseup in Common.html), so
+// the chosen width is remembered for next time too ("give me flexibility to do
+// that, and remember it next time").
+const AGEING_PIVOT_COLS=[
+  {key:'od90',label:'90+ Days',side:'od',width:88},{key:'od6190',label:'61-90 Days',side:'od',width:88},
+  {key:'od3160',label:'31-60 Days',side:'od',width:88},{key:'od030',label:'0-30 Days',side:'od',width:88},
+  {key:'partyName',label:'Party Name',side:'name',width:260},
+  {key:'nd030',label:'0-30 Days',side:'nd',width:88},{key:'nd3160',label:'31-60 Days',side:'nd',width:88},
+  {key:'nd6190',label:'61-90 Days',side:'nd',width:88},{key:'nd90',label:'90+ Days',side:'nd',width:88},
+  {key:'total',label:'Total Amount',side:'total',width:120}
+];
+
+// Heatmap for the overdue (left/red) and not-yet-due (right/green) bucket cells —
+// bigger amount = darker shade, smaller amount = lighter shade, per explicit user
+// instruction ("red color dikhaya hai usmein bhi heatmap type lga do jasie aapne
+// sales report mein dikhaya hai bda number dardk color chota number light color
+// left wala red mein right wala green mein"). Mirrors heatmapCellStyle_() in
+// Common.html (used for Sales Report's Amount column) but with two color ramps
+// instead of one, and the min/max range is shared across ALL FOUR buckets on that
+// side (not per individual column) so the shade genuinely reflects "how big is
+// this amount compared to every other overdue/not-yet-due amount on screen" rather
+// than just within its own narrow bucket column. Zero-value cells are left alone
+// (handled by the existing .apv-zero CSS rule) — a heatmap tint on an empty "₹0"
+// cell would be meaningless.
+const AGEING_OD_KEYS=['od90','od6190','od3160','od030'];
+const AGEING_ND_KEYS=['nd030','nd3160','nd6190','nd90'];
+function ageingSideRange_(rows,keys){
+  let min=Infinity,max=-Infinity;
+  rows.forEach(r=>keys.forEach(k=>{
+    const v=Number(r[k])||0;
+    if(v>0){ if(v<min)min=v; if(v>max)max=v; }
+  }));
+  if(min===Infinity){min=0;max=0;}
+  return {min,max};
+}
+function ageingHeatmapStyle_(v,range,tone){
+  const num=Number(v)||0;
+  if(num<=0)return ''; // keep the plain "₹0"/.apv-zero look — nothing to shade
+  const span=range.max-range.min;
+  const t=span>0?(num-range.min)/span:1; // 0..1, share of the range on THIS side
+  // Light-tint (low) -> saturated dark (high) ramp, one for each side.
+  const ramp=tone==='red'
+    ? {r0:254,g0:238,b0:236,r1:168,g1:26,b1:20}   // #FEEEEC -> #A81A14
+    : {r0:232,g0:250,b0:240,r1:11,g1:107,b1:57};  // #E8FAF0 -> #0B6B39
+  const r=Math.round(ramp.r0+(ramp.r1-ramp.r0)*t),g=Math.round(ramp.g0+(ramp.g1-ramp.g0)*t),b=Math.round(ramp.b0+(ramp.b1-ramp.b0)*t);
+  const textColor=t>0.55?'#fff':(tone==='red'?'#8C1A15':'#0B6B39');
+  return `background:rgb(${r},${g},${b});color:${textColor};`;
+}
+
+// Renders just the pivot <table> itself — the party-name search box used to live
+// inline here, but it's now built by renderAgeing() and placed on the SAME row as
+// the All Data/Ageing Wise tabs (see .ageing-mode-bar), per explicit user
+// instruction that the search must not push onto its own line.
+function renderAgeingPivot(kind){
+  const isRecv=kind==='recv';
+  const tableKey=isRecv?'ageingPivotRecv':'ageingPivotPay';
+  const st=tableState(tableKey);
+  if(!st.sort){st.sort='total';st.dir=-1;}
+  let rows=ageingPivotRows(kind);
+  const q=(st.filters.partyName||'').toLowerCase();
+  if(q) rows=rows.filter(r=>r.partyName.toLowerCase().includes(q));
+  rows.sort((a,b)=>{
+    if(st.sort==='partyName'){
+      const x=a.partyName.toLowerCase(),y=b.partyName.toLowerCase();
+      if(x<y)return -1*st.dir; if(x>y)return 1*st.dir; return 0;
+    }
+    return ((Number(a[st.sort])||0)-(Number(b[st.sort])||0))*st.dir;
+  });
+  const totals={}; AGEING_PIVOT_COLS.forEach(c=>{ if(c.key!=='partyName') totals[c.key]=rows.reduce((s,r)=>s+(Number(r[c.key])||0),0); });
+  // Resolved width per column: user's own resized width (persisted via
+  // persistGridPrefs_(tableKey), same as every other grid) if they've dragged it,
+  // otherwise the column's own default above.
+  const colW=c=>st.widths[c.key]||c.width;
+
+  const hdr=AGEING_PIVOT_COLS.map(c=>{
+    const w=colW(c);
+    const active=st.sort===c.key; const arrow=active?(st.dir===1?'▲':'▼'):'';
+    // resize-handle sits OUTSIDE apv-th-inner (as a direct child of <th>, which is
+    // the positioned ancestor via table.dt's own position:sticky) — same structure
+    // the generic grid engine uses in Common.html — so it stays absolutely pinned
+    // to the column's right edge instead of getting laid out as a 3rd flex item
+    // inside the centered label row.
+    return `<th class="apv-th apv-${c.side}${active?' apv-sorted':''}" style="width:${w}px;min-width:${w}px;max-width:${w}px;" data-col="${c.key}">
+      <div class="apv-th-inner" data-action="sort" data-table="${tableKey}" data-col="${c.key}"><span>${esc(c.label)}</span><span class="apv-sort-ic">${arrow}</span></div>
+      <div class="resize-handle" data-action="resize" data-table="${tableKey}" data-col="${c.key}"></div>
+    </th>`;
+  }).join('');
+
+  const totalsRow=AGEING_PIVOT_COLS.map(c=>{
+    const w=colW(c);const style=`width:${w}px;min-width:${w}px;max-width:${w}px;`;
+    if(c.key==='partyName') return `<td class="apv-tot-name" style="${style}">PARTY NAME</td>`;
+    return `<td class="apv-tot apv-${c.side}" style="${style}">${fmtINR(totals[c.key]||0)}</td>`;
+  }).join('');
+
+  const odRange=ageingSideRange_(rows,AGEING_OD_KEYS),ndRange=ageingSideRange_(rows,AGEING_ND_KEYS);
+  const body=rows.length?rows.map(r=>`<tr>${AGEING_PIVOT_COLS.map(c=>{
+      const w=colW(c);const style=`width:${w}px;min-width:${w}px;max-width:${w}px;`;
+      if(c.key==='partyName') return `<td class="apv-name" style="${style}">${esc(r.partyName)}</td>`;
+      const v=Number(r[c.key])||0;
+      const heat=c.side==='od'?ageingHeatmapStyle_(v,odRange,'red'):c.side==='nd'?ageingHeatmapStyle_(v,ndRange,'green'):'';
+      return `<td class="apv-cell apv-${c.side}${v===0?' apv-zero':''}" style="${style}${heat}">${fmtINR(v)}</td>`;
+    }).join('')}</tr>`).join(''):`<tr><td colspan="${AGEING_PIVOT_COLS.length}"><div class="empty-state"><div class="big">No matching parties</div></div></td></tr>`;
+
+  return `
+    <div class="dt-table-wrap apv-wrap">
+      <div class="dt-scroll">
+        <table class="dt apv-table">
+          <thead>
+            <tr class="apv-totals-row">${totalsRow}</tr>
+            <tr>${hdr}</tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+/* ============================= AGEING PAGE — Receivable/Payable, All Data/Ageing Wise =============================
+ * Kind tabs (Receivable Ageing / Payable Ageing) — added per explicit user
+ * instruction so both Ageing Summary dashboards are reachable from ONE page via
+ * a tab click, in addition to the existing sidebar "Ageing Summary" submenu.
+ * Mode tabs (All Data / Ageing Wise) — "All Data" now holds everything that used
+ * to live on the separate Receivables/Payables Dashboard page: the 4 KPI cards
+ * plus the full flat, searchable/filterable/sortable/resizable grid. The old
+ * Top Customers bar chart and Ageing Snapshot buckets were dropped ("top
+ * customers and ageing chart not needed"). "Ageing Wise" keeps the party-pivot
+ * table. Both tab rows share ONE line with whatever search box is relevant to
+ * the active mode, so nothing pushes onto its own extra line.
+ */
+// KPI card icon+color combos reused from the Main Dashboard's kpi-strip styling
+// (card-icon/card-top/card-label/card-value/card-sub), per explicit user
+// instruction to make these look consistent with the rest of the dashboard
+// instead of the plain text-only cards they had before.
+// Thin, single-row layout (icon on the left, label+value+sub stacked tight to its
+// right) — even thinner than the Main Dashboard's own kpi-strip cards, per
+// explicit user instruction ("Kpi kards...koi aur layout hoga to chalega, i want
+// really thin layout for these...that will save my screen").
+function ageingKpiCard_(label,value,sub,icon,cls){
+  return `<div class="card ageing-kpi-card">
+    <div class="card-icon ${cls}">${NAV_ICONS[icon]}</div>
+    <div class="ageing-kpi-body">
+      <div class="card-label">${esc(label)}</div>
+      <div class="ageing-kpi-vs"><span class="card-value">${value}</span>${sub?`<span class="card-sub">${sub}</span>`:''}</div>
+    </div>
+  </div>`;
+}
+
+/* ============================= AGEING SUMMARY — LANDING OVERVIEW =============================
+ * Per explicit user feedback (TWICE — first asking to combine, then correctly
+ * pointing out the combine was wrong): Receivables (an ASSET — money owed TO the
+ * business) and Payables (a LIABILITY — money the business owes) are opposite
+ * directions and should NEVER be summed into one blended number — "Total
+ * Outstanding ₹39L" or a combined "Ageing Snapshot" bucket mixing both hides
+ * exactly the information this page exists to surface. Per explicit user
+ * instruction ("dono ke alag alag le lo, recvale ka data recevoable gaing se aa
+ * jayega, payble ka payeble agin se") — this page is now two FULLY independent,
+ * self-contained panels: each one pulls its OWN rows/amount-column from its own
+ * side (Receivables: pendingAmount, Payables: closingBalance) for EVERYTHING it
+ * shows — the KPI stats AND its own Ageing Snapshot buckets — nothing from one
+ * side is ever combined with the other anywhere on this page.
+ */
+// One fully self-contained panel per side — header, KPI stat row, its OWN Ageing
+// Snapshot bucket mini-panel, and two clearly-styled action buttons ("View All
+// Data" / "View Ageing Wise") that navigate into the existing ageingRecv/ageingPay
+// page and pre-select which mode tab is active on arrival (via the "nav-ageing"
+// action — see the click handler below). Restyled from plain .btn-ghost (which
+// per explicit user feedback "dont look like button, small kara hai") into a
+// larger, clearly-actionable pair: "All Data" as a solid accent-colored primary
+// action, "Ageing Wise" as a bold outlined secondary — both with icons, per
+// explicit user instruction ("make it lokk like a prfoessional dashboard").
+function ageingSummaryPanel_(kind){
+  const isRecv=kind==='recv';
+  const pageKey=isRecv?'ageingRecv':'ageingPay';
+  const rows=dataForFY(isRecv?'receivables':'payables');
+  const amtKey=isRecv?'pendingAmount':'closingBalance';
+  const overdue=rows.filter(r=>Number(r.overdueDays)>0);
+  const notYetDue=rows.filter(r=>Number(r.overdueDays)<=0);
+  const total=sumBy(rows,amtKey);
+  const avgOverdueDays=overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0;
+  const buckets=ageingBuckets(rows,amtKey);
+  const tone=isRecv?'recv':'pay';
+  return `<div class="ageing-panel ageing-panel-${tone}">
+    <div class="ageing-panel-head">
+      <div class="ageing-panel-icon ${tone}">${NAV_ICONS[isRecv?'in':'out']}</div>
+      <div class="ageing-panel-head-text">
+        <div class="ageing-panel-title">${isRecv?'Receivables Ageing':'Payables Ageing'}</div>
+        <div class="ageing-panel-sub">${rows.length} open bills — ${esc(selectedFYLabel())}</div>
+      </div>
+      <div class="ageing-panel-total">${fmtINR(total)}</div>
+    </div>
+    <div class="ageing-panel-stats">
+      <div class="ageing-stat danger">
+        <div class="ageing-stat-label">Overdue</div>
+        <div class="ageing-stat-value">${fmtINR(sumBy(overdue,amtKey))}</div>
+        <div class="ageing-stat-count">${overdue.length} bills</div>
+      </div>
+      <div class="ageing-stat success">
+        <div class="ageing-stat-label">Not Yet Due</div>
+        <div class="ageing-stat-value">${fmtINR(sumBy(notYetDue,amtKey))}</div>
+        <div class="ageing-stat-count">${notYetDue.length} bills</div>
+      </div>
+      <div class="ageing-stat neutral">
+        <div class="ageing-stat-label">Avg Overdue Days</div>
+        <div class="ageing-stat-value">${avgOverdueDays}</div>
+        <div class="ageing-stat-count">across overdue bills</div>
+      </div>
+    </div>
+    <div class="ageing-panel-buckets">
+      <div class="ageing-panel-buckets-label">Ageing Snapshot</div>
+      <div class="age-buckets age-buckets-sm">${Object.keys(buckets).map(k=>`<div class="age-bucket ${k==='90+'?'danger':''}"><div class="ab-label">${k} Days</div><div class="ab-val">${fmtINR(buckets[k])}</div></div>`).join('')}</div>
+    </div>
+    <div class="ageing-panel-actions">
+      <button class="ageing-action-btn primary" data-action="nav-ageing" data-page="${pageKey}" data-mode="all"><span class="aa-ic">${NAV_ICONS.reports}</span>All Data</button>
+      <button class="ageing-action-btn" data-action="nav-ageing" data-page="${pageKey}" data-mode="ageing"><span class="aa-ic">${NAV_ICONS.ageing}</span>Ageing Wise</button>
+    </div>
+  </div>`;
+}
+function renderAgeingSummaryLanding(){
+  return `<div class="ageing-panels-grid">
+    ${ageingSummaryPanel_('recv')}
+    ${ageingSummaryPanel_('pay')}
+  </div>`;
+}
+registerPage('ageingSummary',renderAgeingSummaryLanding);
+
+function renderAgeing(kind){
+  const isRecv=kind==='recv',rows=dataForFY(isRecv?'receivables':'payables'),amtKey=isRecv?'pendingAmount':'closingBalance';
+  const overdue=rows.filter(r=>Number(r.overdueDays)>0),notYetDue=rows.filter(r=>Number(r.overdueDays)<=0),mode=S.ageingMode||'all';
+
+  const tableKey=isRecv?'ageingPivotRecv':'ageingPivotPay';
+  const pivotSt=tableState(tableKey);
+  const pivotQ=(pivotSt.filters.partyName||'').toLowerCase();
+  const pivotAll=ageingPivotRows(kind);
+  const pivotCount=pivotQ?pivotAll.filter(r=>r.partyName.toLowerCase().includes(pivotQ)).length:pivotAll.length;
+
+  // Receivable Ageing / Payable Ageing kind switch — now the FIRST row, above the
+  // All Data/Ageing Wise mode tabs, per explicit user instruction ("isme receivable
+  // and payable summary tab pehle kar do, all data and ageing wise baad me...there
+  // are two selection ye user ko clear rahe" — the two-level selection needs to be
+  // unambiguous: pick the report kind first, THEN pick the view mode for it).
+  const kindTabs=`<div class="view-toggle ageing-kind-tabs">
+      <button class="${isRecv?'active':''}" data-action="nav" data-page="ageingRecv" title="Receivable Ageing Summary">Receivable Ageing Summary</button>
+      <button class="${!isRecv?'active':''}" data-action="nav" data-page="ageingPay" title="Payable Ageing Summary">Payable Ageing Summary</button>
+    </div>`;
+  // "All Data"/"Ageing Wise" tabs — now the SECOND row, below the kind switch above.
+  // Shrunk to a smaller, denser pill (see .ageing-mode-tabs in CSS.html) so they
+  // read as a compact professional control.
+  const modeTabs=`<div class="view-toggle ageing-mode-tabs">
+      <button class="${mode==='all'?'active':''}" data-action="ageing-mode" data-mode="all">All Data</button>
+      <button class="${mode==='ageing'?'active':''}" data-action="ageing-mode" data-mode="ageing">Ageing Wise</button>
+    </div>`;
+  // Party-name search only makes sense while the pivot table is on screen: for
+  // Receivables that's the "Ageing Wise" tab only (since "All Data" now shows the
+  // flat grid, which has its own per-column search built in); for Payables the
+  // pivot is shown in BOTH tabs, so its search stays visible either way.
+  const pivotVisible=mode==='ageing';
+  // Reset Filters — the Ageing Party Pivot doesn't use the generic renderGrid()
+  // toolbar (it's a bespoke table), so its own party-name search filter needs its
+  // own explicit reset control here, per explicit user instruction ("JHA JHA FILTER
+  // HAI ADD RESET FILTER PLS" — every filter in the app, not just generic grids).
+  const pivotFilterActive=!!(pivotSt.filters.partyName||'').trim();
+  const searchBox=pivotVisible?`<div class="apv-searchbar">
+      <input type="text" placeholder="Search party name…" data-action="filter" data-table="${tableKey}" data-col="partyName" value="${esc(pivotSt.filters.partyName||'')}">
+      <span class="apv-count">${pivotCount} parties</span>
+      <button class="btn btn-ghost" data-action="reset-grid-filters" data-table="${tableKey}" ${pivotFilterActive?'':'disabled'} title="Clear the party name search" style="padding:5px 10px;font-size:11px;">↺ Reset Filters</button>
+    </div>`:'';
+  const dashGridKey=isRecv?'receivablesDashboard':'payablesDashboard';
+  // The embedded receivablesDashboard/payablesDashboard grid IS the generic engine
+  // (renderGrid) but is set noToolbar:true (its Refresh/Columns are folded in here
+  // instead) — so its own Reset Filters button needs to be added to this same
+  // control row too, using the exact same reset-grid-filters action/handler in
+  // Common.html that every other grid's toolbar button already uses.
+  const dashGridSt=tableState(dashGridKey);
+  const dashboardControls=(mode==='all')?`<div class="ageing-dash-controls"><button class="btn btn-ghost" data-action="reset-grid-filters" data-table="${dashGridKey}" ${hasAnyActiveColumnFilter_(dashGridSt)?'':'disabled'} title="Clear every column filter on this table">↺ Reset Filters</button>${renderRefreshBtnHtml_()}${renderColMenuBtnHtml_(dashGridKey)}</div>`:'';
+  // All controls on ONE single row: Kind tabs (Receivable/Payable) → Mode tabs
+  // (All Data/Ageing Wise) → Search → Dashboard controls — saves a full row of
+  // vertical space so more data rows are visible, per explicit user instruction.
+  const pageTabsBar=`<div class="ageing-single-bar">
+    ${kindTabs}${modeTabs}${searchBox}${dashboardControls}
+  </div>`;
+
+  if(mode==='ageing'){
+    // NOTE: an "Ageing Snapshot" (0-30/31-60/61-90/90+ Days) buckets panel was
+    // briefly added HERE (on the individual Receivables/Payables Ageing Wise page)
+    // in an earlier change, but per explicit user feedback with a screenshot it was
+    // removed again — this exact page already shows the same bucket totals as
+    // sortable/heatmapped COLUMNS across the top of the party pivot table right
+    // below (see renderAgeingPivot()'s own totals row), so a separate snapshot
+    // panel here was redundant. The combined (Receivables+Payables) version of this
+    // same snapshot correctly lives ONLY on the main "Ageing Summary" landing page
+    // — Receivables/Payables now each get their OWN separate snapshot instead, on
+    // the main "Ageing Summary" landing page — see ageingSummaryPanel_() above.
+    return `${pageTabsBar}
+      <div class="dash-grid ageing-page-cards ageing-summary-cards">
+        ${ageingKpiCard_(isRecv?'Paisa Aana Tha, Aaya Nahi':'Payment Karna Tha, Hua Nahi',fmtINR(sumBy(overdue,amtKey)),`${overdue.length} overdue bills`,'clock','c-red')}
+        ${ageingKpiCard_(isRecv?'Paisa Abhi Aana Hai':'Payment Abhi Karna Hai',fmtINR(sumBy(notYetDue,amtKey)),`${notYetDue.length} not-yet-due bills`,isRecv?'in':'out','c-green')}
+        ${ageingKpiCard_('Total Amount',fmtINR(sumBy(rows,amtKey)),`${rows.length} total bills`,'ageing','c-blue')}
+      </div>
+      ${renderAgeingPivot(kind)}`;
+  }
+
+  // "All Data" — BOTH Receivables and Payables now show: 4 KPI summary cards on top
+  // + the full flat searchable/filterable/sortable grid below (receivablesDashboard
+  // or payablesDashboard). Previously Payables "All Data" incorrectly fell through
+  // to the ageing pivot — now both views are consistent, per explicit user
+  // instruction ("All Data click hai but ageing aa rahi hai — fix it").
+  return `${pageTabsBar}
+    <div class="dash-grid ageing-page-cards ageing-alldata-cards">
+      ${ageingKpiCard_('Total Outstanding',fmtINR(sumBy(rows,amtKey)),`${rows.length} open bills`,isRecv?'in':'out',isRecv?'c-blue':'c-orange')}
+      ${ageingKpiCard_('Overdue Bills',overdue.length,`${fmtINR(sumBy(overdue,amtKey))} was due but not ${isRecv?'received':'paid'}`,'clock','c-red')}
+      ${ageingKpiCard_('Not Yet Due',notYetDue.length,`${fmtINR(sumBy(notYetDue,amtKey))} still ${isRecv?'to come':'to pay'}`,isRecv?'in':'out','c-green')}
+      ${ageingKpiCard_('Avg Overdue Days',overdue.length?Math.round(sumBy(overdue,'overdueDays')/overdue.length):0,'','ageing','c-orange')}
+    </div>
+    <section class="recv-dashboard-table">
+      ${renderGrid(dashGridKey)}
+    </section>`;
+}
+registerPage('ageingRecv',()=>renderAgeing('recv'));registerPage('ageingPay',()=>renderAgeing('pay'));
+
+// No redundant in-page heading here — the topbar already shows the page name
+// (e.g. "Customer List") via PAGE_TITLES, so repeating it above the table just
+// pushed the table down for no reason. renderGrid() is returned directly.
+function renderPartyList(kind){const key=kind==='recv'?'customerList':'vendorList';return renderGrid(key);}
+registerPage('customerList',()=>renderPartyList('recv'));registerPage('vendorList',()=>renderPartyList('pay'));
+
+/* ============================= RECEIVABLES REPORT SWITCHER =============================
+ * Lets the user jump between the 5 Receivables reports (Customer List, Receipt List,
+ * Collection Analysis, Follow Up List, Credit Notes) via buttons that sit ABOVE each
+ * report's own table/cards, instead of going back to the sidebar every time — per
+ * explicit user instruction ("suppose i click of customer list, the table will open
+ * for customer list, while customer list is highlighted on button above").
+ * For the 4 grid-based reports this is woven directly into renderGrid()'s own
+ * toolbar row via GRID_DEFS[key].reportTabs (see renderGrid() in Common.html): the
+ * tab buttons come FIRST (left), Refresh + Columns move to the right corner after
+ * them, and the "N of N rows" count is dropped entirely — all per explicit user
+ * instruction. Collection Analysis isn't a grid (it's a KPI-card page), so the same
+ * tab row is rendered directly above its cards here instead.
+ */
+const RECEIVABLES_REPORT_TABS=[
+  {key:'customerList',label:'Customer List',icon:'customer'},
+  {key:'receipt',label:'Receipt List',icon:'arrow-down'},
+  {key:'collectionAnalysis',label:'Collection Analysis',icon:'collection'},
+  {key:'followUpList',label:'Follow Up List',icon:'followup'},
+  {key:'creditNotes',label:'Credit Notes',icon:'creditnote'},
+];
+function renderReceivablesReportTabs_(){
+  return `<div class="report-switcher-tabs">${RECEIVABLES_REPORT_TABS.map(t=>
+    `<button class="report-switcher-tab${S.page===t.key?' active':''}" data-action="nav" data-page="${t.key}">
+      <span class="rst-ic">${NAV_ICONS[t.icon]||''}</span>${esc(t.label)}
+    </button>`
+  ).join('')}</div>`;
+}
+
+function renderCollectionAnalysis(){
+  const sales=sumBy(voucherSales_(),'debit'),collections=sumBy(dataForFY('receipt'),'debitLedgerAmount'),recv=outstandingReceivable();
+  const dso=sales?recv/sales*selectedFYDayCount():0,eff=sales?Math.min(100,collections/sales*100):0;
+  return `${renderReceivablesReportTabs_()}
+    <div class="dash-grid"><div class="card"><div class="card-label">DSO</div><div class="card-value">${dso.toFixed(1)} days</div></div><div class="card"><div class="card-label">Collection Efficiency</div><div class="card-value">${eff.toFixed(1)}%</div></div><div class="card"><div class="card-label">Collected</div><div class="card-value">${fmtINR(collections)}</div></div><div class="card"><div class="card-label">Sales</div><div class="card-value">${fmtINR(sales)}</div></div></div>`;
+}
+registerPage('collectionAnalysis',renderCollectionAnalysis);
+// Follow Up List page itself, plus its "Mark/Edit Follow Up" popup rendered
+// on top of it (see S.followUpPopup) — a small modal with Date + Remarks inputs.
+// Saving writes onto S.followUpData keyed by customer name (followUpDataKey_() in
+// Grids.html), so every row sharing that company updates together, and that
+// company's rows all get highlighted via GRID_DEFS.followUpList.highlightKey —
+// all per explicit user instruction.
+// Previous follow-up history list shown INSIDE the Mark/Edit Follow Up popup, so
+// every earlier remark for this party is visible right there while adding a new
+// one — per explicit user instruction ("SAVE ALL PREVIOUS FOLLOW UP REMARKS ALSO
+// AND CAN SEE ALSO WHILE FOLLOW UP"). Newest first (see rebuildFollowUpData_() in
+// Common.html); the entry that would be edited by "Edit Follow Up" (index 0) is
+// visually marked "Latest" so it's clear which one the form above is prefilled from.
+function renderFollowUpHistoryList_(party){
+  const history=S.followUpHistory[followUpDataKey_(party)]||[];
+  if(!history.length)return `<div class="followup-history-empty">No previous follow-ups for this party yet.</div>`;
+  return `<div class="followup-history-list">${history.map((h,i)=>`
+    <div class="followup-history-item">
+      <div class="followup-history-top">
+        <span class="followup-history-date">${h.date?esc(fmtDDMMMYYYY(fromISO(h.date))):'—'}</span>
+        ${i===0?'<span class="followup-history-latest">Latest</span>':''}
+        ${h.timestamp?`<span class="followup-history-ts">${esc(h.timestamp)}</span>`:''}
+      </div>
+      ${h.remarks?`<div class="followup-history-remarks">${esc(h.remarks)}</div>`:''}
+      ${(h.promisedAmount!=null&&h.promisedAmount!=='')?`<div class="followup-history-promised">Promised: ${fmtINR(h.promisedAmount)}</div>`:''}
+    </div>`).join('')}</div>`;
+}
+function renderFollowUpPopup_(){
+  const p=S.followUpPopup;if(!p||!p.open)return '';
+  return `<div class="modal-overlay">
+    <div class="modal-card followup-modal">
+      <div class="modal-head">
+        <h3>Mark Follow Up — ${esc(p.party)}</h3>
+        <span class="modal-x" data-action="followup-close">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Follow-up Date</label><input type="date" id="followupDateInput" value="${esc(p.date||'')}"></div>
+        <div class="field"><label>Remarks</label><textarea id="followupRemarksInput" rows="3" placeholder="e.g. Customer said payment by Friday…">${esc(p.remarks||'')}</textarea></div>
+        <div class="field"><label>Promised Amount (optional)</label><input type="number" id="followupPromisedInput" placeholder="e.g. 15000" value="${p.promisedAmount!=null?esc(String(p.promisedAmount)):''}"></div>
+        <div class="followup-history-section">
+          <label>Previous Follow-ups</label>
+          ${renderFollowUpHistoryList_(p.party)}
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-action="followup-close">Cancel</button>
+        <button class="btn btn-primary" data-action="followup-save">Save</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderFollowUpList(){return renderGrid('followUpList')+renderFollowUpPopup_();}registerPage('followUpList',renderFollowUpList);
+function renderCreditNotes(){return renderGrid('creditNotes');}registerPage('creditNotes',renderCreditNotes);
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){
+    const a=el.getAttribute('data-action');
+    if(a==='followup-open'){
+      const party=el.getAttribute('data-party'),rowKey=el.getAttribute('data-rowkey');
+      const existing=S.followUpData[followUpDataKey_(party)];
+      S.followUpPopup={open:true,party,rowKey,date:(existing&&existing.date)||toISO(new Date()),remarks:'',promisedAmount:null};
+      render();return;
+    }
+    if(a==='followup-close'){S.followUpPopup=null;render();return;}
+    if(a==='followup-save'){
+      const p=S.followUpPopup;if(!p){render();return;}
+      const dateVal=document.getElementById('followupDateInput')?document.getElementById('followupDateInput').value:p.date;
+      const remarksVal=document.getElementById('followupRemarksInput')?document.getElementById('followupRemarksInput').value:p.remarks;
+      const promisedRaw=document.getElementById('followupPromisedInput')?document.getElementById('followupPromisedInput').value:'';
+      const promisedVal=promisedRaw!==''&&promisedRaw!=null?Number(promisedRaw):null;
+      const key=followUpDataKey_(p.party);
+      const now=new Date();
+      const timestamp=now.toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      // Add this save to the front of the local history immediately (optimistic
+      // update) so the popup/grid reflect it without waiting for the server
+      // round-trip — rebuildFollowUpData_() also runs again once the next sync
+      // reloads the authoritative FOLLOWUP_LOG sheet data, per explicit user
+      // instruction ("SAVE ALL PREVIOUS FOLLOW UP REMARKS ALSO AND CAN SEE ALSO
+      // WHILE FOLLOW UP") — nothing is ever overwritten, every save is additive.
+      const newEntry={party:p.party,date:dateVal,remarks:remarksVal,promisedAmount:promisedVal,timestamp};
+      S.followUpHistoryRaw=(S.followUpHistoryRaw||[]).concat([newEntry]);
+      rebuildFollowUpData_();
+      // Highlight every row for this company
+      tableState('followUpList').highlightedRowKey=key;
+      S.followUpPopup=null;render();
+      // Persist to Google Sheet: appends a new row to FOLLOWUP_LOG (history, never
+      // overwritten) AND writes the latest values onto every matching SALES row
+      // (at-a-glance visibility directly in the spreadsheet). Fire-and-forget:
+      // don't block the UI waiting for the server write.
+      runServer('saveFollowUp',{party:p.party,date:dateVal,remarks:remarksVal,promisedAmount:promisedVal,timestamp}).catch(err=>{
+        showToast('Follow-up save error: '+err.message,true);
+      });
+      return;
+    }
+    if(a==='ageing-mode'){S.ageingMode=el.getAttribute('data-mode');tableState(S.page).page=1;render();return;}
+    // Ageing Summary landing page's per-card "All Data"/"Ageing Wise" buttons — per
+    // explicit user request. Navigates into the existing ageingRecv/ageingPay page
+    // (same navigateTo() every other nav click uses) AND pre-selects which mode tab
+    // is active on arrival, so clicking "Ageing Wise" here doesn't land you on
+    // whatever mode was last left active (which defaults to 'all').
+    if(a==='nav-ageing'){
+      S.ageingMode=el.getAttribute('data-mode')||'all';
+      navigateTo(el.getAttribute('data-page'));
+      return;
+    }
+  }
+  // Click on the dark overlay itself (not the card) closes the popup — same pattern
+  // as clicking away from any other dropdown/menu in this app.
+  if(S.followUpPopup&&S.followUpPopup.open&&e.target.classList&&e.target.classList.contains('modal-overlay')){S.followUpPopup=null;render();}
+});
+</script>
