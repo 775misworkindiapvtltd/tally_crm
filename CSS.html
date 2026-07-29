@@ -1370,6 +1370,38 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
 .ledger-print-co-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;font-size:10.5px;color:var(--ink-secondary);}
 .ledger-print-co-meta span b{font-weight:700;}
 
+/* ---------- SALES DASHBOARD — EXECUTIVE PULSE ---------- */
+/* A management-first opening block: YoY direction and comparable-period metrics are
+   visible before the raw KPIs, while the SALES source badge makes provenance clear. */
+.sd-pulse{position:relative;overflow:hidden;margin-bottom:14px;padding:16px 18px;border:1px solid var(--line);border-color:color-mix(in srgb,var(--accent) 24%,var(--line));border-radius:14px;background:var(--surface);background:linear-gradient(135deg,color-mix(in srgb,var(--accent-tint) 52%,var(--surface)) 0%,var(--surface) 58%,color-mix(in srgb,var(--accent-tint2) 55%,var(--surface)) 100%);box-shadow:0 8px 24px rgba(20,35,70,.05);}
+.sd-pulse::after{content:'';position:absolute;width:220px;height:220px;right:-90px;top:-130px;border-radius:50%;background:color-mix(in srgb,var(--accent) 10%,transparent);pointer-events:none;}
+.sd-pulse-head{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px;}
+.sd-pulse-eyebrow{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.11em;color:var(--accent-dark);margin-bottom:4px;}
+.sd-pulse-head h3{font-family:'Space Grotesk',sans-serif;font-size:18px;line-height:1.2;color:var(--ink);margin:0;}
+.sd-pulse-head p{max-width:850px;margin:5px 0 0;font-size:11px;line-height:1.55;color:var(--ink-secondary);}
+.sd-source-badge{display:flex;align-items:center;gap:7px;flex:none;padding:6px 9px;border:1px solid var(--line);border-radius:20px;background:color-mix(in srgb,var(--surface) 88%,transparent);font-size:9.5px;font-weight:700;color:var(--ink-secondary);white-space:nowrap;}
+.sd-source-badge span{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 14%,transparent);}
+.sd-pulse-grid{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+.sd-pulse-metric{min-width:0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--line) 82%,transparent);border-radius:10px;background:color-mix(in srgb,var(--surface) 90%,transparent);}
+.sd-pulse-metric-label{font-size:8.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.sd-pulse-metric-value{display:flex;align-items:center;gap:4px;margin-top:4px;font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:800;line-height:1.1;}
+.sd-pulse-metric-value span{font-size:13px;}.sd-pulse-metric-value.positive{color:var(--success);}.sd-pulse-metric-value.negative{color:var(--danger);}.sd-pulse-metric-value.neutral{color:var(--muted);}
+.sd-pulse-metric-current{margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sd-pulse-metric-sub{margin-top:2px;font-size:8.8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* Action-oriented interpretation of the numbers. Tone is deliberately subtle so
+   warnings are obvious without making a finance dashboard look alarmist. */
+.sd-insights-panel{margin-bottom:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;}
+.sd-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line-light);}
+.sd-section-heading>div{display:flex;align-items:baseline;gap:8px;min-width:0;}.sd-section-heading span{font-size:12.5px;font-weight:800;color:var(--ink);}.sd-section-heading small{font-size:9.5px;color:var(--muted);}.sd-section-heading b{font-size:9px;color:var(--accent-dark);white-space:nowrap;}
+.sd-insight-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
+.sd-insight{display:flex;gap:10px;min-width:0;padding:13px 14px;border-right:1px solid var(--line-light);border-top:3px solid transparent;}
+.sd-insight:last-child{border-right:0;}.sd-insight.good{border-top-color:var(--success);}.sd-insight.watch{border-top-color:var(--orange);}.sd-insight.risk{border-top-color:var(--danger);}.sd-insight.neutral{border-top-color:var(--muted);}
+.sd-insight-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex:none;border-radius:8px;background:var(--accent-tint);color:var(--accent-dark);}.sd-insight-icon svg{width:14px;height:14px;}
+.sd-insight-copy{min-width:0;}.sd-insight-title{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.045em;}.sd-insight-value{margin-top:3px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.sd-insight-text{margin-top:3px;font-size:9.5px;line-height:1.45;color:var(--ink-secondary);}
+@media (max-width:1200px){.sd-pulse-grid,.sd-insight-grid{grid-template-columns:repeat(2,1fr);}.sd-insight:nth-child(2){border-right:0;}.sd-insight:nth-child(-n+2){border-bottom:1px solid var(--line-light);}}
+@media (max-width:700px){.sd-pulse{padding:14px}.sd-pulse-head{flex-direction:column}.sd-pulse-grid,.sd-insight-grid{grid-template-columns:1fr}.sd-insight{border-right:0;border-bottom:1px solid var(--line-light)}.sd-insight:last-child{border-bottom:0}.sd-section-heading small{display:none}}
+
 /* ---------- SALES DASHBOARD — SPOTLIGHT + HEALTH PANELS ---------- */
 /* "Spotlight" cards headline a NAME (Highest Paying Client / Most Selling Product /
    Best Month / Top State) rather than a number, with the amount and a share bar

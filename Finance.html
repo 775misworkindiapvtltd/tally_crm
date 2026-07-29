@@ -30,25 +30,100 @@ const SALES_DASH_PRODUCT_META={
   description:{label:'Product / Service',plural:'Products'},
   category:{label:'Category',plural:'Categories'}
 };
+const SALES_DASH_UNSPECIFIED_CLIENT='Unspecified Client';
 function salesDashProductDim_(){
   const d=S.salesDashProductDim;
   return SALES_DASH_PRODUCT_META[d]?d:'description';
+}
+
+// The Sales Report intentionally excludes rows with no Invoice No because it groups
+// every visible result by invoice. Keep the dashboard on that exact same population
+// so its total, client, product and trend numbers reconcile with the report instead
+// of silently including orphan lines the report cannot display. The excluded rows
+// are counted separately in renderSalesDashboard() and surfaced as a data-quality
+// warning rather than being silently lost.
+function salesDashboardReportLines_(rows){
+  const source=Array.isArray(rows)?rows:dataForFY('sales');
+  return source.filter(r=>String(r.invoiceNo||'').trim());
+}
+
+// Small, dependency-free period summary used for the YoY management pulse. Invoice
+// identity mirrors buildSalesReport(): Invoice No + client, preventing accidental
+// collapse if two parties ever reuse the same invoice number.
+function salesDashPeriodStats_(rows){
+  const invoiceSet=new Set(),clientSet=new Set();
+  let sales=0;
+  (rows||[]).forEach(r=>{
+    sales+=Number(r.amount)||0;
+    const inv=String(r.invoiceNo||'').trim().toLowerCase();
+    const client=String(r.invoiceTo||'').trim().toLowerCase();
+    if(inv)invoiceSet.add(inv+'|'+client);
+    if(client)clientSet.add(client);
+  });
+  return {sales,invoices:invoiceSet.size,clients:clientSet.size,avgInvoice:invoiceSet.size?sales/invoiceSet.size:0};
+}
+
+// Year-on-year comparison for the latest selected FY (or latest SALES FY when the
+// page is showing All Financial Years). This keeps the dashboard total scoped to the
+// user's full selection while giving management a clean apples-to-apples momentum
+// signal against the immediately preceding FY.
+function salesDashYoYComparison_(){
+  const allRows=salesDashboardReportLines_(S.salesRows||[]);
+  const salesFYs=Array.from(new Set(allRows.map(r=>financialYearKey(r.date)).filter(Boolean))).sort().reverse();
+  const selected=selectedFinancialYears().slice().sort();
+  const selectedWithSales=selected.filter(key=>salesFYs.indexOf(key)!==-1);
+  const currentKey=selectedWithSales.length?selectedWithSales[selectedWithSales.length-1]:(selected.length?selected[selected.length-1]:(salesFYs[0]||null));
+  if(!currentKey)return null;
+  const start=parseInt(currentKey.split('-')[0],10);
+  const previousKey=(start-1)+'-'+String(start).slice(-2);
+  const today=new Date();
+  const activeFYKey=financialYearKey(today);
+  const isPartial=currentKey===activeFYKey;
+  let currentRows=allRows.filter(r=>financialYearKey(r.date)===currentKey);
+  let previousRows=allRows.filter(r=>financialYearKey(r.date)===previousKey);
+  let currentThrough=null,previousThrough=null;
+  if(isPartial){
+    const currentCutoff=new Date(today.getFullYear(),today.getMonth(),today.getDate(),23,59,59,999);
+    const currentStart=new Date(start,3,1);
+    const previousStart=new Date(start-1,3,1);
+    // Compare equal elapsed FY days, not just the same calendar date. The latter is
+    // off by one around leap years (e.g. an active FY that has crossed 29 February).
+    const elapsedDays=Math.floor((Date.UTC(currentCutoff.getFullYear(),currentCutoff.getMonth(),currentCutoff.getDate())-Date.UTC(currentStart.getFullYear(),currentStart.getMonth(),currentStart.getDate()))/86400000);
+    const previousCutoff=new Date(previousStart);
+    previousCutoff.setDate(previousStart.getDate()+elapsedDays);
+    previousCutoff.setHours(23,59,59,999);
+    currentRows=currentRows.filter(r=>{const t=parseDT(r.date);return t!==null&&t<=currentCutoff.getTime();});
+    previousRows=previousRows.filter(r=>{const t=parseDT(r.date);return t!==null&&t<=previousCutoff.getTime();});
+    currentThrough=toISO(currentCutoff);previousThrough=toISO(previousCutoff);
+  }
+  const current=salesDashPeriodStats_(currentRows);
+  const previous=salesDashPeriodStats_(previousRows);
+  const delta=(value,base)=>base?((value-base)/Math.abs(base))*100:null;
+  return {
+    currentKey,previousKey,current,previous,isPartial,currentThrough,previousThrough,hasPrevious:previous.invoices>0,
+    salesGrowth:delta(current.sales,previous.sales),
+    invoiceGrowth:delta(current.invoices,previous.invoices),
+    clientGrowth:delta(current.clients,previous.clients),
+    avgInvoiceGrowth:delta(current.avgInvoice,previous.avgInvoice)
+  };
 }
 
 // Product (or Category) wise sales summary — one row per distinct product, with
 // invoice/client counts, revenue, share of total and average ticket. Invoices and
 // clients are counted as DISTINCT sets (not raw line counts) because one invoice can
 // carry several lines of the same product, and the same client can buy it repeatedly.
-function buildSalesProductSummary_(dim){
+function buildSalesProductSummary_(dim,sourceRows){
   const map={};
-  dataForFY('sales').forEach(r=>{
+  salesDashboardReportLines_(sourceRows).forEach(r=>{
     const name=String((dim==='category'?r.category:r.description)||'').trim()||'Unspecified';
     if(!map[name])map[name]={product:name,amount:0,lines:0,invoiceSet:new Set(),clientSet:new Set()};
     const m=map[name];
     m.amount+=Number(r.amount)||0;
     m.lines++;
-    const inv=String(r.invoiceNo||'').trim().toLowerCase();if(inv)m.invoiceSet.add(inv);
-    const cl=String(r.invoiceTo||'').trim().toLowerCase();if(cl)m.clientSet.add(cl);
+    const inv=String(r.invoiceNo||'').trim().toLowerCase();
+    const cl=String(r.invoiceTo||'').trim().toLowerCase();
+    if(inv)m.invoiceSet.add(inv+'|'+cl);
+    if(cl)m.clientSet.add(cl);
   });
   const all=Object.keys(map).map(k=>map[k]);
   const total=all.reduce((s,m)=>s+m.amount,0);
@@ -65,12 +140,13 @@ function buildSalesProductSummary_(dim){
 // Top Clients table. lastSale is stored as a real ISO date STRING (not a display
 // string) so the grid's shared calendar date-range filter/sort can read it directly,
 // the same way followUpList's planDate had to be materialized (see Grids.html).
-function buildSalesTopClients_(){
+function buildSalesTopClients_(sourceRows){
   const map={};
-  dataForFY('sales').forEach(r=>{
-    const name=String(r.invoiceTo||'').trim();if(!name)return;
+  salesDashboardReportLines_(sourceRows).forEach(r=>{
+    const rawName=String(r.invoiceTo||'').trim();
+    const name=rawName||SALES_DASH_UNSPECIFIED_CLIENT;
     const key=name.toLowerCase();
-    if(!map[key])map[key]={client:name,state:'',amount:0,lines:0,invoiceSet:new Set(),productSet:new Set(),lastTs:null};
+    if(!map[key])map[key]={client:name,isUnspecified:!rawName,state:'',amount:0,lines:0,invoiceSet:new Set(),productSet:new Set(),lastTs:null};
     const m=map[key];
     m.amount+=Number(r.amount)||0;
     m.lines++;
@@ -83,7 +159,7 @@ function buildSalesTopClients_(){
   const total=all.reduce((s,m)=>s+m.amount,0);
   return all.map(m=>{
     const invCount=m.invoiceSet.size||m.lines;
-    return {client:m.client,state:m.state||'',invoices:invCount,products:m.productSet.size,
+    return {client:m.client,isUnspecified:m.isUnspecified,state:m.state||'',invoices:invCount,products:m.productSet.size,
       amount:Math.round(m.amount*100)/100,
       avgInvoice:invCount?Math.round(m.amount/invCount*100)/100:0,
       sharePct:total?Math.round(m.amount/total*1000)/10:0,
@@ -96,10 +172,10 @@ function buildSalesTopClients_(){
 // a client billed in the selected FY(s) who ALSO bought outside them is "repeat";
 // one whose whole history sits inside the selection is "new". With no FY filter
 // applied, "repeat" instead means they bought across more than one financial year.
-function salesDashNewRepeat_(){
+function salesDashNewRepeat_(periodRows){
   const selected=new Set(selectedFinancialYears());
   const history={};
-  (S.salesRows||[]).forEach(r=>{
+  salesDashboardReportLines_(S.salesRows||[]).forEach(r=>{
     const name=String(r.invoiceTo||'').trim();if(!name)return;
     const fy=financialYearKey(r.date);if(!fy)return;
     const k=name.toLowerCase();
@@ -107,7 +183,7 @@ function salesDashNewRepeat_(){
     history[k].add(fy);
   });
   const inPeriod=new Set();
-  dataForFY('sales').forEach(r=>{const n=String(r.invoiceTo||'').trim();if(n)inPeriod.add(n.toLowerCase());});
+  salesDashboardReportLines_(periodRows).forEach(r=>{const n=String(r.invoiceTo||'').trim();if(n)inPeriod.add(n.toLowerCase());});
   let fresh=0,repeat=0;
   inPeriod.forEach(k=>{
     const fys=history[k]||new Set();
@@ -143,16 +219,22 @@ GRID_DEFS.salesProductSummary={cols:SALES_PRODUCT_SUMMARY_COLS,data:()=>S._sales
 GRID_DEFS.salesTopClients={cols:SALES_TOP_CLIENTS_COLS,data:()=>S._salesTopClientRows||[],showSortArrows:true};
 
 function renderSalesDashboard(){
-  const rawLines=dataForFY('sales');
+  const allPeriodLines=dataForFY('sales');
+  const rawLines=salesDashboardReportLines_(allPeriodLines);
+  const excludedLines=allPeriodLines.length-rawLines.length;
   const invoices=buildSalesReport();
   const fyLabel=selectedFYLabel();
   const dim=salesDashProductDim_();
   const dimMeta=SALES_DASH_PRODUCT_META[dim];
 
-  const totalSales=sumBy(rawLines,'amount');
-  const clientRows=buildSalesTopClients_();
-  const productRows=buildSalesProductSummary_(dim);
-  const topClient=clientRows[0]||null;
+  // Use the invoice roll-up total as the dashboard's authoritative topline. Since
+  // rawLines above applies the same Invoice No rule as buildSalesReport(), product,
+  // client, state and chart totals now reconcile with this number line-for-line.
+  const totalSales=invoices.reduce((sum,row)=>sum+(Number(row.amount)||0),0);
+  const clientRows=buildSalesTopClients_(rawLines);
+  const knownClientRows=clientRows.filter(row=>!row.isUnspecified);
+  const productRows=buildSalesProductSummary_(dim,rawLines);
+  const topClient=knownClientRows[0]||null;
   const topProduct=productRows[0]||null;
   const byState=topN(rawLines,'state','amount',6).filter(s=>s.label&&s.label!=='Unknown');
   const maxState=Math.max(1,...byState.map(x=>x.value));
@@ -160,6 +242,8 @@ function renderSalesDashboard(){
 
   // Month-wise series (also feeds the trend chart via CHART_DEFS below).
   const monthly=selectedFYMonths().map(m=>({label:m.label,value:sumBy(rowsInCustomRange(rawLines,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount')}));
+  const undatedLines=rawLines.filter(r=>parseDT(r.date)===null);
+  const undatedSales=sumBy(undatedLines,'amount');
   const activeMonths=monthly.filter(m=>m.value>0);
   const bestMonth=activeMonths.slice().sort((a,b)=>b.value-a.value)[0]||null;
   const avgPerMonth=activeMonths.length?totalSales/activeMonths.length:0;
@@ -168,13 +252,16 @@ function renderSalesDashboard(){
   // No (already computed per invoice by buildSalesReport()). Invoices with no matching
   // receivable row count as fully realised.
   const unpaid=invoices.reduce((s,inv)=>s+(Number(inv.recvPendingAmount)||0),0);
-  const realisedPct=totalSales?((totalSales-unpaid)/totalSales*100):0;
+  const overdueInvoices=invoices.filter(inv=>Number(inv.recvOverdueDays)>0&&Number(inv.recvPendingAmount)>0);
+  const overdueOutstanding=overdueInvoices.reduce((s,inv)=>s+(Number(inv.recvPendingAmount)||0),0);
+  const realisedPct=totalSales?Math.max(0,Math.min(100,(totalSales-unpaid)/totalSales*100)):0;
   const gstAmt=sumBy(rawLines.filter(r=>String(r.gstNo||'').trim()),'amount');
   const gstPct=totalSales?(gstAmt/totalSales*100):0;
-  const top5Amt=clientRows.slice(0,5).reduce((s,c)=>s+c.amount,0);
+  const top5Amt=knownClientRows.slice(0,5).reduce((s,c)=>s+c.amount,0);
   const top5Pct=totalSales?(top5Amt/totalSales*100):0;
-  const nr=salesDashNewRepeat_();
+  const nr=salesDashNewRepeat_(rawLines);
   const repeatPct=nr.total?(nr.repeat/nr.total*100):0;
+  const yoy=salesDashYoYComparison_();
 
   S._salesProductRows=productRows;
   S._salesTopClientRows=clientRows;
@@ -183,8 +270,8 @@ function renderSalesDashboard(){
   if(!rawLines.length){
     return `${renderFilterBar()}
       <div class="panel"><div class="panel-body"><div class="empty-state">
-        <div class="big">No sales data for ${esc(fyLabel)}</div>
-        Financial Year filter badal ke dekho — ya "Sync with Tally" dabao.
+        <div class="big">No invoice-numbered sales data for ${esc(fyLabel)}</div>
+        ${excludedLines?`${excludedLines} SALES line${excludedLines===1?' has':'s have'} a blank Invoice No. Add invoice numbers in the SALES sheet so those rows can appear in Sales Report and this dashboard.`:'Financial Year filter badal ke dekho — ya "Sync with Tally" dabao.'}
       </div></div></div>`;
   }
 
@@ -207,15 +294,63 @@ function renderSalesDashboard(){
       <div class="sd-health-track"><div class="sd-health-fill ${tone}" style="width:${Math.max(1,Math.min(100,pct)).toFixed(1)}%;"></div></div>
       <div class="sd-health-note">${esc(note)}</div>
     </div>`;
+  const deltaMeta=value=>{
+    if(value===null||value===undefined||!isFinite(value))return{value:'—',tone:'neutral',arrow:'',word:'No baseline'};
+    const rounded=Math.abs(value).toFixed(1)+'%';
+    if(value>0.05)return{value:'+'+rounded,tone:'positive',arrow:'↑',word:'Growth'};
+    if(value<-.05)return{value:'−'+rounded,tone:'negative',arrow:'↓',word:'Decline'};
+    return{value:'0.0%',tone:'neutral',arrow:'→',word:'Flat'};
+  };
+  const pulseMetric=(label,delta,currentValue,sub)=>{
+    const d=deltaMeta(delta);
+    return `<div class="sd-pulse-metric">
+      <div class="sd-pulse-metric-label">${esc(label)}</div>
+      <div class="sd-pulse-metric-value ${d.tone}"><span>${d.arrow}</span>${esc(d.value)}</div>
+      <div class="sd-pulse-metric-current">${currentValue}</div>
+      <div class="sd-pulse-metric-sub">${esc(sub)}</div>
+    </div>`;
+  };
+  const insight=(tone,icon,title,value,text)=>`<div class="sd-insight ${tone}">
+      <div class="sd-insight-icon">${NAV_ICONS[icon]||''}</div>
+      <div class="sd-insight-copy"><div class="sd-insight-title">${esc(title)}</div><div class="sd-insight-value">${esc(value)}</div><div class="sd-insight-text">${esc(text)}</div></div>
+    </div>`;
+  const hasSalesComparison=!!(yoy&&yoy.hasPrevious&&yoy.salesGrowth!==null&&isFinite(yoy.salesGrowth));
+  const comparisonWindow=yoy&&yoy.isPartial?`through ${fmtDDMMMYYYY(fromISO(yoy.currentThrough))}`:'full financial year';
+  const previousWindow=yoy&&yoy.isPartial?`through ${fmtDDMMMYYYY(fromISO(yoy.previousThrough))}`:'full financial year';
+  const salesGrowth=hasSalesComparison?deltaMeta(yoy.salesGrowth):null;
+  const pulseSummary=hasSalesComparison
+    ?`${yoy.currentKey} sales ${comparisonWindow} ${yoy.salesGrowth>=0?'grew':'declined'} ${Math.abs(yoy.salesGrowth).toFixed(1)}% versus ${yoy.previousKey} ${previousWindow}. ${yoy.current.clients} active clients generated ${fmtINRCompact(yoy.current.sales)} from ${yoy.current.invoices} invoices.`
+    :`Sales performance for ${fyLabel}. A comparable prior financial-year period is not available yet, so year-on-year movement will appear automatically after matching history is loaded.`;
+  const collectionTone=overdueOutstanding>0?'risk':'good';
+  const concentrationTone=top5Pct>60?'risk':top5Pct>40?'watch':'good';
+  const productDependency=topProduct?topProduct.sharePct:0;
+  const productTone=productDependency>45?'risk':productDependency>25?'watch':'good';
 
   return `
     ${renderFilterBar()}
+
+    <section class="sd-pulse">
+      <div class="sd-pulse-head">
+        <div>
+          <div class="sd-pulse-eyebrow">Executive Sales Pulse</div>
+          <h3>${yoy?esc(yoy.currentKey+' vs '+yoy.previousKey):esc(fyLabel)}</h3>
+          <p>${esc(pulseSummary)}</p>
+        </div>
+        <div class="sd-source-badge"><span></span>Live source: SALES Report</div>
+      </div>
+      <div class="sd-pulse-grid">
+        ${pulseMetric('Revenue Growth',yoy&&yoy.hasPrevious?yoy.salesGrowth:null,yoy?fmtINR(yoy.current.sales):fmtINR(totalSales),yoy&&yoy.hasPrevious?'vs '+yoy.previousKey+' · '+previousWindow:'prior FY unavailable')}
+        ${pulseMetric('Client Growth',yoy&&yoy.hasPrevious?yoy.clientGrowth:null,String(yoy?yoy.current.clients:knownClientRows.length)+' active clients',yoy&&yoy.hasPrevious?'vs '+yoy.previous.clients+' clients · '+previousWindow:'unique billed clients')}
+        ${pulseMetric('Invoice Growth',yoy&&yoy.hasPrevious?yoy.invoiceGrowth:null,String(yoy?yoy.current.invoices:invoices.length)+' invoices',yoy&&yoy.hasPrevious?'vs '+yoy.previous.invoices+' invoices · '+previousWindow:'invoice-wise SALES rows')}
+        ${pulseMetric('Avg Invoice Growth',yoy&&yoy.hasPrevious?yoy.avgInvoiceGrowth:null,fmtINR(yoy?yoy.current.avgInvoice:(invoices.length?totalSales/invoices.length:0)),yoy&&yoy.hasPrevious?'vs '+fmtINRCompact(yoy.previous.avgInvoice)+' · '+previousWindow:'current average ticket')}
+      </div>
+    </section>
 
     <div class="kpi-strip" style="grid-template-columns:repeat(6,1fr);">
       ${kpi('Total Sales',fmtINR(totalSales),esc(fyLabel),'sales','c-green','salesReport')}
       ${kpi('Total Invoices',invoices.length,`${rawLines.length} line items`,'reports','c-blue','salesReport')}
       ${kpi('Avg Invoice Value',fmtINR(invoices.length?totalSales/invoices.length:0),'per invoice','collection','c-purple','salesReport')}
-      ${kpi('Total Clients',clientRows.length,`${nr.fresh} new · ${nr.repeat} repeat`,'customer','c-teal','customerList')}
+      ${kpi('Total Clients',knownClientRows.length,`${nr.fresh} new · ${nr.repeat} repeat${clientRows.length>knownClientRows.length?' · '+(clientRows.length-knownClientRows.length)+' unspecified':''}`,'customer','c-teal','customerList')}
       ${kpi(dimMeta.plural+' Sold',productRows.length,`distinct ${esc(dimMeta.label.toLowerCase())}`,'wallet','c-indigo')}
       ${kpi('Unpaid from Sales',fmtINR(unpaid),`${realisedPct.toFixed(1)}% realised`,'in','c-red','ageingRecv')}
     </div>
@@ -226,6 +361,19 @@ function renderSalesDashboard(){
       ${bestMonth?spot('Best Month',bestMonth.label,`${fmtINR(bestMonth.value)} <span>· avg ${fmtINRCompact(avgPerMonth)}/mo</span>`,totalSales?bestMonth.value/totalSales*100:0,`across ${activeMonths.length} active month${activeMonths.length===1?'':'s'}`,'ageing','c-orange'):''}
       ${topState?spot('Top State',topState.label,`${fmtINR(topState.value)} <span>· ${byState.length} state${byState.length===1?'':'s'}</span>`,totalSales?topState.value/totalSales*100:0,(totalSales?(topState.value/totalSales*100).toFixed(1):'0.0')+'% of total sales','map','c-purple','stateSalesReport'):''}
     </div>
+
+    <section class="sd-insights-panel">
+      <div class="sd-section-heading">
+        <div><span>Management Insights</span><small>What needs attention in the selected sales book</small></div>
+        <b>${esc(fyLabel)}</b>
+      </div>
+      <div class="sd-insight-grid">
+        ${insight(salesGrowth?(salesGrowth.tone==='positive'?'good':salesGrowth.tone==='negative'?'risk':'watch'):'neutral','sales','Revenue Momentum',salesGrowth?salesGrowth.value:'No prior FY',salesGrowth?`${yoy.currentKey} ${comparisonWindow} vs ${yoy.previousKey} ${previousWindow}. ${salesGrowth.word} uses invoice-level SALES data.`:'Load the comparable preceding FY period to unlock year-on-year growth analysis.')}
+        ${insight(collectionTone,'in','Collection Exposure',fmtINRCompact(overdueOutstanding),overdueInvoices.length?`${overdueInvoices.length} overdue invoice${overdueInvoices.length===1?'':'s'} remain open; prioritise these collections.`:'No linked overdue receivable is currently open for these sales invoices.')}
+        ${insight(concentrationTone,'customer','Client Concentration',top5Pct.toFixed(1)+'% in Top 5',top5Pct>60?'Revenue is concentrated; build a wider customer base to reduce dependency.':top5Pct>40?'Monitor dependency on the top five clients while growing mid-tier accounts.':'Revenue is reasonably diversified across the active client base.')}
+        ${insight(productTone,'wallet',dimMeta.label+' Dependency',productDependency.toFixed(1)+'% top share',topProduct?`${topProduct.product} leads with ${fmtINRCompact(topProduct.amount)}. ${productDependency>45?'Diversify the mix to reduce single-product risk.':'The sales mix is not excessively dependent on one item.'}`:'Product/category details are not available in the selected period.')}
+      </div>
+    </section>
 
     <div class="dash-row3" style="grid-template-columns:1.5fr 1fr 1fr;">
       <div class="panel">
@@ -247,7 +395,7 @@ function renderSalesDashboard(){
         <div class="panel-title">Sales Health &amp; Mix</div>
         <div class="panel-body">
           <div class="sd-health">
-            ${health('Top 5 Client Concentration',top5Pct.toFixed(1)+'%',top5Pct,`Top 5 of ${clientRows.length} clients = ${fmtINRCompact(top5Amt)}`,top5Pct>60?'danger':top5Pct>40?'warn':'ok')}
+            ${health('Top 5 Client Concentration',top5Pct.toFixed(1)+'%',top5Pct,`Top 5 of ${knownClientRows.length} named clients = ${fmtINRCompact(top5Amt)}`,top5Pct>60?'danger':top5Pct>40?'warn':'ok')}
             ${health('Repeat Clients',repeatPct.toFixed(1)+'%',repeatPct,`${nr.repeat} repeat · ${nr.fresh} new of ${nr.total}`,repeatPct>50?'ok':'warn')}
             ${health('Revenue Realised',realisedPct.toFixed(1)+'%',realisedPct,`${fmtINRCompact(unpaid)} still unpaid`,realisedPct>80?'ok':realisedPct>60?'warn':'danger')}
             ${health('GST-Registered Sales',gstPct.toFixed(1)+'%',gstPct,`${fmtINRCompact(gstAmt)} billed to GST clients`,'info')}
@@ -280,7 +428,7 @@ function renderSalesDashboard(){
       </div>
     </div>
 
-    <div class="compare-note" style="margin-top:10px;">Every figure on this page is computed from the SALES sheet for ${esc(fyLabel)} — the exact same source the Sales Report page uses, so totals reconcile line-for-line. "Unpaid from Sales" links each invoice to its RECEIVABLES row by Bill Ref No; invoices with no matching receivable row are treated as fully realised. Use the Product/Category toggle if your sheet records the product name in the Category column instead of Description.</div>`;
+    <div class="compare-note" style="margin-top:10px;">Every figure on this page is computed from invoice-numbered SALES rows for ${esc(fyLabel)} — the exact same population used by Sales Report, so totals reconcile line-for-line. "Unpaid from Sales" links each invoice to RECEIVABLES by Bill Ref No + Party Name; ambiguous references are left unlinked rather than assigned to the wrong client. Use the Product/Category toggle if your sheet records product names in Category instead of Description.${excludedLines?` <b>Data quality:</b> ${excludedLines} SALES line${excludedLines===1?' was':'s were'} excluded because Invoice No is blank; add invoice numbers to include them in both Sales Report and this dashboard.`:''}${undatedLines.length?` <b>Date quality:</b> ${undatedLines.length} invoice-numbered line${undatedLines.length===1?' has':'s have'} a blank/invalid Date (${fmtINRCompact(undatedSales)}); this revenue appears in the chart's "Undated" bucket.`:''}</div>`;
 }
 registerPage('salesDashboard',renderSalesDashboard);
 
@@ -697,9 +845,12 @@ CHART_DEFS['salesDashboard']=function(){
   // Sales Report page and as the KPIs in renderSalesDashboard() above, so the chart
   // and the numbers around it always agree.
   const months=selectedFYMonths();
-  const rawLines=dataForFY('sales');
+  const rawLines=salesDashboardReportLines_(dataForFY('sales'));
   const salesSeries=months.map(m=>sumBy(rowsInCustomRange(rawLines,'date',toISO(new Date(m.y,m.m,1)),toISO(new Date(m.y,m.m+1,0))),'amount'));
-  drawComboChart('chSalesOnly',months.map(m=>m.label),[{label:'Sales',data:salesSeries,color:'#2E6BF2'}]);
+  const salesLabels=months.map(m=>m.label);
+  const undatedSales=sumBy(rawLines.filter(r=>parseDT(r.date)===null),'amount');
+  if(undatedSales){salesLabels.push('Undated');salesSeries.push(undatedSales);}
+  drawComboChart('chSalesOnly',salesLabels,[{label:'Sales',data:salesSeries,color:'#2E6BF2'}]);
   // Sales mix donut — follows whichever product dimension the summary table below is
   // currently showing, so the donut, its legend and the table never disagree.
   const mix=(S._salesProductRows||[]).slice(0,6);

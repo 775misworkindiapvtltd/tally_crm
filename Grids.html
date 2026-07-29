@@ -199,12 +199,12 @@ function buildCustomerList(){
 // its own Date/Description/Category/Amount/Amount-Excl-GST. Total Price (both
 // incl./excl. GST) is the SUM of every line's amount for that invoice.
 //
-// Receivable linkage: the RECEIVABLES sheet's Bill Ref No is matched against this
-// Invoice No (case-insensitive) so the master row can also show Pending Amount +
-// Overdue Days for that invoice, without duplicating the receivable calculation logic
-// used elsewhere (outstandingReceivable(), ageingBuckets(), etc). If no receivable row
-// matches (already fully paid, or billed outside the RECEIVABLES sheet), both fields
-// stay null and the grid shows "—" rather than a fabricated 0/blank.
+// Receivable linkage: match normalized Bill Ref No + Party Name to this invoice's
+// Invoice No + Invoice To, aggregating duplicate receivable rows. A Bill-Ref-only
+// fallback is allowed only for a party-less RECEIVABLES reference that belongs to
+// one SALES party. This keeps Pending Amount/Overdue Days tied to the right customer even when invoice
+// references are reused. If no safe match exists (already fully paid, billed outside
+// RECEIVABLES, or ambiguous), both fields stay null and the grid shows "—".
 function buildSalesReport(){
   const byInvoice={};
   const order=[];
@@ -226,25 +226,52 @@ function buildSalesReport(){
     g.amount+=lineAmount;
     if(lineExclGst!==null){g.amountExclGst+=lineExclGst;g.hasAnyExclGst=true;}
   });
-  const recvByInvoice={};
+  // Receivables can contain more than one row for a Bill Ref No and, in rare
+  // datasets, two parties may reuse the same reference. Match on Bill Ref + Party
+  // (the same party component used in the Sales invoice identity) and aggregate
+  // duplicate rows. A Bill-Ref-only fallback is used only for party-less
+  // RECEIVABLES rows when that reference also maps to one SALES party. This prevents
+  // the dashboard/report from assigning another customer's pending amount or
+  // silently dropping duplicates.
+  const normJoin=v=>String(v||'').trim().toLowerCase().replace(/\s+/g,' ');
+  const recvByInvoiceParty={},recvByInvoice={};
+  const addRecv=(map,key,row)=>{
+    if(!map[key])map[key]={pendingAmount:0,overdueDays:0,parties:new Set()};
+    const agg=map[key];
+    agg.pendingAmount+=Number(row.pendingAmount)||0;
+    agg.overdueDays=Math.max(agg.overdueDays,Number(row.overdueDays)||0);
+    const party=normJoin(row.partyName);if(party)agg.parties.add(party);
+  };
   dataForFY('receivables').forEach(r=>{
-    const key=String(r.billRefNo||'').trim().toLowerCase();if(!key)return;
-    if(!recvByInvoice[key])recvByInvoice[key]=r; // first match wins if duplicated
+    const ref=normJoin(r.billRefNo);if(!ref)return;
+    const party=normJoin(r.partyName);
+    addRecv(recvByInvoice,ref,r);
+    if(party)addRecv(recvByInvoiceParty,ref+'|'+party,r);
   });
   // Cumulative Amount per customer (Invoice To) — sum of every invoice's Amount
   // (With GST) for that same customer, across the whole currently-selected
   // financial-year data. Computed once here so every master row belonging to that
   // customer shows the identical total, per explicit user instruction ("if client
   // is pansari, to table me jitni baar bhi pansari hai sabka sum bhi dikhe").
-  const cumulativeByCustomer={};
+  const cumulativeByCustomer={},salesPartiesByInvoice={};
   order.forEach(key=>{
     const g=byInvoice[key];
     const custKey=String(g.invoiceTo||'').trim().toLowerCase();
     cumulativeByCustomer[custKey]=(cumulativeByCustomer[custKey]||0)+g.amount;
+    const refKey=normJoin(g.invoiceNo);
+    if(!salesPartiesByInvoice[refKey])salesPartiesByInvoice[refKey]=new Set();
+    salesPartiesByInvoice[refKey].add(normJoin(g.invoiceTo));
   });
   return order.map(key=>{
     const g=byInvoice[key];
-    const recv=recvByInvoice[String(g.invoiceNo).trim().toLowerCase()];
+    const refKey=normJoin(g.invoiceNo),partyKey=normJoin(g.invoiceTo);
+    const exact=recvByInvoiceParty[refKey+'|'+partyKey];
+    const fallback=recvByInvoice[refKey];
+    const salesParties=salesPartiesByInvoice[refKey];
+    // A party-less RECEIVABLES fallback is safe only when this reference is unique
+    // on the SALES side too. Any named receivable party must match through `exact`.
+    const safePartylessFallback=fallback&&fallback.parties.size===0&&salesParties&&salesParties.size===1;
+    const recv=exact||(safePartylessFallback?fallback:null);
     const custKey=String(g.invoiceTo||'').trim().toLowerCase();
     return {
       invoiceNo:g.invoiceNo,invoiceDate:g.invoiceDate||'',invoiceTo:g.invoiceTo,address:g.address,state:g.state,gstNo:g.gstNo,
