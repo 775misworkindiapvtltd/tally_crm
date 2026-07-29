@@ -266,9 +266,10 @@ function renderSalesDashboard(){
   S._salesProductRows=productRows;
   S._salesTopClientRows=clientRows;
   SALES_PRODUCT_SUMMARY_COLS[0].label=dimMeta.label;
+  const salesReportButton=`<button type="button" class="btn btn-primary sd-sales-report-btn" data-action="goto" data-page="salesReport">View Sales Report <span>→</span></button>`;
 
   if(!rawLines.length){
-    return `${renderFilterBar()}
+    return `${renderFilterBar(salesReportButton)}
       <div class="panel"><div class="panel-body"><div class="empty-state">
         <div class="big">No invoice-numbered sales data for ${esc(fyLabel)}</div>
         ${excludedLines?`${excludedLines} SALES line${excludedLines===1?' has':'s have'} a blank Invoice No. Add invoice numbers in the SALES sheet so those rows can appear in Sales Report and this dashboard.`:'Financial Year filter badal ke dekho — ya "Sync with Tally" dabao.'}
@@ -287,7 +288,7 @@ function renderSalesDashboard(){
       <div class="sd-spot-name" title="${esc(name)}">${esc(name)}</div>
       <div class="sd-spot-meta">${meta}</div>
       <div class="sd-spot-bar"><div class="sd-spot-fill ${tone}" style="width:${Math.max(2,Math.min(100,pct)).toFixed(1)}%;"></div></div>
-      <div class="sd-spot-sub">${esc(sub)}</div>
+      <div class="sd-spot-foot"><span class="sd-spot-sub">${esc(sub)}</span>${page?'<span class="sd-spot-view">View details →</span>':''}</div>
     </div>`;
   const health=(label,valueText,pct,note,tone)=>`<div class="sd-health-row">
       <div class="sd-health-top"><span class="sd-health-label">${esc(label)}</span><span class="sd-health-val ${tone}">${esc(valueText)}</span></div>
@@ -300,6 +301,20 @@ function renderSalesDashboard(){
     if(value>0.05)return{value:'+'+rounded,tone:'positive',arrow:'↑',word:'Growth'};
     if(value<-.05)return{value:'−'+rounded,tone:'negative',arrow:'↓',word:'Decline'};
     return{value:'0.0%',tone:'neutral',arrow:'→',word:'Flat'};
+  };
+  const comparisonRow=(label,current,previous,delta,isMoney)=>{
+    const hasPrevious=previous!==null&&previous!==undefined;
+    const variance=hasPrevious?current-previous:null;
+    const d=deltaMeta(hasPrevious?delta:null);
+    const value=v=>isMoney?fmtINRCompact(v):fmtNum(v);
+    const varianceText=variance===null?'—':`${variance>0?'+':variance<0?'−':''}${value(Math.abs(variance))}`;
+    return `<div class="sd-compare-row">
+      <span class="sd-compare-label">${esc(label)}</span>
+      <span class="sd-compare-current">${value(current)}</span>
+      <span>${hasPrevious?value(previous):'—'}</span>
+      <span class="sd-compare-variance ${variance>0?'positive':variance<0?'negative':'neutral'}">${varianceText}</span>
+      <span class="sd-compare-growth ${d.tone}">${d.arrow?`<b>${d.arrow}</b>`:''}${esc(d.value)}</span>
+    </div>`;
   };
   const pulseMetric=(label,delta,currentValue,sub)=>{
     const d=deltaMeta(delta);
@@ -327,7 +342,7 @@ function renderSalesDashboard(){
   const productTone=productDependency>45?'risk':productDependency>25?'watch':'good';
 
   return `
-    ${renderFilterBar()}
+    ${renderFilterBar(salesReportButton)}
 
     <section class="sd-pulse">
       <div class="sd-pulse-head">
@@ -362,6 +377,26 @@ function renderSalesDashboard(){
       ${topState?spot('Top State',topState.label,`${fmtINR(topState.value)} <span>· ${byState.length} state${byState.length===1?'':'s'}</span>`,totalSales?topState.value/totalSales*100:0,(totalSales?(topState.value/totalSales*100).toFixed(1):'0.0')+'% of total sales','map','c-purple','stateSalesReport'):''}
     </div>
 
+    <section class="panel sd-comparison-panel">
+      <div class="panel-title">
+        <span>Sales Comparison Analysis <small>${yoy?esc(yoy.currentKey+' vs '+yoy.previousKey):esc(fyLabel)}</small></span>
+        <a data-action="goto" data-page="salesReport">View Sales Report →</a>
+      </div>
+      <div class="panel-body sd-comparison-body">
+        <div class="sd-compare-periods">
+          <div><span>Current period</span><b>${yoy?esc(yoy.currentKey):esc(fyLabel)}</b><small>${esc(comparisonWindow)}</small></div>
+          <div><span>Previous comparable period</span><b>${yoy?esc(yoy.previousKey):'Not available'}</b><small>${yoy&&yoy.hasPrevious?esc(previousWindow):'Comparable history required'}</small></div>
+        </div>
+        <div class="sd-compare-table">
+          <div class="sd-compare-head"><span>Metric</span><span>Current</span><span>Previous</span><span>Variance</span><span>Growth</span></div>
+          ${comparisonRow('Sales Revenue',yoy?yoy.current.sales:totalSales,yoy&&yoy.hasPrevious?yoy.previous.sales:null,yoy?yoy.salesGrowth:null,true)}
+          ${comparisonRow('Invoices',yoy?yoy.current.invoices:invoices.length,yoy&&yoy.hasPrevious?yoy.previous.invoices:null,yoy?yoy.invoiceGrowth:null,false)}
+          ${comparisonRow('Active Clients',yoy?yoy.current.clients:knownClientRows.length,yoy&&yoy.hasPrevious?yoy.previous.clients:null,yoy?yoy.clientGrowth:null,false)}
+          ${comparisonRow('Average Invoice',yoy?yoy.current.avgInvoice:(invoices.length?totalSales/invoices.length:0),yoy&&yoy.hasPrevious?yoy.previous.avgInvoice:null,yoy?yoy.avgInvoiceGrowth:null,true)}
+        </div>
+      </div>
+    </section>
+
     <section class="sd-insights-panel">
       <div class="sd-section-heading">
         <div><span>Management Insights</span><small>What needs attention in the selected sales book</small></div>
@@ -375,21 +410,30 @@ function renderSalesDashboard(){
       </div>
     </section>
 
-    <div class="dash-row3" style="grid-template-columns:1.5fr 1fr 1fr;">
+    <div class="dash-row3 sd-overview-row">
       <div class="panel">
-        <div class="panel-title">Monthly Sales Trend <span style="font-weight:500;color:var(--muted);font-size:11px;">— ${esc(fyLabel)}</span></div>
+        <div class="panel-title"><span>Monthly Sales Trend <small>— ${esc(fyLabel)}</small></span><a data-action="goto" data-page="salesReport">View details →</a></div>
         <div class="panel-body"><div class="chart-wrap"><canvas id="chSalesOnly" data-chart-fallback></canvas></div></div>
         <div class="panel-foot"><span>Total Sales</span><span>${fmtINR(totalSales)}</span></div>
       </div>
-      <div class="panel">
-        <div class="panel-title">Sales Mix by ${esc(dimMeta.label)}</div>
-        <div class="panel-body donut-panel-body">
-          <div class="chart-wrap donut"><canvas id="chSalesDashMix" data-chart-fallback></canvas></div>
-          <div class="donut-legend">
-            ${productRows.slice(0,6).map((c,i)=>`<div class="dl-row"><span class="dl-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="dl-label" title="${esc(c.product)}">${esc(c.product)}</span><span class="dl-val">${fmtINRCompact(c.amount)}</span></div>`).join('')}
-          </div>
+      <div class="panel sd-mix-report-panel">
+        <div class="panel-title">
+          <span>Top ${esc(dimMeta.label)} Report</span>
+          <span class="pt-actions"><span class="sd-mix-report-count">Top ${Math.min(6,productRows.length)}</span><a data-action="goto" data-page="salesReport">View details →</a></span>
         </div>
-        <div class="panel-foot"><span>Top 6 of ${productRows.length}</span><span>${(productRows.slice(0,6).reduce((s,c)=>s+c.sharePct,0)).toFixed(1)}%</span></div>
+        <div class="panel-body sd-mix-report-body">
+          <div class="sd-mix-report-head">
+            <span>#</span><span>${esc(dimMeta.label)}</span><span>Invoices</span><span>Sales</span><span>Mix</span>
+          </div>
+          ${productRows.slice(0,6).map((c,i)=>`<div class="sd-mix-report-row">
+            <span class="sd-mix-rank">${i+1}</span>
+            <span class="sd-mix-name" title="${esc(c.product)}">${esc(c.product)}</span>
+            <span class="sd-mix-invoices">${c.invoices}</span>
+            <span class="sd-mix-amount">${fmtINRCompact(c.amount)}</span>
+            <span class="sd-mix-share">${c.sharePct.toFixed(1)}%</span>
+          </div>`).join('')}
+        </div>
+        <div class="panel-foot"><span>Top ${Math.min(6,productRows.length)} of ${productRows.length}</span><span>${(productRows.slice(0,6).reduce((s,c)=>s+c.sharePct,0)).toFixed(1)}% of sales</span></div>
       </div>
       <div class="panel">
         <div class="panel-title">Sales Health &amp; Mix</div>
@@ -408,6 +452,7 @@ function renderSalesDashboard(){
       <div class="panel-title">
         <span>${esc(dimMeta.label)} wise Sales Summary <span style="font-weight:500;color:var(--muted);font-size:11px;">— ${esc(fyLabel)}</span></span>
         <span class="pt-actions">
+          <a data-action="goto" data-page="salesReport">View Sales Report →</a>
           <span class="view-toggle sales-report-view-toggle" style="margin:0;">
             <button class="${dim==='description'?'active':''}" data-action="sales-dash-product-dim" data-dim="description">Product</button>
             <button class="${dim==='category'?'active':''}" data-action="sales-dash-product-dim" data-dim="category">Category</button>
@@ -851,10 +896,6 @@ CHART_DEFS['salesDashboard']=function(){
   const undatedSales=sumBy(rawLines.filter(r=>parseDT(r.date)===null),'amount');
   if(undatedSales){salesLabels.push('Undated');salesSeries.push(undatedSales);}
   drawComboChart('chSalesOnly',salesLabels,[{label:'Sales',data:salesSeries,color:'#2E6BF2'}]);
-  // Sales mix donut — follows whichever product dimension the summary table below is
-  // currently showing, so the donut, its legend and the table never disagree.
-  const mix=(S._salesProductRows||[]).slice(0,6);
-  if(mix.length)drawDonutChart('chSalesDashMix',mix.map(c=>c.product),mix.map(c=>c.amount),CHART_PALETTE);
 };
 
 function renderExpensesDashboard(){
