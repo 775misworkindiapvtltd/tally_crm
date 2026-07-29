@@ -5,7 +5,7 @@ const EXPENSE_COLS=[
   {key:'voucherNumber',label:'Voucher No',width:100},{key:'partyName',label:'Party Name',width:220},
   {key:'group',label:'Group',width:130},{key:'subGroup',label:'Sub Group',width:150},
   {key:'designNumber',label:'Design No',width:110},{key:'itemName',label:'Item Name',width:150},
-  {key:'qty',label:'Qty',width:80},{key:'rate',label:'Rate',width:90},{key:'amount',label:'Amount',width:120,num:true,filterType:'number-range'},{key:'type',label:'Type',width:70}
+  {key:'qty',label:'Qty',width:80},{key:'rate',label:'Rate',width:90},{key:'amount',label:'Amount',width:120,num:true,filterType:'number-range',headerTotal:true},{key:'type',label:'Type',width:70}
 ];
 // filterType:'number-range' added to every meaningful numeric column across every
 // grid (Overdue Days, Amount, Pending Amount, Closing Balance, etc — was only on
@@ -20,36 +20,36 @@ const PAYABLES_COLS=[
   {key:'billRefNo',label:'Bill Ref No',width:150},{key:'partyName',label:'Party Name',width:220},
   {key:'partyGroup',label:'Party Group',width:130},{key:'subGroup',label:'Sub Group',width:150},{key:'mainGroup',label:'Main Group',width:150},
   {key:'salesPerson',label:'Sales Person',width:120},{key:'phoneNo',label:'Phone No',width:130},{key:'paymentTerms',label:'Payment Terms',width:130},
-  {key:'closingBalance',label:'Closing Balance',width:140,num:true,filterType:'number-range'},{key:'dueDate',label:'Due Date',width:110,date:true},{key:'overdueDays',label:'Overdue Days',width:110,num:true,filterType:'number-range'}
+  {key:'closingBalance',label:'Closing Balance',width:140,num:true,filterType:'number-range',headerTotal:true},{key:'dueDate',label:'Due Date',width:110,date:true},{key:'overdueDays',label:'Overdue Days',width:110,num:true,filterType:'number-range'}
 ];
 const RECEIVABLES_COLS=[
   {key:'timestamp',label:'Timestamp',width:150,date:true},{key:'billDate',label:'Bill Date',width:110,date:true},
   {key:'billRefNo',label:'Bill Ref No',width:150},{key:'partyName',label:'Party Name',width:220},
   {key:'partyGroup',label:'Party Group',width:130},{key:'subGroup',label:'Sub Group',width:150},{key:'mainGroup',label:'Main Group',width:150},
   {key:'salesPerson',label:'Sales Person',width:120},{key:'phoneNo',label:'Phone No',width:130},{key:'paymentTerms',label:'Payment Terms',width:130},
-  {key:'pendingAmount',label:'Pending Amount',width:140,num:true,filterType:'number-range'},{key:'dueDate',label:'Due Date',width:110,date:true},{key:'overdueDays',label:'Overdue Days',width:110,num:true,filterType:'number-range'}
+  {key:'pendingAmount',label:'Pending Amount',width:140,num:true,filterType:'number-range',headerTotal:true},{key:'dueDate',label:'Due Date',width:110,date:true},{key:'overdueDays',label:'Overdue Days',width:110,num:true,filterType:'number-range'}
 ];
 const RECEIPT_COLS=[
   {key:'timestamp',label:'Timestamp',width:150,date:true},{key:'voucherNumber',label:'Voucher No',width:110},{key:'date',label:'Date',width:100,date:true},
   {key:'group',label:'Group',width:120},{key:'subGroup',label:'Sub Group',width:130},{key:'creditLedgerName',label:'Ledger (Cr)',width:180},
-  {key:'creditLedgerAmount',label:'Amount (Cr)',width:120,num:true,filterType:'number-range'},{key:'billType',label:'Bill Type',width:100},{key:'billName',label:'Bill Name',width:150},
-  {key:'billAmount',label:'Bill Amount',width:120,num:true,filterType:'number-range'},{key:'debitLedgerName',label:'Ledger (Dr)',width:200},{key:'debitLedgerAmount',label:'Amount (Dr)',width:120,num:true,filterType:'number-range'},
+  {key:'creditLedgerAmount',label:'Amount (Cr)',width:120,num:true,filterType:'number-range',headerTotal:true},{key:'billType',label:'Bill Type',width:100},{key:'billName',label:'Bill Name',width:150},
+  {key:'billAmount',label:'Bill Amount',width:120,num:true,filterType:'number-range',headerTotal:true},{key:'debitLedgerName',label:'Ledger (Dr)',width:200},{key:'debitLedgerAmount',label:'Amount (Dr)',width:120,num:true,filterType:'number-range',headerTotal:true},
   {key:'bankPartyName',label:'Bank/Party Name',width:180},{key:'transactionType',label:'Transaction Type',width:130},{key:'instNo',label:'Instrument No',width:120},
   {key:'instDate',label:'Instrument Date',width:130,date:true},{key:'bankName',label:'Bank Name',width:180}
 ];
 const CUSTOMER_COLS=[
   {key:'invoiceTo',label:'Invoice To',width:220},{key:'address',label:'Address',width:260},{key:'state',label:'State',width:130},
   {key:'gstNo',label:'GST No.',width:150},{key:'contactPerson',label:'Contact Person Name',width:190},{key:'phone',label:'Phone',width:140},
-  {key:'email',label:'Email',width:220},{key:'totalInvoices',label:'Total Invoice',width:120,num:true},{key:'totalAmount',label:'Total Amount',width:150,num:true,filterType:'number-range'}
+  {key:'email',label:'Email',width:220},{key:'totalInvoices',label:'Total Invoice',width:120,num:true},{key:'totalAmount',label:'Total Amount',width:150,num:true,filterType:'number-range',headerTotal:true}
 ];
 const AGEING_COLS=[
   {key:'partyName',label:'Party Name',width:220},{key:'billRefNo',label:'Bill Ref No',width:150},{key:'billDate',label:'Bill Date',width:120,date:true},
-  {key:'dueDate',label:'Due Date',width:120,date:true},{key:'overdueDays',label:'Overdue Days',width:120,num:true,filterType:'number-range'},{key:'amount',label:'Amount',width:150,num:true,filterType:'number-range'}
+  {key:'dueDate',label:'Due Date',width:120,date:true},{key:'overdueDays',label:'Overdue Days',width:120,num:true,filterType:'number-range'},{key:'amount',label:'Amount',width:150,num:true,filterType:'number-range',headerTotal:true}
 ];
 const VENDOR_COLS=[
   {key:'name',label:'Vendor Name',width:230},{key:'group',label:'Group',width:160},{key:'phone',label:'Phone',width:140},
   {key:'salesPerson',label:'Sales Person',width:150},{key:'bills',label:'Bills',width:90,num:true},{key:'maxOverdue',label:'Max Overdue Days',width:140,num:true,filterType:'number-range'},
-  {key:'total',label:'Outstanding',width:150,num:true,filterType:'number-range'},{key:'status',label:'Status',width:110}
+  {key:'total',label:'Outstanding',width:150,num:true,filterType:'number-range',headerTotal:true},{key:'status',label:'Status',width:110}
 ];
 // Follow-up notes are keyed per CUSTOMER (partyName, normalized), not per bill — see
 // followUpDataKey_()/S.followUpData in Common.html. That's what makes "same company
@@ -58,7 +58,7 @@ function followUpDataKey_(partyName){return String(partyName||'').trim().toLower
 const FOLLOWUP_COLS=[
   {key:'partyName',label:'Customer',width:210},{key:'billRefNo',label:'Bill Ref',width:140},{key:'phoneNo',label:'Phone',width:130},
   {key:'salesPerson',label:'Sales Person',width:140},{key:'dueDate',label:'Due Date',width:120,date:true},{key:'overdueDays',label:'Overdue Days',width:120,num:true,filterType:'number-range'},
-  {key:'pendingAmount',label:'Amount',width:150,num:true,filterType:'number-range'},
+  {key:'pendingAmount',label:'Amount',width:150,num:true,filterType:'number-range',headerTotal:true},
   // Plan Date — the follow-up date saved via the popup, shown as its own column so
   // it's visible at a glance without opening the popup, per explicit user instruction
   // ("plan date ka bhi col ayega jo nahi aa rha hai list mein"). date:true switches
@@ -101,7 +101,7 @@ const FOLLOWUP_COLS=[
 ];
 const CREDIT_NOTE_COLS=[
   {key:'partyName',label:'Customer',width:220},{key:'date',label:'Date',width:120,date:true},{key:'voucherNo',label:'Voucher No',width:140},
-  {key:'particular',label:'Particulars',width:280},{key:'amount',label:'Amount',width:150,num:true,filterType:'number-range'}
+  {key:'particular',label:'Particulars',width:280},{key:'amount',label:'Amount',width:150,num:true,filterType:'number-range',headerTotal:true}
 ];
 // Dashboard mini reports intentionally use only the requested business columns.
 // `compactName` renders a one-line ellipsis with the full text available on hover.
@@ -156,7 +156,7 @@ const SALES_REPORT_COLS=[
   // map...high on dark...then light light"). See heatmapCellStyle_() in
   // Common.html for the actual color interpolation, applied generically to any
   // column flagged heatmap:true.
-  {key:'amount',label:'Amount',headerSub:'With GST',width:160,num:true,filterType:'number-range',heatmap:true},
+  {key:'amount',label:'Amount',headerSub:'With GST',width:160,num:true,filterType:'number-range',heatmap:true,headerTotal:true},
 ];
 // Detail sub-table — every individual SALES line belonging to one invoice. Category
 // here is the single raw value per line (never concatenated), so it keeps the plain
