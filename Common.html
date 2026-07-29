@@ -89,6 +89,13 @@ function persistPivotColWidths_(){
 
 let S = {
   ready:false, loadError:"", user:null, page:null, syncing:false, sidebarOpen:false,
+  // Back-navigation history — a simple stack of previously-visited page keys, per
+  // explicit user instruction ("I do not have any option to go back to my previous
+  // page, can we add that"). Pushed onto by navigateTo() every time the page
+  // actually changes, popped by goBack() — see both below. Capped at 50 entries so
+  // it can't grow unbounded over a very long session. Reset on login/logout so a
+  // fresh session never shows a stale "back" target.
+  pageHistory:[],
   expense:[], payables:[], receivables:[], receipt:[], payment:[], balanceParties:[], balanceVouchers:[], balanceLedgers:{}, salesRows:[], expenseTrendRows:[],
   users:[], missingSheets:[], diagnostics:{}, diagBannerDismissed:false,
   toast:null, loginError:"",
@@ -419,7 +426,7 @@ async function loadAll(){
     if(savedId)resumedUser=S.users.find(u=>String(u.id)===savedId)||null;
   }catch(e){}
   if(resumedUser){
-    S.user=resumedUser;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();
+    S.user=resumedUser;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();S.pageHistory=[];
     loadGridPrefsCache_();
     Object.keys(S.dt).forEach(applyPersistedGridPrefs_);
     await hydrateCachedData_();
@@ -616,7 +623,7 @@ async function doLogin(id,pw){
   const u=S.users.find(x=>x.id.toLowerCase()===id.trim().toLowerCase()&&String(x.password)===pw);
   if(!u){S.loginError="Invalid user ID or password.";render();return;}
   persistSessionUserId_(u.id);
-  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();
+  S.user=u;S.loginError="";S.sidebarOpen=false;S.logoutAt=nextLogoutTs();S.filters=defaultFilterState();S.page=firstAllowedPage();S.pageHistory=[];
   S.cacheLoaded=false;S.lastSync='';S.lastSyncAt=0;S.lastSyncSource='';
   // Load this user's remembered column hide/order/width/sort/page-size settings, then
   // re-apply them onto the small set of grid states that were already created before
@@ -729,6 +736,7 @@ const NAV_ICONS={
   balance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M3 21h18"/><path d="M4 8l4-3 4 3"/><path d="M12 8l4-3 4 3"/><path d="M5 8v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V8"/><path d="M13 8v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V8"/></svg>',
   reports:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>',
   bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
   settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.44.57.78 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
 };
 
@@ -830,6 +838,7 @@ function renderShell(inner){
     <div class="main">
       <div class="topbar">
         <div class="topbar-left">
+          ${(S.pageHistory&&S.pageHistory.length)?`<button class="back-btn" data-action="goback" title="Go back to ${esc((PAGE_TITLES[S.pageHistory[S.pageHistory.length-1]]||{}).t||S.pageHistory[S.pageHistory.length-1]||'previous page')}">${NAV_ICONS.back}</button>`:''}
           <button class="hamburger" data-action="open-sidebar">☰</button>
           <div class="tb-title"><h2>${esc(title.t)} <span style="font-size:10px;color:var(--muted);">ⓘ</span></h2><div class="sub">${esc(title.s)}</div></div>
           ${S.syncing?`<span class="tb-refresh-pill refreshing"><span class="tb-refresh-dot"></span>Refreshing…</span>`:(S.lastSync?`<span class="tb-refresh-pill done">Last Refreshed on ${esc(S.lastSync)}</span>`:'')}
@@ -877,9 +886,30 @@ function shouldReportsStayOpenOnNav_(pageKey){
   return pageKey==='reports'||pageKey==='salesReport'||pageKey==='expense';
 }
 function navigateTo(pageKey){
+  // Record where we're navigating FROM (not the destination) onto the back-stack —
+  // only when the page is actually changing, so clicking the same nav item twice
+  // (or a "Refresh"-style no-op) never pushes a duplicate/no-op entry, per explicit
+  // user instruction ("I do not have any option to go back to my previous page").
+  if(S.page&&S.page!==pageKey){
+    if(!S.pageHistory)S.pageHistory=[];
+    S.pageHistory.push(S.page);
+    if(S.pageHistory.length>50)S.pageHistory.shift();
+  }
   S.colMenuOpen=null;S.page=pageKey;S.sidebarOpen=false;
   if(!shouldAgeingStayOpenOnNav_(pageKey))S.ageingOpen=false;
   if(!shouldReportsStayOpenOnNav_(pageKey))S.reportsOpen=false;
+  render();
+}
+// Pops the most recent page off the back-stack and navigates there WITHOUT pushing
+// the current page back onto the stack (that would make the "Back" button
+// immediately able to go "forward" again to where you just were, which isn't how
+// a normal back button behaves — each click should move you one real step back).
+function goBack(){
+  if(!S.pageHistory||!S.pageHistory.length)return;
+  const prevPage=S.pageHistory.pop();
+  S.colMenuOpen=null;S.page=prevPage;S.sidebarOpen=false;
+  if(!shouldAgeingStayOpenOnNav_(prevPage))S.ageingOpen=false;
+  if(!shouldReportsStayOpenOnNav_(prevPage))S.reportsOpen=false;
   render();
 }
 
@@ -1451,7 +1481,8 @@ document.addEventListener('click',e=>{
   }
   if(a==='nav'){navigateTo(el.getAttribute('data-page'));return;}
   if(a==='goto'){navigateTo(el.getAttribute('data-page'));return;}
-  if(a==='logout'){void writeCachedSnapshot_();clearPersistedSessionUserId_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;render();return;}
+  if(a==='logout'){void writeCachedSnapshot_();clearPersistedSessionUserId_();S.user=null;S.page=null;S.sidebarOpen=false;S.logoutAt=0;S.pageHistory=[];render();return;}
+  if(a==='goback'){goBack();return;}
   if(a==='syncnow'){refreshData();return;} // sidebar "Sync with Tally" — always a full refresh
   if(a==='refreshpage'){refreshCurrentPage();return;} // per-page "Refresh" button — scoped when PAGE_CHUNK_KEYS has an entry for the current page
   if(a==='dismiss-diag'){S.diagBannerDismissed=true;render();return;}

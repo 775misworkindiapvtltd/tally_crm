@@ -1,19 +1,44 @@
 <script>
 /* ============================= FINANCE MODULE ============================= */
 
+// Redesigned per explicit user request ("sales dashobaord currently is enmpty
+// suggest what can i add that , so that it looks insightful, u can refer to my
+// sales reoprt section for data inputs"). Pulls directly from the SAME data the
+// Sales Report itself is built from (dataForFY('sales') raw lines + buildSalesReport()
+// invoice-level rollup — Grids.html), so every number here is guaranteed consistent
+// with what Sales Report shows, instead of a bare 2-panel page. Added: GST-
+// registered sales %, Sales by Category, Sales by State, and a Top 5 Invoices list
+// (each clickable straight into Sales Report) — plus the pre-existing Total
+// Sales/Transactions/Avg Ticket/Active Customers KPIs and Sales Trend chart, kept
+// as-is since those were already useful.
 function renderSalesDashboard(){
   const salesRows=voucherSales_();
   const cur=periodMetrics();
+  const rawSalesLines=dataForFY('sales');
+  const invoices=buildSalesReport();
   const byCustomer=topN(salesRows,'partyName','debit',8);
   const maxC=Math.max(1,...byCustomer.map(x=>x.value));
   const fyLabel=selectedFYLabel();
 
+  const byCategory=topN(rawSalesLines,'category','amount',6);
+  const maxCat=Math.max(1,...byCategory.map(x=>x.value));
+  const byState=topN(rawSalesLines,'state','amount',6);
+  const maxState=Math.max(1,...byState.map(x=>x.value));
+  const gstRegisteredAmt=sumBy(rawSalesLines.filter(r=>String(r.gstNo||'').trim()),'amount');
+  const gstPct=cur.sales?(gstRegisteredAmt/cur.sales*100):0;
+  const topInvoices=invoices.slice().sort((a,b)=>b.amount-a.amount).slice(0,5);
+  const totalBase=cur.sales||1;
+
   return `
     <div class="dash-grid">
       <div class="card"><div class="card-top"><span class="card-label">Total Sales</span><div class="card-icon c-green">${NAV_ICONS.sales}</div></div><div class="card-value">${fmtINR(cur.sales)}</div><div class="card-sub">${esc(fyLabel)}</div></div>
-      <div class="card"><div class="card-top"><span class="card-label">Transactions</span><div class="card-icon c-blue">${NAV_ICONS.reports}</div></div><div class="card-value">${salesRows.length}</div><div class="card-sub">sales vouchers — ${esc(fyLabel)}</div></div>
-      <div class="card"><div class="card-top"><span class="card-label">Avg. Ticket Size</span><div class="card-icon c-purple">${NAV_ICONS.collection}</div></div><div class="card-value">${fmtINR(salesRows.length?cur.sales/salesRows.length:0)}</div><div class="card-sub">per voucher — ${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Total Invoices</span><div class="card-icon c-blue">${NAV_ICONS.reports}</div></div><div class="card-value">${invoices.length}</div><div class="card-sub">unique invoices — ${esc(fyLabel)}</div></div>
+      <div class="card"><div class="card-top"><span class="card-label">Avg. Invoice Value</span><div class="card-icon c-purple">${NAV_ICONS.collection}</div></div><div class="card-value">${fmtINR(invoices.length?cur.sales/invoices.length:0)}</div><div class="card-sub">per invoice — ${esc(fyLabel)}</div></div>
       <div class="card"><div class="card-top"><span class="card-label">Active Customers</span><div class="card-icon c-teal">${NAV_ICONS.customer}</div></div><div class="card-value">${new Set(salesRows.map(v=>v.partyName)).size}</div><div class="card-sub">billed — ${esc(fyLabel)}</div></div>
+      <div class="card" data-action="goto" data-page="gstSalesSplit"><div class="card-top"><span class="card-label">GST-Registered Sales</span><div class="card-icon c-indigo">${NAV_ICONS.creditnote}</div></div><div class="card-value">${gstPct.toFixed(1)}%</div><div class="card-sub">${fmtINR(gstRegisteredAmt)} of ${esc(fyLabel)}</div></div>
+      <div class="card" data-action="goto" data-page="stateSalesReport"><div class="card-top"><span class="card-label">Top State</span><div class="card-icon c-orange">${NAV_ICONS.map}</div></div><div class="card-value" style="font-size:15px;">${esc(byState[0]?byState[0].label:'—')}</div><div class="card-sub">${byState[0]?fmtINR(byState[0].value):''}</div></div>
+      <div class="card" data-action="goto" data-page="salesPersonPerf"><div class="card-top"><span class="card-label">Top Customer</span><div class="card-icon c-red">${NAV_ICONS.customer}</div></div><div class="card-value" style="font-size:15px;">${esc(byCustomer[0]?byCustomer[0].label:'—')}</div><div class="card-sub">${byCustomer[0]?fmtINR(byCustomer[0].value):''}</div></div>
+      <div class="card" data-action="goto" data-page="customerNewRepeat"><div class="card-top"><span class="card-label">New vs Repeat</span><div class="card-icon c-blue">${NAV_ICONS.collection}</div></div><div class="card-value" style="font-size:13px;">View Breakdown →</div><div class="card-sub">click to open report</div></div>
     </div>
     <div class="dash-row">
       <div class="panel">
@@ -23,6 +48,20 @@ function renderSalesDashboard(){
       <div class="panel">
         <div class="panel-title">Top Customers by Sales — ${esc(fyLabel)}</div>
         <div class="panel-body"><div class="bar-chart">${byCustomer.map(c=>`<div class="bar-item"><div class="b-label" title="${esc(c.label)}">${esc(c.label)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,c.value/maxC*100)}%;"></div></div><div class="b-val">${fmtINR(c.value)}</div></div>`).join('')||`<div class="empty-state"><div class="big">No sales for the selected financial years</div></div>`}</div></div>
+      </div>
+    </div>
+    <div class="dash-row3" style="grid-template-columns:1.1fr 1.1fr 1fr;">
+      <div class="panel">
+        <div class="panel-title">Sales by Category — ${esc(fyLabel)} <a data-action="goto" data-page="salesReport">View All</a></div>
+        <div class="panel-body">${byCategory.map((c,i)=>`<div class="mini-cat-row"><span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span><div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxCat*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div><span class="mc-amt">${fmtINR(c.value)}</span><span class="mc-pct">${(c.value/totalBase*100).toFixed(1)}%</span></div>`).join('')||`<div class="empty-state"><div class="big">No category data for the selected financial years</div></div>`}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Sales by State — ${esc(fyLabel)} <a data-action="goto" data-page="stateSalesReport">View All</a></div>
+        <div class="panel-body">${byState.map((c,i)=>`<div class="mini-cat-row"><span class="mini-cat-dot" style="background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></span><span class="mc-label" title="${esc(c.label)}">${esc(c.label)}</span><div class="mc-track"><div class="mc-fill" style="width:${(c.value/maxState*100).toFixed(0)}%;background:${CHART_PALETTE[i%CHART_PALETTE.length]};"></div></div><span class="mc-amt">${fmtINR(c.value)}</span><span class="mc-pct">${(c.value/totalBase*100).toFixed(1)}%</span></div>`).join('')||`<div class="empty-state"><div class="big">No state data for the selected financial years</div></div>`}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Top 5 Invoices <a data-action="goto" data-page="salesReport">View All</a></div>
+        <div class="panel-body" style="padding:6px 16px;">${topInvoices.length?topInvoices.map(inv=>`<div class="mini-row"><div class="lft"><div><div class="nm">${esc(inv.invoiceTo)}</div><div class="sub">${esc(inv.invoiceNo)}${inv.invoiceDate?' · '+esc(inv.invoiceDate):''}</div></div></div><span class="amt recv">${fmtINR(inv.amount)}</span></div>`).join(''):`<div class="empty-state"><div class="big">No invoices for the selected financial years</div></div>`}</div>
       </div>
     </div>`;
 }
