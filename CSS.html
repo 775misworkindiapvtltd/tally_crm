@@ -1370,6 +1370,80 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
 .ledger-print-co-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;font-size:10.5px;color:var(--ink-secondary);}
 .ledger-print-co-meta span b{font-weight:700;}
 
+/* ---------- SALES DASHBOARD — EXECUTIVE PULSE ---------- */
+/* A management-first opening block: YoY direction and comparable-period metrics are
+   visible before the raw KPIs, while the SALES source badge makes provenance clear. */
+.sd-pulse{position:relative;overflow:hidden;margin-bottom:14px;padding:16px 18px;border:1px solid var(--line);border-color:color-mix(in srgb,var(--accent) 24%,var(--line));border-radius:14px;background:var(--surface);background:linear-gradient(135deg,color-mix(in srgb,var(--accent-tint) 52%,var(--surface)) 0%,var(--surface) 58%,color-mix(in srgb,var(--accent-tint2) 55%,var(--surface)) 100%);box-shadow:0 8px 24px rgba(20,35,70,.05);}
+.sd-pulse::after{content:'';position:absolute;width:220px;height:220px;right:-90px;top:-130px;border-radius:50%;background:color-mix(in srgb,var(--accent) 10%,transparent);pointer-events:none;}
+.sd-pulse-head{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px;}
+.sd-pulse-eyebrow{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.11em;color:var(--accent-dark);margin-bottom:4px;}
+.sd-pulse-head h3{font-family:'Space Grotesk',sans-serif;font-size:18px;line-height:1.2;color:var(--ink);margin:0;}
+.sd-pulse-head p{max-width:850px;margin:5px 0 0;font-size:11px;line-height:1.55;color:var(--ink-secondary);}
+.sd-source-badge{display:flex;align-items:center;gap:7px;flex:none;padding:6px 9px;border:1px solid var(--line);border-radius:20px;background:color-mix(in srgb,var(--surface) 88%,transparent);font-size:9.5px;font-weight:700;color:var(--ink-secondary);white-space:nowrap;}
+.sd-source-badge span{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 14%,transparent);}
+.sd-pulse-grid{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+.sd-pulse-metric{min-width:0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--line) 82%,transparent);border-radius:10px;background:color-mix(in srgb,var(--surface) 90%,transparent);}
+.sd-pulse-metric-label{font-size:8.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.sd-pulse-metric-value{display:flex;align-items:center;gap:4px;margin-top:4px;font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:800;line-height:1.1;}
+.sd-pulse-metric-value span{font-size:13px;}.sd-pulse-metric-value.positive{color:var(--success);}.sd-pulse-metric-value.negative{color:var(--danger);}.sd-pulse-metric-value.neutral{color:var(--muted);}
+.sd-pulse-metric-current{margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sd-pulse-metric-sub{margin-top:2px;font-size:8.8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* Action-oriented interpretation of the numbers. Tone is deliberately subtle so
+   warnings are obvious without making a finance dashboard look alarmist. */
+.sd-insights-panel{margin-bottom:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;}
+.sd-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line-light);}
+.sd-section-heading>div{display:flex;align-items:baseline;gap:8px;min-width:0;}.sd-section-heading span{font-size:12.5px;font-weight:800;color:var(--ink);}.sd-section-heading small{font-size:9.5px;color:var(--muted);}.sd-section-heading b{font-size:9px;color:var(--accent-dark);white-space:nowrap;}
+.sd-insight-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
+.sd-insight{display:flex;gap:10px;min-width:0;padding:13px 14px;border-right:1px solid var(--line-light);border-top:3px solid transparent;}
+.sd-insight:last-child{border-right:0;}.sd-insight.good{border-top-color:var(--success);}.sd-insight.watch{border-top-color:var(--orange);}.sd-insight.risk{border-top-color:var(--danger);}.sd-insight.neutral{border-top-color:var(--muted);}
+.sd-insight-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex:none;border-radius:8px;background:var(--accent-tint);color:var(--accent-dark);}.sd-insight-icon svg{width:14px;height:14px;}
+.sd-insight-copy{min-width:0;}.sd-insight-title{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.045em;}.sd-insight-value{margin-top:3px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.sd-insight-text{margin-top:3px;font-size:9.5px;line-height:1.45;color:var(--ink-secondary);}
+@media (max-width:1200px){.sd-pulse-grid,.sd-insight-grid{grid-template-columns:repeat(2,1fr);}.sd-insight:nth-child(2){border-right:0;}.sd-insight:nth-child(-n+2){border-bottom:1px solid var(--line-light);}}
+@media (max-width:700px){.sd-pulse{padding:14px}.sd-pulse-head{flex-direction:column}.sd-pulse-grid,.sd-insight-grid{grid-template-columns:1fr}.sd-insight{border-right:0;border-bottom:1px solid var(--line-light)}.sd-insight:last-child{border-bottom:0}.sd-section-heading small{display:none}}
+
+/* Compact report replaces the Sales Dashboard's former pie/donut chart. It uses the
+   same productRows aggregation as the full summary grid below, but presents the top
+   performers as a small management report (rank, invoices, revenue and mix share). */
+.sd-mix-report-panel{min-width:0;}
+.sd-overview-row{grid-template-columns:1.5fr 1fr 1fr;}
+/* At laptop widths the expanded desktop sidebar reduces the usable content area.
+   Give the report and health panels half-width tracks and let the trend span both;
+   below 980px the existing global .dash-row3 rule stacks all three panels. */
+@media (min-width:981px) and (max-width:1400px){.sd-overview-row{grid-template-columns:1fr 1fr;}.sd-overview-row>.panel:first-child{grid-column:1/-1;}}
+.sd-mix-report-count{padding:3px 7px;border-radius:10px;background:var(--accent-tint);color:var(--accent-dark);font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;}
+.sd-mix-report-body{padding:5px 12px 3px;overflow:hidden;}
+.sd-mix-report-head,.sd-mix-report-row{display:grid;grid-template-columns:24px minmax(70px,1fr) 50px 82px 43px;gap:6px;align-items:center;}
+.sd-mix-report-head{padding:5px 4px 6px;border-bottom:1px solid var(--line);font-size:7.8px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.sd-mix-report-head span:nth-child(n+3){text-align:right;}
+.sd-mix-report-row{min-height:31px;padding:5px 4px;border-bottom:1px solid var(--line-light);font-size:10px;transition:background .12s;}
+.sd-mix-report-row:last-child{border-bottom:0;}.sd-mix-report-row:hover{background:var(--accent-tint2);}
+.sd-mix-rank{width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--accent-tint);color:var(--accent-dark);font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:800;}
+.sd-mix-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-secondary);font-weight:700;}
+.sd-mix-invoices,.sd-mix-amount,.sd-mix-share{text-align:right;white-space:nowrap;font-family:'JetBrains Mono',monospace;}
+.sd-mix-invoices{color:var(--muted);}.sd-mix-amount{color:var(--ink);font-weight:800;}.sd-mix-share{color:var(--accent-dark);font-weight:800;}
+@media (max-width:700px){.sd-mix-report-head,.sd-mix-report-row{grid-template-columns:24px minmax(70px,1fr) 45px 76px 40px;gap:4px}.sd-mix-report-body{padding-left:7px;padding-right:7px}}
+
+/* Direct dashboard-to-report navigation and a full current-vs-prior management
+   comparison. All links use the app's existing data-action="goto" navigation, so
+   they preserve the normal back stack and avoid a page reload/server round trip. */
+.sd-sales-report-btn{padding:7px 13px;font-size:10.5px;white-space:nowrap;}.sd-sales-report-btn span{font-size:13px;line-height:1;}
+.page-salesDashboard .panel-title small{font-size:9.5px;font-weight:600;color:var(--muted);margin-left:4px;}
+.sd-comparison-panel{margin-bottom:14px;}
+.sd-comparison-body{display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;padding:12px 14px;}
+.sd-compare-periods{display:flex;flex-direction:column;gap:8px;}
+.sd-compare-periods>div{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--accent-tint2);}
+.sd-compare-periods span{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}.sd-compare-periods b{font-family:'Space Grotesk',sans-serif;font-size:12.5px;color:var(--ink);}.sd-compare-periods small{font-size:9px;color:var(--ink-secondary);}
+.sd-compare-table{min-width:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;}
+.sd-compare-head,.sd-compare-row{display:grid;grid-template-columns:minmax(130px,1.3fr) repeat(4,minmax(80px,1fr));align-items:center;gap:8px;padding:7px 10px;}
+.sd-compare-head{background:var(--accent-tint2);border-bottom:1px solid var(--line);font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+.sd-compare-head span:not(:first-child),.sd-compare-row span:not(:first-child){text-align:right;}
+.sd-compare-row{min-height:33px;border-bottom:1px solid var(--line-light);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-secondary);}.sd-compare-row:last-child{border-bottom:0;}.sd-compare-row:hover{background:var(--accent-tint2);}
+.sd-compare-label{font-family:'Inter',system-ui,sans-serif;font-weight:700;color:var(--ink);}.sd-compare-current{font-weight:800;color:var(--accent-dark);}
+.sd-compare-variance.positive,.sd-compare-growth.positive{color:var(--success);}.sd-compare-variance.negative,.sd-compare-growth.negative{color:var(--danger);}.sd-compare-variance.neutral,.sd-compare-growth.neutral{color:var(--muted);}.sd-compare-growth{font-weight:800;}.sd-compare-growth b{margin-right:3px;}
+@media (max-width:900px){.sd-comparison-body{grid-template-columns:1fr}.sd-compare-periods{display:grid;grid-template-columns:1fr 1fr}}
+@media (max-width:700px){.sd-compare-periods{grid-template-columns:1fr}.sd-compare-table{overflow-x:auto}.sd-compare-head,.sd-compare-row{min-width:590px}.sd-sales-report-btn{width:100%;justify-content:center}}
+
 /* ---------- SALES DASHBOARD — SPOTLIGHT + HEALTH PANELS ---------- */
 /* "Spotlight" cards headline a NAME (Highest Paying Client / Most Selling Product /
    Best Month / Top State) rather than a number, with the amount and a share bar
@@ -1390,7 +1464,9 @@ table.ledger-table tbody tr:nth-child(even){background:#FAFBFD;}
 .sd-spot-fill{height:100%;border-radius:3px;}
 .sd-spot-fill.c-blue{background:var(--blue);}.sd-spot-fill.c-green{background:var(--green);}
 .sd-spot-fill.c-orange{background:var(--orange);}.sd-spot-fill.c-purple{background:var(--purple);}
-.sd-spot-sub{font-size:10px;color:var(--muted);font-weight:600;}
+.sd-spot-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;}
+.sd-spot-sub{font-size:10px;color:var(--muted);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sd-spot-view{flex:none;font-size:9px;font-weight:800;color:var(--accent-dark);white-space:nowrap;}
 /* "Sales Health & Mix" — concentration risk / repeat-client rate / revenue realised /
    GST share, each as a labelled progress bar so a business owner can read the health
    of the sales book at a glance instead of reading raw numbers. */

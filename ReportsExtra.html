@@ -44,7 +44,7 @@ GRID_DEFS.salesPersonPerf={cols:[
   {key:'bills',label:'Total Bills',width:110,num:true},
   {key:'overdueBills',label:'Overdue Bills',width:110,num:true},
   {key:'maxOverdueDays',label:'Max Overdue Days',width:130,num:true,filterType:'number-range'},
-  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range'}
+  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:buildSalesPersonRows_};
 registerPage('salesPersonPerf',()=>renderGrid('salesPersonPerf'));
 
@@ -64,7 +64,7 @@ function buildStateSalesRows_(){
 GRID_DEFS.stateSalesReport={cols:[
   {key:'state',label:'State',width:200},
   {key:'invoices',label:'Invoices',width:110,num:true},
-  {key:'amount',label:'Sales Amount',width:160,num:true,currency:true,filterType:'number-range'}
+  {key:'amount',label:'Sales Amount',width:160,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:buildStateSalesRows_};
 registerPage('stateSalesReport',()=>renderGrid('stateSalesReport'));
 
@@ -109,7 +109,7 @@ GRID_DEFS.customerNewRepeat={cols:[
   {key:'invoiceTo',label:'Party Name',width:240},
   {key:'yearsActive',label:'Years Active (Lifetime)',width:150,num:true},
   {key:'classification',label:'Type',width:120,render:r=>reportBadge_(r.classification,r.classification==='New'?'success':'info')},
-  {key:'amount',label:'Amount (Selected FY)',width:170,num:true,currency:true,filterType:'number-range'}
+  {key:'amount',label:'Amount (Selected FY)',width:170,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:()=>S._customerNewRepeatRows||[]};
 function renderCustomerNewRepeat(){
   const rows=buildCustomerNewRepeatRows_();
@@ -146,7 +146,7 @@ function buildInvoiceBucketRows_(){
 GRID_DEFS.invoiceBuckets={cols:[
   {key:'label',label:'Invoice Value Bucket',width:220},
   {key:'invoices',label:'Invoices',width:110,num:true},
-  {key:'amount',label:'Total Amount',width:160,num:true,currency:true},
+  {key:'amount',label:'Total Amount',width:160,num:true,currency:true,headerTotal:true},
   {key:'pctLabel',label:'% of Total',width:110}
 ],data:buildInvoiceBucketRows_,noPagination:true};
 registerPage('invoiceBuckets',()=>renderGrid('invoiceBuckets'));
@@ -165,7 +165,7 @@ function buildGstSplitRows_(){
 GRID_DEFS.gstSalesSplit={cols:[
   {key:'label',label:'Segment',width:220},
   {key:'invoices',label:'Invoices',width:120,num:true},
-  {key:'amount',label:'Total Amount',width:170,num:true,currency:true}
+  {key:'amount',label:'Total Amount',width:170,num:true,currency:true,headerTotal:true}
 ],data:buildGstSplitRows_,noPagination:true};
 registerPage('gstSalesSplit',()=>renderGrid('gstSalesSplit'));
 
@@ -185,7 +185,7 @@ GRID_DEFS.itemExpenseReport={cols:[
   {key:'itemName',label:'Item Name',width:220},
   {key:'qty',label:'Total Qty',width:110,num:true},
   {key:'lines',label:'Voucher Lines',width:120,num:true},
-  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range'}
+  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:buildItemExpenseRows_};
 registerPage('itemExpenseReport',()=>renderGrid('itemExpenseReport'));
 
@@ -206,7 +206,7 @@ GRID_DEFS.expenseRecurring={cols:[
   {key:'partyName',label:'Party Name',width:230},
   {key:'months',label:'Distinct Months Billed',width:160,num:true},
   {key:'classification',label:'Type',width:120,render:r=>reportBadge_(r.classification,r.classification==='Recurring'?'warning':'info')},
-  {key:'amount',label:'Total Expense',width:150,num:true,currency:true,filterType:'number-range'}
+  {key:'amount',label:'Total Expense',width:150,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:buildExpenseRecurringRows_};
 registerPage('expenseRecurring',()=>renderGrid('expenseRecurring'));
 
@@ -222,8 +222,8 @@ function buildCollectionTrendRows_(){
 }
 GRID_DEFS.collectionEfficiencyTrend={cols:[
   {key:'month',label:'Month',width:140},
-  {key:'sales',label:'Sales',width:150,num:true,currency:true},
-  {key:'collections',label:'Collections',width:150,num:true,currency:true},
+  {key:'sales',label:'Sales',width:150,num:true,currency:true,headerTotal:true},
+  {key:'collections',label:'Collections',width:150,num:true,currency:true,headerTotal:true},
   {key:'efficiencyPct',label:'Collection Efficiency',width:160,num:true,render:r=>r.efficiencyPct.toFixed(1)+'%'}
 ],data:buildCollectionTrendRows_,noPagination:true};
 function renderCollectionEfficiencyTrend(){
@@ -255,8 +255,8 @@ GRID_DEFS.paymentTermsCompliance={cols:[
   {key:'paymentTerms',label:'Payment Terms',width:180},
   {key:'totalBills',label:'Total Bills',width:110,num:true},
   {key:'overdueBills',label:'Overdue Bills',width:110,num:true},
-  {key:'totalOutstanding',label:'Total Outstanding',width:160,num:true,currency:true,filterType:'number-range'},
-  {key:'overdueOutstanding',label:'Overdue Outstanding',width:160,num:true,currency:true,filterType:'number-range'}
+  {key:'totalOutstanding',label:'Total Outstanding',width:160,num:true,currency:true,filterType:'number-range',headerTotal:true},
+  {key:'overdueOutstanding',label:'Overdue Outstanding',width:160,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:buildPaymentTermsRows_};
 registerPage('paymentTermsCompliance',()=>renderGrid('paymentTermsCompliance'));
 
@@ -283,7 +283,7 @@ function buildCustomerRiskRows_(){
 }
 GRID_DEFS.customerRiskScore={cols:[
   {key:'partyName',label:'Party Name',width:230},
-  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range'},
+  {key:'pendingAmount',label:'Outstanding',width:150,num:true,currency:true,filterType:'number-range',headerTotal:true},
   {key:'maxOverdueDays',label:'Max Overdue Days',width:150,num:true,filterType:'number-range'},
   {key:'riskLevel',label:'Risk Level',width:120,render:r=>reportBadge_(r.riskLevel,r.riskLevel==='High'?'danger':r.riskLevel==='Medium'?'warning':'success')}
 ],data:buildCustomerRiskRows_};
@@ -306,9 +306,9 @@ function buildPartyGroupRows_(){
 }
 GRID_DEFS.partyGroupOutstanding={cols:[
   {key:'partyGroup',label:'Party Group',width:220},
-  {key:'receivable',label:'Receivable Outstanding',width:170,num:true,currency:true,filterType:'number-range'},
-  {key:'payable',label:'Payable Outstanding',width:170,num:true,currency:true,filterType:'number-range'},
-  {key:'net',label:'Net Position',width:150,num:true,filterType:'number-range',render:r=>`<span style="color:${r.net>=0?'var(--success)':'var(--danger)'};font-weight:700;">${esc(fmtINRCompact(r.net))}</span>`}
+  {key:'receivable',label:'Receivable Outstanding',width:170,num:true,currency:true,filterType:'number-range',headerTotal:true},
+  {key:'payable',label:'Payable Outstanding',width:170,num:true,currency:true,filterType:'number-range',headerTotal:true},
+  {key:'net',label:'Net Position',width:150,num:true,filterType:'number-range',headerTotal:true,render:r=>`<span style="color:${r.net>=0?'var(--success)':'var(--danger)'};font-weight:700;">${esc(fmtINRCompact(r.net))}</span>`}
 ],data:buildPartyGroupRows_};
 registerPage('partyGroupOutstanding',()=>renderGrid('partyGroupOutstanding'));
 
@@ -329,7 +329,7 @@ GRID_DEFS.bankCollectionReport={cols:[
   {key:'bankName',label:'Bank Name',width:220},
   {key:'transactionType',label:'Transaction Type',width:150},
   {key:'count',label:'Receipts',width:110,num:true},
-  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range'}
+  {key:'amount',label:'Amount',width:150,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:buildBankCollectionRows_};
 registerPage('bankCollectionReport',()=>renderGrid('bankCollectionReport'));
 
@@ -347,7 +347,7 @@ function buildCreditNoteImpactRows_(){
 GRID_DEFS.creditNoteImpact={cols:[
   {key:'partyName',label:'Customer',width:230},
   {key:'count',label:'Credit Notes',width:120,num:true},
-  {key:'amount',label:'Total Amount',width:160,num:true,currency:true,filterType:'number-range'}
+  {key:'amount',label:'Total Amount',width:160,num:true,currency:true,filterType:'number-range',headerTotal:true}
 ],data:buildCreditNoteImpactRows_};
 function renderCreditNoteImpact(){
   const rows=creditNoteRows();
